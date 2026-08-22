@@ -1,0 +1,1499 @@
+// Furniture ERP — Prisma schema (V1)
+//
+// Conventions used throughout:
+//
+// * Money is `BigInt`, a whole number of so'm. Postgres `bigint` makes it
+//   impossible to store a fractional amount, and every value stays far below
+//   2^53 so the repository layer can convert to a JS `number` losslessly.
+//   See `shared/src/utils/money.ts`.
+//
+// * Every business row carries `storeId`. One store is in use today, but each
+//   query is scoped by it so additional stores need no migration, and a user can
+//   never read another store's data.
+//
+// * Derived accounting totals (grossProfit, remainingAmount, …) are stored, not
+//   computed on read. Reports aggregate millions of rows and cannot recompute
+//   per row. They are only ever written by the accounting service, which uses
+//   the shared pure functions, so the stored value and a fresh calculation agree.
+//
+// * Product name and prices are snapshotted onto SaleItem. Editing a product's
+//   price next year must not silently rewrite last year's profit.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums — mirrored in `shared/src/constants/enums.ts`
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  PLATFORM_ADMIN
+  ADMIN
+  CASHIER
+  EMPLOYEE
+}
+
+/// Business work capabilities — independent of system UserRole.
+/// A single worker may hold several of these at once.
+enum WorkerResponsibility {
+  SELLER
+  ASSEMBLER
+  DELIVERY
+  INSTALLER
+  SMM
+  OTHER
+}
+
+/// Lightweight activity feed for a worker (not a full audit framework).
+enum WorkerActivityType {
+  WORKER_CREATED
+  WORKER_UPDATED
+  WORKER_ACTIVATED
+  WORKER_DEACTIVATED
+  PASSWORD_RESET
+  SALE_CREATED
+  SALE_CANCELLED
+  ASSEMBLY_ASSIGNED
+  ASSEMBLY_STARTED
+  ASSEMBLY_COMPLETED
+  PAYMENT_RECORDED
+}
+
+enum ProductStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+/// Inventory quantity change kinds. `quantity` on StockMovement is signed:
+/// positive = stock in, negative = stock out.
+enum StockMovementType {
+  PURCHASE
+  SALE
+  SALE_CANCEL
+  MANUAL_IN
+  MANUAL_OUT
+  ADJUSTMENT
+}
+
+enum StockReferenceType {
+  SALE
+  MANUAL
+  PURCHASE
+  ADJUSTMENT
+}
+
+enum CustomerStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum SupplierStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+/// Purchase invoice lifecycle. CANCELLED soft-voids the purchase (stock reversed).
+enum PurchaseStatus {
+  ACTIVE
+  CANCELLED
+}
+
+/// Outstanding balance on a purchase invoice (mirrors SalePaymentStatus semantics).
+enum PurchasePaymentStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+}
+
+enum ExpenseStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum PaymentType {
+  FULL_PAYMENT
+  DEPOSIT
+  INSTALLMENT
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+  OTHER
+}
+
+enum SaleStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum SalePaymentStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+}
+
+enum InstallmentPlanStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum InstallmentStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+}
+
+enum FulfilmentStatus {
+  NOT_REQUIRED
+  PENDING
+  SCHEDULED
+  IN_TRANSIT
+  COMPLETED
+  CANCELLED
+}
+
+/// Lifecycle of an assembly assignment ("terlash") against a sale.
+enum AssemblyTaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+/// Worker ledger movement kinds. Not payroll — classification only.
+/// Salary / assembly / sale compensation types arrive in later phases.
+enum WorkerFinancialTransactionType {
+  BONUS
+  COMMISSION
+  ADVANCE
+  DEBT
+  PAYMENT
+  ADJUSTMENT
+  /// Offsets a prior ledger row. Amount stays positive; effect is opposite of reversesType.
+  REVERSAL
+}
+
+/// Optional link target for a worker financial row (no FK yet).
+enum WorkerFinancialReferenceType {
+  MANUAL
+  SALE
+  ASSEMBLY
+  PAYROLL
+  /// Posted from compensation settle; referenceId = breakdown line id.
+  COMPENSATION
+  /// referenceId points at the original WorkerFinancialTransaction being reversed.
+  REVERSAL
+}
+
+/// Lifecycle of an administrator-triggered backup export.
+enum BackupJobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+/// Physical shape of a backup artefact.
+///
+/// LOGICAL_JSON is the portable store-scoped export the application writes and
+/// reads itself. PG_CUSTOM is a `pg_dump -Fc` of the whole database; it is only
+/// offered when the binary is present and BACKUP_ENABLE_PG_DUMP is set.
+enum BackupFormat {
+  LOGICAL_JSON
+  PG_CUSTOM
+}
+
+/// How a worker is normally compensated for a responsibility.
+/// Configuration only — creating a rule must never post ledger rows.
+enum WorkerCompensationType {
+  PERCENT_OF_SALE
+  PERCENT_OF_GROSS_PROFIT
+  FIXED_PER_SALE
+  FIXED_PER_ASSEMBLY
+  FIXED_PER_DELIVERY
+  FIXED_PER_INSTALLATION
+}
+
+/// Role for a sale-form manual worker pay row (Ish haqlari).
+enum SaleWorkerPayRole {
+  SELLER
+  ASSEMBLER
+  DASTAFCHI
+  SHOPIR
+}
+
+/// Origin of a sale worker compensation line. Form rows are always MANUAL.
+enum SaleWorkerPaySource {
+  MANUAL
+  RULE
+}
+
+/// Public "open a store" application. Stays PENDING until PLATFORM_ADMIN acts.
+/// Approval is what creates the Store and its ADMIN owner — never the submit.
+enum StoreCreationRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Store ERP access. Independent of SubscriptionStatus.
+/// isActive is kept in sync: true only when accessStatus is ACTIVE.
+enum StoreAccessStatus {
+  ACTIVE
+  PAYMENT_BLOCKED
+  MANUALLY_BLOCKED
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  EXPIRED
+  PENDING_PAYMENT
+  BLOCKED
+  CANCELLED
+}
+
+enum PlatformBillingStatus {
+  PENDING
+  PAID
+  OVERDUE
+  REJECTED
+  CANCELLED
+}
+
+enum PlatformPaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+  OTHER
+}
+
+enum PlatformExpenseCategory {
+  SERVER
+  HOSTING
+  DOMAIN
+  SMS
+  EMAIL
+  SOFTWARE
+  ADVERTISING
+  MARKETING
+  DEVELOPMENT
+  OTHER
+}
+
+enum PlatformExpenseStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum PlatformBillingCycle {
+  MONTHLY
+}
+
+enum SubscriptionRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy
+// ---------------------------------------------------------------------------
+
+model Store {
+  id       String  @id @default(cuid())
+  name     String
+  phone    String?
+  address  String?
+  /// ISO 4217 code. Fixed to UZS today; present so a second store can differ.
+  currency String  @default("UZS")
+  timezone String  @default("Asia/Tashkent")
+  /// Operational login/API gate. Synced from accessStatus (ACTIVE => true).
+  isActive Boolean @default(true)
+  /// Why the store is open or closed. Payment vs manual block must stay distinct.
+  accessStatus StoreAccessStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users             User[]
+  productCategories ProductCategory[]
+  products          Product[]
+  customers         Customer[]
+  sales             Sale[]
+  saleItems         SaleItem[]
+  payments          Payment[]
+  installmentPlans  InstallmentPlan[]
+  installments      InstallmentPayment[]
+  assemblyTasks     AssemblyTask[]
+  expenseCategories ExpenseCategory[]
+  expenses          Expense[]
+  userResponsibilities UserResponsibility[]
+  workerActivities  WorkerActivity[]
+  workerFinancialTransactions WorkerFinancialTransaction[]
+  workerCompensationRules     WorkerCompensationRule[]
+  saleWorkerCompensations     SaleWorkerCompensation[]
+  stockMovements              StockMovement[]
+  suppliers                   Supplier[]
+  purchases                   Purchase[]
+  purchaseItems               PurchaseItem[]
+  supplierPayments            SupplierPayment[]
+  backupJobs                  BackupJob[]
+  auditLogs                   AuditLog[]
+  creationRequests            StoreCreationRequest[]
+  subscriptions               StoreSubscription[]
+  platformInvoices            PlatformInvoice[]
+  subscriptionRequests        SubscriptionRequest[]
+
+  @@index([isActive])
+  @@index([accessStatus])
+  @@map("stores")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  storeId      String
+  email        String
+  /// Optional short login for cash-desk staff who would rather not type an email.
+  username     String?
+  passwordHash String
+  fullName     String
+  phone        String?
+  /// Free-form notes about the worker (schedule preferences, skills, …).
+  notes        String?
+  role         UserRole  @default(CASHIER)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  salesCreated          Sale[]         @relation("SaleCreatedBy")
+  salesSold             Sale[]         @relation("SaleSeller")
+  salesInstalled        Sale[]         @relation("SaleInstaller")
+  salesDelivered        Sale[]         @relation("SaleDeliveryPerson")
+  salesCancelled        Sale[]         @relation("SaleCancelledBy")
+  paymentsTaken         Payment[]      @relation("PaymentCreatedBy")
+  expensesLogged        Expense[]      @relation("ExpenseCreatedBy")
+  expensesCancelled     Expense[]      @relation("ExpenseCancelledBy")
+  assemblyTasksAssigned AssemblyTask[] @relation("AssemblyTaskAssignee")
+  assemblyTasksAssignedBy AssemblyTask[] @relation("AssemblyTaskAssignedBy")
+  assemblyTasksCompleted  AssemblyTask[] @relation("AssemblyTaskCompletedBy")
+  responsibilities      UserResponsibility[]
+  activitiesAsSubject   WorkerActivity[] @relation("WorkerActivitySubject")
+  activitiesAsActor     WorkerActivity[] @relation("WorkerActivityActor")
+  workerFinancialAsWorker   WorkerFinancialTransaction[] @relation("WorkerFinancialWorker")
+  workerFinancialCreatedBy  WorkerFinancialTransaction[] @relation("WorkerFinancialCreatedBy")
+  workerCompensationRules   WorkerCompensationRule[]     @relation("WorkerCompensationRuleWorker")
+  createdCompensationRules  WorkerCompensationRule[]     @relation("WorkerCompensationRuleCreator")
+  saleWorkerCompensations   SaleWorkerCompensation[]     @relation("SaleWorkerCompensationWorker")
+  stockMovementsCreated     StockMovement[]              @relation("StockMovementCreatedBy")
+  purchasesCreated          Purchase[]                   @relation("PurchaseCreatedBy")
+  purchasesCancelled        Purchase[]                   @relation("PurchaseCancelledBy")
+  supplierPaymentsTaken     SupplierPayment[]            @relation("SupplierPaymentCreatedBy")
+  backupJobsCreated         BackupJob[]                  @relation("BackupJobCreatedBy")
+  auditLogs                 AuditLog[]                   @relation("AuditLogActor")
+  reviewedStoreCreationRequests StoreCreationRequest[]   @relation("StoreCreationReviewedBy")
+  ownedStoreCreationRequests    StoreCreationRequest[]   @relation("StoreCreationCreatedUser")
+  recordedPlatformInvoices      PlatformInvoice[]        @relation("PlatformInvoiceRecordedBy")
+  requestedPlatformInvoices     PlatformInvoice[]        @relation("PlatformInvoiceRequestedBy")
+  platformExpensesCreated       PlatformExpense[]        @relation("PlatformExpenseCreatedBy")
+  platformExpensesCancelled     PlatformExpense[]        @relation("PlatformExpenseCancelledBy")
+  reviewedSubscriptionRequests  SubscriptionRequest[]    @relation("SubscriptionRequestReviewedBy")
+
+  // Unique per store, not globally: two stores may each employ an "admin@".
+  @@unique([storeId, email])
+  @@unique([storeId, username])
+  @@index([storeId, isActive])
+  @@index([storeId, role])
+  @@map("users")
+}
+
+/// Application to open a new store. Not store-scoped until approval links
+/// `createdStoreId`. Password is stored only as a bcrypt hash and is cleared
+/// once the request is resolved so leftover credentials do not sit in the inbox.
+model StoreCreationRequest {
+  id String @id @default(cuid())
+
+  applicantFirstName String
+  applicantLastName  String
+  phone              String
+  email              String
+  username           String
+  /// bcrypt digest. Null after approve/reject.
+  passwordHash       String?
+
+  storeName String
+  region    String
+  district  String
+  address   String
+
+  status StoreCreationRequestStatus @default(PENDING)
+
+  reviewedById    String?
+  reviewedAt      DateTime?
+  rejectionReason String?
+
+  createdStoreId String?
+  createdUserId  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reviewedBy    User?  @relation("StoreCreationReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  createdStore  Store? @relation(fields: [createdStoreId], references: [id], onDelete: SetNull)
+  createdUser   User?  @relation("StoreCreationCreatedUser", fields: [createdUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([phone, status])
+  @@index([email, status])
+  @@index([username, status])
+  @@index([createdStoreId])
+  @@map("store_creation_requests")
+}
+
+/// Many-to-many: one worker may be seller + assembler + delivery, etc.
+model UserResponsibility {
+  id             String               @id @default(cuid())
+  storeId        String
+  userId         String
+  responsibility WorkerResponsibility
+
+  createdAt DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, responsibility])
+  @@index([storeId, responsibility])
+  @@index([storeId, userId])
+  @@map("user_responsibilities")
+}
+
+/// Worker-facing activity history (sale / assembly / payment events about a worker).
+model WorkerActivity {
+  id               String             @id @default(cuid())
+  storeId          String
+  workerId         String
+  actorId          String?
+  type             WorkerActivityType
+  relatedSaleId    String?
+  relatedTaskId    String?
+  relatedPaymentId String?
+  message          String?
+
+  createdAt DateTime @default(now())
+
+  store  Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  worker User  @relation("WorkerActivitySubject", fields: [workerId], references: [id], onDelete: Cascade)
+  actor  User? @relation("WorkerActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([storeId, workerId, createdAt])
+  @@index([storeId, createdAt])
+  @@map("worker_activities")
+}
+
+// ---------------------------------------------------------------------------
+// Catalogue
+// ---------------------------------------------------------------------------
+
+model ProductCategory {
+  id          String  @id @default(cuid())
+  storeId     String
+  name        String
+  description String?
+  sortOrder   Int     @default(0)
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store    Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@unique([storeId, name])
+  @@index([storeId, isActive])
+  @@map("product_categories")
+}
+
+model Product {
+  id          String  @id @default(cuid())
+  storeId     String
+  categoryId  String?
+  name        String
+  /// Optional article/SKU printed on the price tag.
+  sku         String?
+  description String?
+  /// Storage-driver-agnostic key; the URL is resolved by the file storage service.
+  imageKey    String?
+  imageUrl    String?
+
+  /// What the store paid the supplier.
+  costPrice        BigInt
+  /// Suggested price, pre-filled on the sale form and overridable per sale.
+  defaultSalePrice BigInt
+
+  /// On-hand units when trackStock is true. Never silently go negative.
+  stockQty    Int     @default(0)
+  /// Threshold for "low stock" status (Kam qolgan).
+  minStockQty Int     @default(0)
+  /// When false, sales do not mutate quantity and inventory screens treat it as untracked.
+  trackStock  Boolean @default(true)
+
+  status ProductStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store          Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  category       ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  saleItems      SaleItem[]
+  stockMovements StockMovement[]
+  purchaseItems  PurchaseItem[]
+
+  @@unique([storeId, sku])
+  @@index([storeId, status])
+  @@index([storeId, categoryId])
+  @@index([storeId, name])
+  @@index([storeId, trackStock, stockQty])
+  @@map("products")
+}
+
+/// Append-only inventory ledger. Current stock lives on Product.stockQty;
+/// every change must create a movement row (never silent overwrite).
+model StockMovement {
+  id             String             @id @default(cuid())
+  storeId        String
+  productId      String
+  /// Signed delta applied to stock (e.g. SALE = -1, PURCHASE = +5).
+  quantity       Int
+  quantityBefore Int
+  quantityAfter  Int
+  movementType   StockMovementType
+  referenceType  StockReferenceType?
+  referenceId    String?
+  reason         String?
+  createdById    String?
+
+  createdAt DateTime @default(now())
+
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  createdBy User?    @relation("StockMovementCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([storeId, createdAt])
+  @@index([storeId, productId, createdAt])
+  @@index([storeId, movementType])
+  @@index([storeId, referenceType, referenceId])
+  @@map("stock_movements")
+}
+
+// ---------------------------------------------------------------------------
+// Customers
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id        String         @id @default(cuid())
+  storeId   String
+  firstName String
+  lastName  String
+  phone     String
+  address   String?
+  notes     String?
+  status    CustomerStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store            Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  sales            Sale[]
+  payments         Payment[]
+  installmentPlans InstallmentPlan[]
+
+  // Phone is the natural key a cashier searches by, and must not repeat in a store.
+  @@unique([storeId, phone])
+  @@index([storeId, status])
+  @@index([storeId, lastName, firstName])
+  @@map("customers")
+}
+
+// ---------------------------------------------------------------------------
+// Suppliers & purchases (incoming furniture / supplier debt)
+// ---------------------------------------------------------------------------
+
+model Supplier {
+  id     String         @id @default(cuid())
+  storeId String
+  name   String
+  phone  String?
+  notes  String?
+  status SupplierStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store     Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  purchases Purchase[]
+
+  @@index([storeId, status])
+  @@index([storeId, name])
+  @@map("suppliers")
+}
+
+/// Goods received from a supplier. Totals are stored whole so'm (BigInt).
+/// remainingAmount drives supplier debt — never a mutable Supplier.balance.
+model Purchase {
+  id            String @id @default(cuid())
+  storeId       String
+  purchaseNumber Int
+  supplierId    String
+
+  purchaseDate DateTime @default(now())
+  /// Sum of line totals (quantity × unitCost).
+  totalCost    BigInt
+  paidAmount   BigInt @default(0)
+  remainingAmount BigInt @default(0)
+
+  paymentStatus PurchasePaymentStatus @default(UNPAID)
+  status        PurchaseStatus        @default(ACTIVE)
+  notes         String?
+
+  createdById   String?
+  cancelledAt   DateTime?
+  cancelledById String?
+  cancellationReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store       Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  supplier    Supplier          @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  items       PurchaseItem[]
+  payments    SupplierPayment[]
+  createdBy   User?             @relation("PurchaseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  cancelledBy User?             @relation("PurchaseCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+
+  @@unique([storeId, purchaseNumber])
+  @@index([storeId, purchaseDate])
+  @@index([storeId, status])
+  @@index([storeId, paymentStatus])
+  @@index([storeId, supplierId])
+  @@index([storeId, remainingAmount])
+  @@map("purchases")
+}
+
+model PurchaseItem {
+  id         String @id @default(cuid())
+  storeId    String
+  purchaseId String
+  productId  String
+
+  /// Snapshot at purchase time — catalogue rename must not rewrite history.
+  productName String
+  quantity    Int
+  unitCost    BigInt
+  lineTotal   BigInt
+
+  createdAt DateTime @default(now())
+
+  store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([storeId, purchaseId])
+  @@index([storeId, productId])
+  @@map("purchase_items")
+}
+
+model SupplierPayment {
+  id         String @id @default(cuid())
+  storeId    String
+  purchaseId String
+  supplierId String
+
+  amount  BigInt
+  method  PaymentMethod
+  paidAt  DateTime @default(now())
+  note    String?
+
+  createdById String?
+
+  createdAt DateTime @default(now())
+
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  purchase  Purchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  createdBy User?    @relation("SupplierPaymentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([storeId, paidAt])
+  @@index([storeId, purchaseId])
+  @@index([storeId, supplierId])
+  @@map("supplier_payments")
+}
+
+// ---------------------------------------------------------------------------
+// Sales
+// ---------------------------------------------------------------------------
+
+model Sale {
+  id         String @id @default(cuid())
+  storeId    String
+  /// Human-readable per-store counter shown on the receipt, e.g. 1042.
+  saleNumber Int
+
+  customerId  String
+  /// Who made the sale. Nullable so a sale survives an employee being removed.
+  sellerId    String?
+  /// Current assembly worker. Creating/changing this maintains AssemblyTask rows.
+  installerId String?
+  /// Worker responsible for delivery when delivery is required.
+  deliveryPersonId String?
+  createdById String?
+
+  saleDate DateTime   @default(now())
+  status   SaleStatus @default(ACTIVE)
+
+  // --- Money -----------------------------------------------------------------
+  /// Sum of line sale totals before discount.
+  subtotal       BigInt @default(0)
+  discountAmount BigInt @default(0)
+  /// What the customer owes in total: subtotal - discount.
+  totalSalePrice BigInt @default(0)
+  /// Sum of line cost totals. Supplier cost only — never business expenses.
+  totalCostPrice BigInt @default(0)
+
+  paymentType     PaymentType
+  paymentStatus   SalePaymentStatus @default(UNPAID)
+  /// Down payment taken at the cash desk when the sale was created.
+  depositAmount   BigInt            @default(0)
+  /// Everything received so far, including the deposit.
+  paidAmount      BigInt            @default(0)
+  /// totalSalePrice - paidAmount. Never negative.
+  remainingAmount BigInt            @default(0)
+
+  // --- Costs attributable to this sale (kept out of totalCostPrice) -----------
+  sellerBonus      BigInt @default(0)
+  installationCost BigInt @default(0)
+  deliveryCost     BigInt @default(0)
+  otherCosts       BigInt @default(0)
+
+  // --- Derived profit, written by the accounting service ----------------------
+  /// totalSalePrice - totalCostPrice
+  grossProfit BigInt @default(0)
+  /// grossProfit - sellerBonus - installationCost - deliveryCost - otherCosts
+  netProfit   BigInt @default(0)
+
+  // --- Fulfilment --------------------------------------------------------------
+  /// Denormalised from the active AssemblyTask so the sales list can filter without a join.
+  assemblyStatus     AssemblyTaskStatus?
+  installationStatus FulfilmentStatus   @default(NOT_REQUIRED)
+  installationDate   DateTime?
+  installationNotes  String?
+  deliveryStatus     FulfilmentStatus   @default(NOT_REQUIRED)
+  deliveryDate       DateTime?
+  deliveryAddress    String?
+  deliveryNotes      String?
+
+  notes String?
+
+  /// Controlled void metadata — the sale row is never hard-deleted.
+  cancelledAt          DateTime?
+  cancelledById        String?
+  cancellationReason   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store          Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer       Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  seller         User?    @relation("SaleSeller", fields: [sellerId], references: [id], onDelete: SetNull)
+  installer      User?    @relation("SaleInstaller", fields: [installerId], references: [id], onDelete: SetNull)
+  deliveryPerson User?    @relation("SaleDeliveryPerson", fields: [deliveryPersonId], references: [id], onDelete: SetNull)
+  createdBy      User?    @relation("SaleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  cancelledBy    User?    @relation("SaleCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+
+  items           SaleItem[]
+  payments        Payment[]
+  installmentPlan InstallmentPlan?
+  assemblyTasks   AssemblyTask[]
+  workerCompensations SaleWorkerCompensation[]
+
+  @@unique([storeId, saleNumber])
+  @@index([storeId, saleDate])
+  @@index([storeId, status])
+  @@index([storeId, paymentStatus])
+  @@index([storeId, customerId])
+  @@index([storeId, sellerId])
+  @@index([storeId, assemblyStatus])
+  @@index([storeId, deliveryStatus])
+  @@index([storeId, installationStatus])
+  @@index([storeId, cancelledAt])
+  @@map("sales")
+}
+
+/// Exact UZS pay for a role on one sale (Ish haqlari). MANUAL overrides RULE for that sale event bucket.
+model SaleWorkerCompensation {
+  id       String              @id @default(cuid())
+  storeId  String
+  saleId   String
+  workerId String
+  role     SaleWorkerPayRole
+  /// Persisted sale-form rows are always MANUAL.
+  source   SaleWorkerPaySource @default(MANUAL)
+  amount   BigInt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store  Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  sale   Sale  @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  worker User  @relation("SaleWorkerCompensationWorker", fields: [workerId], references: [id], onDelete: Restrict)
+
+  @@unique([saleId, role])
+  @@index([storeId, saleId])
+  @@index([storeId, workerId])
+  @@map("sale_worker_compensations")
+}
+
+model SaleItem {
+  id        String  @id @default(cuid())
+  storeId   String
+  saleId    String
+  /// Nullable so deleting a product never destroys sales history.
+  productId String?
+
+  /// Snapshot of the product at the moment of sale.
+  productName String
+  productSku  String?
+
+  quantity      Int    @default(1)
+  unitCostPrice BigInt
+  unitSalePrice BigInt
+  /// unitCostPrice * quantity
+  lineCostTotal BigInt
+  /// unitSalePrice * quantity
+  lineSaleTotal BigInt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store   Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  sale    Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([storeId, saleId])
+  @@index([storeId, productId])
+  @@map("sale_items")
+}
+
+// ---------------------------------------------------------------------------
+// Payments and installments
+// ---------------------------------------------------------------------------
+
+model Payment {
+  id         String @id @default(cuid())
+  storeId    String
+  saleId     String
+  customerId String
+
+  amount BigInt
+  method PaymentMethod @default(CASH)
+  paidAt DateTime      @default(now())
+
+  /// Set when this payment settles a scheduled installment, so the schedule row
+  /// and the cash movement stay linked for the installment report.
+  installmentPaymentId String?
+  /// True for the down payment recorded when the sale was created.
+  isDeposit            Boolean @default(false)
+
+  note        String?
+  createdById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store       Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  sale        Sale                @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  customer    Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  installment InstallmentPayment? @relation(fields: [installmentPaymentId], references: [id], onDelete: SetNull)
+  createdBy   User?               @relation("PaymentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([storeId, paidAt])
+  @@index([storeId, saleId])
+  @@index([storeId, customerId])
+  @@index([storeId, installmentPaymentId])
+  @@map("payments")
+}
+
+model InstallmentPlan {
+  id         String @id @default(cuid())
+  storeId    String
+  /// One plan per sale.
+  saleId     String @unique
+  customerId String
+
+  /// The sale total the plan was built from.
+  totalSalePrice BigInt
+  /// Down payment deducted before the schedule was generated.
+  depositAmount  BigInt @default(0)
+  /// totalSalePrice - depositAmount. The sum of all schedule rows equals this.
+  financedAmount BigInt
+  monthCount     Int
+  /// Nominal per-month figure. The final row absorbs the rounding remainder,
+  /// so it can differ by a few so'm.
+  monthlyAmount  BigInt
+
+  firstDueDate DateTime
+  status       InstallmentPlanStatus @default(ACTIVE)
+
+  /// Running totals maintained by the payment service.
+  paidAmount      BigInt @default(0)
+  remainingAmount BigInt @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store    Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  sale     Sale                 @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  customer Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  payments InstallmentPayment[]
+
+  @@index([storeId, status])
+  @@index([storeId, customerId])
+  @@map("installment_plans")
+}
+
+/// One row per scheduled month.
+model InstallmentPayment {
+  id      String @id @default(cuid())
+  storeId String
+  planId  String
+
+  /// 1-based position in the schedule.
+  sequence        Int
+  dueDate         DateTime
+  amount          BigInt
+  paidAmount      BigInt            @default(0)
+  /// amount - paidAmount. Never negative.
+  remainingAmount BigInt
+  status          InstallmentStatus @default(PENDING)
+  paidAt          DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store    Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  plan     InstallmentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  payments Payment[]
+
+  @@unique([planId, sequence])
+  @@index([storeId, dueDate])
+  @@index([storeId, status])
+  @@map("installment_payments")
+}
+
+// ---------------------------------------------------------------------------
+// Assembly assignments ("terlash")
+// ---------------------------------------------------------------------------
+
+/// One assignment of a worker to assemble furniture for a sale.
+///
+/// Reassignment cancels the previous active row and creates a new one, so the
+/// history of who was asked to assemble what is never overwritten.
+model AssemblyTask {
+  id     String @id @default(cuid())
+  storeId String
+  saleId  String
+
+  assigneeId   String
+  assignedById String?
+  completedById String?
+
+  status     AssemblyTaskStatus @default(PENDING)
+  assignedAt DateTime           @default(now())
+  deadline   DateTime?
+  startedAt  DateTime?
+  completedAt DateTime?
+  notes      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store       Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  sale        Sale  @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  assignee    User  @relation("AssemblyTaskAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  assignedBy  User? @relation("AssemblyTaskAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+  completedBy User? @relation("AssemblyTaskCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
+
+  @@index([storeId, assigneeId, status])
+  @@index([storeId, saleId])
+  @@index([storeId, status])
+  @@map("assembly_tasks")
+}
+
+// ---------------------------------------------------------------------------
+// Expenses
+// ---------------------------------------------------------------------------
+
+model ExpenseCategory {
+  id        String  @id @default(cuid())
+  storeId   String
+  /// Stable identifier for the seeded defaults; null for store-created categories.
+  key       String?
+  name      String
+  /// Badge palette token used by the UI.
+  color     String  @default("slate")
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store    Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  expenses Expense[]
+
+  @@unique([storeId, name])
+  @@index([storeId, isActive])
+  @@map("expense_categories")
+}
+
+model Expense {
+  id         String @id @default(cuid())
+  storeId    String
+  categoryId String
+
+  amount      BigInt
+  /// Calendar moment the cost was incurred (not necessarily createdAt).
+  expenseDate DateTime @default(now())
+  description String?
+  createdById String?
+
+  /// Soft void — rows are never hard-deleted once recorded.
+  status               ExpenseStatus @default(ACTIVE)
+  cancelledAt          DateTime?
+  cancelledById        String?
+  cancellationReason   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store       Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  category    ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  createdBy   User?           @relation("ExpenseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  cancelledBy User?           @relation("ExpenseCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+
+  @@index([storeId, expenseDate])
+  @@index([storeId, categoryId])
+  @@index([storeId, createdById])
+  @@index([storeId, status])
+  @@map("expenses")
+}
+
+// ---------------------------------------------------------------------------
+// Worker financial transactions (ledger foundation — not payroll)
+// ---------------------------------------------------------------------------
+
+/// One credited/debited money movement belonging to a worker.
+///
+/// Separate from Sale, Payment, Expense, AssemblyTask, and WorkerActivity.
+/// Amount is always a positive whole so'm; sign semantics live in shared
+/// accounting helpers keyed by `type`.
+model WorkerFinancialTransaction {
+  id              String                          @id @default(cuid())
+  storeId         String
+  workerId        String
+  type            WorkerFinancialTransactionType
+  /// Always positive whole so'm. Effect (credit/debit) comes from `type` (+ reversesType for REVERSAL).
+  amount          BigInt
+  /// When the financial event happened (not necessarily createdAt).
+  transactionDate DateTime
+  description     String?
+  referenceType   WorkerFinancialReferenceType?
+  referenceId     String?
+  /// Set only on REVERSAL rows: the original transaction's type (for sign / aggregation).
+  reversesType    WorkerFinancialTransactionType?
+  createdById     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store     Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// Restrict: deactivating a worker must not erase ledger history.
+  worker    User  @relation("WorkerFinancialWorker", fields: [workerId], references: [id], onDelete: Restrict)
+  createdBy User? @relation("WorkerFinancialCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([storeId, workerId, transactionDate])
+  @@index([storeId, transactionDate])
+  @@index([storeId, type])
+  @@index([storeId, referenceType, referenceId])
+  @@index([storeId, type, reversesType])
+  @@map("worker_financial_transactions")
+}
+
+// ---------------------------------------------------------------------------
+// Worker compensation rules (configuration foundation — not payroll)
+// ---------------------------------------------------------------------------
+
+/// Defines how a worker is normally compensated for a responsibility.
+///
+/// `value` semantics:
+/// - PERCENT_OF_SALE / PERCENT_OF_GROSS_PROFIT → integer basis points (10% = 1000)
+/// - FIXED_* → positive whole so'm
+///
+/// Soft-deactivate via isActive. No hard DELETE. Never auto-posts ledger rows.
+model WorkerCompensationRule {
+  id             String                  @id @default(cuid())
+  storeId        String
+  workerId       String
+  responsibility WorkerResponsibility
+  type           WorkerCompensationType
+  /// Basis points for percent types; whole so'm for fixed types.
+  value          BigInt
+  isActive       Boolean                 @default(true)
+  effectiveFrom  DateTime
+  effectiveTo    DateTime?
+  notes          String?
+  createdById    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store     Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// Restrict: deactivating a worker must not erase compensation history.
+  worker    User  @relation("WorkerCompensationRuleWorker", fields: [workerId], references: [id], onDelete: Restrict)
+  createdBy User? @relation("WorkerCompensationRuleCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([storeId, workerId, responsibility, type])
+  @@index([storeId, workerId, isActive])
+  @@index([storeId, effectiveFrom, effectiveTo])
+  @@map("worker_compensation_rules")
+}
+
+// ---------------------------------------------------------------------------
+// Backups
+// ---------------------------------------------------------------------------
+
+/// One administrator-triggered export of a store's data.
+///
+/// The row is the catalogue entry; the bytes live on disk under
+/// `BACKUP_DIR/<storeId>/<id>.json.gz`. The two can drift apart — a container
+/// with an ephemeral filesystem loses the file while the row survives — so the
+/// download endpoint treats a missing file as an expected 410, not a bug.
+///
+/// Deliberately excluded from the logical export and from the restore wipe:
+/// the history of what was backed up must outlive a restore of the data it
+/// describes.
+model BackupJob {
+  id             String          @id @default(cuid())
+  storeId        String
+  createdById    String?
+  status         BackupJobStatus @default(PENDING)
+  format         BackupFormat    @default(LOGICAL_JSON)
+  /// Download name shown to the administrator, not a filesystem path.
+  filename       String
+  /// Size of the compressed artefact. Null until the job succeeds.
+  sizeBytes      BigInt?
+  /// SHA-256 of the compressed bytes, for verifying a downloaded copy.
+  checksumSha256 String?
+  errorMessage   String?
+  /// True for the safety copy taken automatically just before a restore.
+  isAutomatic    Boolean         @default(false)
+
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  store     Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  createdBy User? @relation("BackupJobCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([storeId, createdAt])
+  @@index([storeId, status])
+  @@map("backup_jobs")
+}
+
+// ---------------------------------------------------------------------------
+// Audit trail
+// ---------------------------------------------------------------------------
+
+/// Immutable, append-only record of who changed what in a store.
+///
+/// Distinct from WorkerActivity on purpose. WorkerActivity answers "what has
+/// happened to this worker" and requires a `workerId`; this table answers "what
+/// has happened in this store" and has no subject worker at all — a settings
+/// change or a failed login belongs to nobody.
+///
+/// Rules this table depends on, none of which the database can enforce alone:
+///
+/// * Nothing in the application ever issues UPDATE or DELETE against it. There
+///   is no repository function that could, and no API route that reaches one.
+/// * `eventType` and `entityType` are `String`, not enums. A row must stay
+///   readable after the vocabulary that produced it has moved on, and an enum
+///   would need a migration for every new event. Values come from
+///   `shared/src/constants/audit.ts`.
+/// * `metadata` is sanitised before it is written: passwords, hashes, tokens
+///   and secrets are stripped by the audit service, never by the caller.
+/// * The row is deliberately absent from the logical backup export, because a
+///   restore deletes and re-inserts every exported table — which would mean
+///   deleting audit history.
+model AuditLog {
+  id          String   @id @default(cuid())
+  /// Null for platform-level events that do not yet belong to a store
+  /// (e.g. a store-creation application before approval).
+  storeId     String?
+  /// Null for events with no signed-in principal, or once the account is gone.
+  actorUserId String?
+  /// Value from the shared AuditEventType vocabulary.
+  eventType   String
+  /// Value from the shared AuditEntityType vocabulary.
+  entityType  String
+  entityId    String?
+  /// One human-readable line, shown verbatim in the audit table.
+  summary     String
+  metadata    Json?
+
+  createdAt DateTime @default(now())
+
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// SetNull, never Cascade: removing a user must not erase what they did.
+  actor User? @relation("AuditLogActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([storeId, createdAt])
+  @@index([storeId, eventType, createdAt])
+  @@index([storeId, entityType, entityId])
+  @@index([storeId, actorUserId, createdAt])
+  @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Platform billing (SaaS control plane — not store ERP payments)
+// ---------------------------------------------------------------------------
+
+/// Catalog plan. Deactivate instead of deleting when invoices still reference it.
+model SubscriptionPlan {
+  id             String  @id @default(cuid())
+  name           String  @unique
+  description    String  @default("")
+  monthlyPrice   BigInt
+  currency       String  @default("UZS")
+  trialDays      Int     @default(0)
+  isActive       Boolean @default(true)
+  /// Used when a new store is approved — typically the free trial plan.
+  isDefaultTrial Boolean @default(false)
+  /// Optional marketing copy. Entitlements live on PlanFeature / PlanLimit.
+  features       Json    @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscriptions        StoreSubscription[]  @relation("SubscriptionPlanCurrent")
+  pendingSubscriptions StoreSubscription[]  @relation("SubscriptionPlanPending")
+  invoices             PlatformInvoice[]
+  planFeatures         PlanFeature[]
+  limits               PlanLimit[]
+  subscriptionRequests SubscriptionRequest[]
+
+  @@index([isActive])
+  @@index([isDefaultTrial])
+  @@map("subscription_plans")
+}
+
+/// Product modules the admin can attach to a plan. Seeded from the shared catalog.
+model Feature {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  name        String
+  description String  @default("")
+  category    String
+  isActive    Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  planFeatures PlanFeature[]
+
+  @@index([isActive, sortOrder])
+  @@map("features")
+}
+
+model PlanFeature {
+  id        String  @id @default(cuid())
+  planId    String
+  featureId String
+  enabled   Boolean @default(true)
+
+  plan    SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  feature Feature          @relation(fields: [featureId], references: [id], onDelete: Restrict)
+
+  @@unique([planId, featureId])
+  @@index([featureId])
+  @@map("plan_features")
+}
+
+model PlanLimit {
+  id         String  @id @default(cuid())
+  planId     String
+  resourceKey String
+  limitValue Int?
+  unlimited  Boolean @default(false)
+
+  plan SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, resourceKey])
+  @@index([resourceKey])
+  @@map("plan_limits")
+}
+
+/// Current + historical subscriptions. Exactly one row per store has isCurrent=true
+/// (enforced by a partial unique index in the migration).
+model StoreSubscription {
+  id                 String             @id @default(cuid())
+  storeId            String
+  planId             String
+  status             SubscriptionStatus @default(TRIAL)
+  isCurrent          Boolean            @default(true)
+  startedAt          DateTime
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  nextPaymentDue     DateTime
+  trialStartedAt     DateTime?
+  trialEndsAt        DateTime?
+  trialWelcomeSeenAt DateTime?
+  cancelledAt        DateTime?
+  endedAt            DateTime?
+  pendingPlanId      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store       Store             @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  plan        SubscriptionPlan  @relation("SubscriptionPlanCurrent", fields: [planId], references: [id], onDelete: Restrict)
+  pendingPlan SubscriptionPlan? @relation("SubscriptionPlanPending", fields: [pendingPlanId], references: [id], onDelete: SetNull)
+  invoices    PlatformInvoice[]
+
+  @@index([storeId, isCurrent])
+  @@index([status, nextPaymentDue])
+  @@index([planId])
+  @@map("store_subscriptions")
+}
+
+/// Store-initiated "obuna bo'lish" request. Price is snapshotted so later plan
+/// edits cannot rewrite what the shop asked to pay.
+model SubscriptionRequest {
+  id                     String                     @id @default(cuid())
+  storeId                String
+  planId                 String
+  requestedPriceSnapshot BigInt
+  currency               String                     @default("UZS")
+  status                 SubscriptionRequestStatus  @default(PENDING)
+  requestedAt            DateTime                   @default(now())
+  reviewedById           String?
+  reviewedAt             DateTime?
+  rejectionReason        String?
+  note                   String?
+  createdInvoiceId       String?
+  createdSubscriptionId  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store      Store            @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  plan       SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  reviewedBy User?            @relation("SubscriptionRequestReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([status, requestedAt])
+  @@index([storeId, status])
+  @@index([planId])
+  @@map("subscription_requests")
+}
+
+/// Immutable billing period row. Amount is snapshotted from the plan at creation.
+model PlatformInvoice {
+  id                 String                @id @default(cuid())
+  storeId            String
+  subscriptionId     String
+  planId             String
+  planName           String
+  amount             BigInt
+  currency           String                @default("UZS")
+  billingPeriodStart DateTime
+  billingPeriodEnd   DateTime
+  dueDate            DateTime
+  status             PlatformBillingStatus @default(PENDING)
+  paidAt             DateTime?
+  paymentMethod      PlatformPaymentMethod?
+  reference          String?
+  note               String?
+  durationMonths     Int                   @default(1)
+  rejectionReason    String?
+  recordedById       String?
+  requestedById      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store        Store            @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  subscription StoreSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  plan         SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  recordedBy   User?            @relation("PlatformInvoiceRecordedBy", fields: [recordedById], references: [id], onDelete: SetNull)
+  requestedBy  User?            @relation("PlatformInvoiceRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+
+  @@unique([subscriptionId, billingPeriodStart])
+  @@index([storeId, status, dueDate])
+  @@index([status, dueDate])
+  @@index([paidAt])
+  @@map("platform_invoices")
+}
+
+model PlatformExpense {
+  id            String                  @id @default(cuid())
+  category      PlatformExpenseCategory
+  amount        BigInt
+  currency      String                  @default("UZS")
+  date          DateTime
+  description   String                  @default("")
+  vendor        String?
+  reference     String?
+  status        PlatformExpenseStatus   @default(ACTIVE)
+  createdById   String
+  cancelledById String?
+  cancelledAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy   User  @relation("PlatformExpenseCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  cancelledBy User? @relation("PlatformExpenseCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+
+  @@index([status, date])
+  @@index([category, date])
+  @@map("platform_expenses")
+}
+
+/// Singleton row id = "platform".
+model PlatformSettings {
+  id                       String               @id
+  platformName             String               @default("Furniture ERP")
+  defaultCurrency          String               @default("UZS")
+  gracePeriodDays          Int                  @default(3)
+  billingCycle             PlatformBillingCycle @default(MONTHLY)
+  paymentRemindersEnabled  Boolean              @default(false)
+  reminderDaysBeforeDue    Int                  @default(3)
+
+  updatedAt DateTime @updatedAt
+
+  @@map("platform_settings")
+}

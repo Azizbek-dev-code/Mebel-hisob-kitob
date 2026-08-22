@@ -1,0 +1,53 @@
+{
+  "name": "furniture-erp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Furniture store ERP / accounting / sales management system",
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "scripts": {
+    "setup:env": "node scripts/init-env.mjs",
+    "predev": "npm run build --workspace shared",
+    "dev": "concurrently -k -n shared,server,client -c magenta,cyan,green \"npm run dev --workspace shared\" \"npm run dev --workspace server\" \"npm run dev --workspace client\"",
+    "dev:client": "npm run dev --workspace client",
+    "dev:server": "npm run dev --workspace server",
+    "build": "npm run build --workspace shared && npm run build --workspace server && npm run build --workspace client",
+    "typecheck": "npm run build --workspace shared && npm run typecheck --workspace server && npm run typecheck --workspace client",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run build --workspace shared && npm run test --workspace shared && npm run test --workspace server && npm run test --workspace client",
+    "test:shared": "npm run test --workspace shared",
+    "test:client": "npm run test --workspace client",
+    "test:server": "npm run test --workspace server",
+    "db:generate": "npm run db:generate --workspace server",
+    "db:migrate": "npm run db:migrate --workspace server",
+    "db:push": "npm run db:push --workspace server",
+    "db:seed": "npm run db:seed --workspace server",
+    "db:seed:demo": "npm run db:seed:demo --workspace server",
+    "db:clean-demo": "npm run db:clean-demo --workspace server --",
+    "db:clear-demo": "npm run db:clear-demo --workspace server --",
+    "db:studio": "npm run db:studio --workspace server",
+    "clean": "rimraf \"**/node_modules\" \"**/dist\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "concurrently": "^9.1.2",
+    "eslint": "^9.18.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "eslint-plugin-react-refresh": "^0.4.18",
+    "globals": "^15.14.0",
+    "prettier": "^3.4.2",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.20.0"
+  }
+}

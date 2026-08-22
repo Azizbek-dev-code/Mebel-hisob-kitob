@@ -1,0 +1,187 @@
+import { describe, expect, it } from 'vitest';
+
+import { TEST_ADMIN, TEST_EMPLOYEE, TEST_PLATFORM_ADMIN } from '@/test/auth-fixtures';
+
+import { NAV_ITEMS, navItemForPath, navItemsForUser } from './navigation';
+import { ROUTES } from './paths';
+
+describe('NAV_ITEMS', () => {
+  it('covers every module the sidebar can show', () => {
+    expect(NAV_ITEMS.map((item) => item.key)).toEqual([
+      'dashboard',
+      'sales',
+      'my-sales',
+      'assembly',
+      'products',
+      'inventory',
+      'purchases',
+      'suppliers',
+      'customers',
+      'debts',
+      'expenses',
+      'workers',
+      'reports',
+      'audit',
+      'profile',
+      'settings',
+    ]);
+    expect(NAV_ITEMS.map((item) => item.key)).not.toContain('masters');
+  });
+
+  it('points every item at a path from the route registry', () => {
+    const registered = Object.values<unknown>(ROUTES).filter(
+      (value): value is string => typeof value === 'string',
+    );
+
+    for (const item of NAV_ITEMS) {
+      expect(registered).toContain(item.to);
+    }
+  });
+});
+
+describe('navItemsForUser', () => {
+  it('shows admin modules without my-sales/profile duplicates', () => {
+    const keys = navItemsForUser(TEST_ADMIN).map((item) => item.key);
+    expect(keys).toContain('workers');
+    expect(keys).toContain('sales');
+    expect(keys).not.toContain('my-sales');
+    expect(keys).not.toContain('profile');
+  });
+
+  it('adapts employee nav to responsibilities', () => {
+    const keys = navItemsForUser(TEST_EMPLOYEE).map((item) => item.key);
+    expect(keys).toEqual(
+      expect.arrayContaining(['dashboard', 'sales', 'my-sales', 'assembly', 'customers', 'profile']),
+    );
+    expect(keys).not.toContain('workers');
+    expect(keys).not.toContain('reports');
+    expect(keys).not.toContain('expenses');
+  });
+
+  it('shows expenses for store admins', () => {
+    expect(navItemsForUser(TEST_ADMIN).map((item) => item.key)).toContain('expenses');
+  });
+
+  it('shows inventory for store admins but not employees', () => {
+    expect(navItemsForUser(TEST_ADMIN).map((item) => item.key)).toContain('inventory');
+    expect(navItemsForUser(TEST_EMPLOYEE).map((item) => item.key)).not.toContain('inventory');
+  });
+
+  it('shows purchases and suppliers for store admins but not employees', () => {
+    const adminKeys = navItemsForUser(TEST_ADMIN).map((item) => item.key);
+    const employeeKeys = navItemsForUser(TEST_EMPLOYEE).map((item) => item.key);
+    expect(adminKeys).toContain('purchases');
+    expect(adminKeys).toContain('suppliers');
+    expect(employeeKeys).not.toContain('purchases');
+    expect(employeeKeys).not.toContain('suppliers');
+  });
+
+  it('shows debts for admins and sellers', () => {
+    expect(navItemsForUser(TEST_ADMIN).map((item) => item.key)).toContain('debts');
+    expect(navItemsForUser(TEST_EMPLOYEE).map((item) => item.key)).toContain('debts');
+  });
+
+  it('shows audit for store admins but not employees', () => {
+    expect(navItemsForUser(TEST_ADMIN).map((item) => item.key)).toContain('audit');
+    expect(navItemsForUser(TEST_EMPLOYEE).map((item) => item.key)).not.toContain('audit');
+  });
+
+  it('shows store requests only for platform admins', () => {
+    expect(navItemsForUser(TEST_PLATFORM_ADMIN).map((item) => item.key)).toContain('store-requests');
+    expect(navItemsForUser(TEST_ADMIN).map((item) => item.key)).not.toContain('store-requests');
+    expect(navItemsForUser(TEST_EMPLOYEE).map((item) => item.key)).not.toContain('store-requests');
+  });
+
+  it('gives PLATFORM_ADMIN the platform tree and hides store ERP modules', () => {
+    const keys = navItemsForUser(TEST_PLATFORM_ADMIN).map((item) => item.key);
+    expect(keys).toEqual([
+      'platform-dashboard',
+      'store-requests',
+      'platform-shops',
+      'platform-payments',
+      'platform-plans',
+      'platform-expenses',
+      'platform-pnl',
+      'platform-analytics',
+      'platform-settings',
+    ]);
+    expect(keys).not.toContain('sales');
+    expect(keys).not.toContain('workers');
+    expect(keys).not.toContain('expenses');
+    const shops = navItemsForUser(TEST_PLATFORM_ADMIN).find((item) => item.key === 'platform-shops');
+    expect(shops?.children).toBeUndefined();
+    expect(shops?.matchingPaths).toEqual([
+      ROUTES.platformShopsActive,
+      ROUTES.platformShopsPendingPayment,
+      ROUTES.platformShopsBlocked,
+    ]);
+    const labels = navItemsForUser(TEST_PLATFORM_ADMIN).map((item) => item.label);
+    expect(new Set(labels).size).toBe(labels.length);
+  });
+});
+
+describe('canReviewStoreCreationRequests', () => {
+  it('allows only PLATFORM_ADMIN', async () => {
+    const { canReviewStoreCreationRequests } = await import('./navigation');
+    expect(canReviewStoreCreationRequests(TEST_PLATFORM_ADMIN)).toBe(true);
+    expect(canReviewStoreCreationRequests(TEST_ADMIN)).toBe(false);
+    expect(canReviewStoreCreationRequests(TEST_EMPLOYEE)).toBe(false);
+  });
+});
+
+describe('canManageInventory', () => {
+  it('allows admins and blocks employees', async () => {
+    const { canManageInventory } = await import('./navigation');
+    expect(canManageInventory(TEST_ADMIN)).toBe(true);
+    expect(canManageInventory(TEST_EMPLOYEE)).toBe(false);
+  });
+});
+
+describe('canManagePurchasing', () => {
+  it('mirrors inventory admin gate', async () => {
+    const { canManagePurchasing, canManageInventory } = await import('./navigation');
+    expect(canManagePurchasing(TEST_ADMIN)).toBe(canManageInventory(TEST_ADMIN));
+    expect(canManagePurchasing(TEST_EMPLOYEE)).toBe(canManageInventory(TEST_EMPLOYEE));
+  });
+});
+
+describe('canManageExpenses', () => {
+  it('allows admins and blocks employees', async () => {
+    const { canManageExpenses } = await import('./navigation');
+    expect(canManageExpenses(TEST_ADMIN)).toBe(true);
+    expect(canManageExpenses(TEST_EMPLOYEE)).toBe(false);
+  });
+});
+
+describe('navItemForPath', () => {
+  it('names the module a page belongs to', () => {
+    expect(navItemForPath(ROUTES.sales)?.label).toBe('Sotuvlar');
+    expect(navItemForPath(ROUTES.dashboard)?.label).toBe('Dashboard');
+  });
+
+  it('keeps naming the module on its nested pages', () => {
+    expect(navItemForPath(ROUTES.saleNew)?.label).toBe('Sotuvlar');
+    expect(navItemForPath(ROUTES.customerDetail('cust_1'))?.label).toBe('Mijozlar');
+    expect(navItemForPath(ROUTES.purchaseNew)?.label).toBe('Kirimlar');
+    expect(navItemForPath(ROUTES.supplierDetail('sup_1'))?.label).toBe('Yetkazuvchilar');
+    expect(navItemForPath(ROUTES.masterDetail('master_1'))?.label).toBe('Ishchilar');
+    expect(navItemForPath(ROUTES.workerDetail('worker_1'))?.label).toBe('Ishchilar');
+  });
+
+  it('does not match a path that merely starts with the same letters', () => {
+    expect(navItemForPath('/salesforce')).toBeUndefined();
+  });
+
+  it('names platform store-request pages', () => {
+    expect(navItemForPath(ROUTES.platformStoreRequests)?.label).toBe("Do'kon so'rovlari");
+    expect(navItemForPath(ROUTES.platformStoreRequestDetail('req_1'))?.label).toBe(
+      "Do'kon so'rovlari",
+    );
+  });
+
+  it('keeps platform child pages under their parent module name', () => {
+    expect(navItemForPath(ROUTES.platformShopsActive)?.label).toBe("Do'konlar");
+    expect(navItemForPath(ROUTES.platformPaymentsOverdue)?.label).toBe("To'lovlar");
+    expect(navItemForPath(ROUTES.platformAnalyticsProfit)?.label).toBe('Analytics');
+  });
+});

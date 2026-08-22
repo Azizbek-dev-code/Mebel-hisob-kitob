@@ -1,0 +1,413 @@
+import { createBrowserRouter, Navigate, useParams, type RouteObject } from 'react-router-dom';
+import type { ReactNode } from 'react';
+
+import { AppLayout } from '@/components/layout/AppLayout';
+import { LoginPage } from '@/features/auth/pages/LoginPage';
+import { useCurrentUser } from '@/features/auth/hooks/use-auth';
+import { CustomersPage } from '@/features/customers/pages/CustomersPage';
+import { CustomerDetailPage } from '@/features/customers/pages/CustomerDetailPage';
+import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
+import { DebtsPage } from '@/features/debts/pages/DebtsPage';
+import { ExpensesPage } from '@/features/expenses/pages/ExpensesPage';
+import { InventoryPage } from '@/features/inventory/pages/InventoryPage';
+import { AccessBlockedPage } from '@/features/platform/pages/AccessBlockedPage';
+import {
+  PlatformAnalyticsExpensesPage,
+  PlatformAnalyticsPage,
+  PlatformAnalyticsProfitPage,
+  PlatformAnalyticsRevenuePage,
+  PlatformAnalyticsStoresPage,
+} from '@/features/platform/pages/PlatformAnalyticsPages';
+import { PlatformDashboardPage } from '@/features/platform/pages/PlatformDashboardPage';
+import { PlatformExpensesPage } from '@/features/platform/pages/PlatformExpensesPage';
+import {
+  PlatformPaymentsHistoryPage,
+  PlatformPaymentsOverduePage,
+  PlatformPaymentsPendingPage,
+} from '@/features/platform/pages/PlatformPaymentsPages';
+import { PlatformPlansPage } from '@/features/platform/pages/PlatformPlansPage';
+import { PlatformPnlPage } from '@/features/platform/pages/PlatformPnlPage';
+import { PlatformSettingsPage } from '@/features/platform/pages/PlatformSettingsPage';
+import { PlatformShopDetailPage } from '@/features/platform/pages/PlatformShopDetailPage';
+import { PlatformShopsPage } from '@/features/platform/pages/PlatformShopsPage';
+import { NewPurchasePage } from '@/features/purchasing/pages/NewPurchasePage';
+import { PurchaseDetailPage } from '@/features/purchasing/pages/PurchaseDetailPage';
+import { PurchasesPage } from '@/features/purchasing/pages/PurchasesPage';
+import { SupplierDetailPage } from '@/features/purchasing/pages/SupplierDetailPage';
+import { SuppliersPage } from '@/features/purchasing/pages/SuppliersPage';
+import { ProductsPage } from '@/features/products/pages/ProductsPage';
+import { ProductDetailPage } from '@/features/products/pages/ProductDetailPage';
+import { ReportsPage } from '@/features/reports/pages/ReportsPage';
+import { AssemblyTasksPage } from '@/features/sales/pages/AssemblyTasksPage';
+import { NewSalePage } from '@/features/sales/pages/NewSalePage';
+import { SaleDetailPage } from '@/features/sales/pages/SaleDetailPage';
+import { SalesPage } from '@/features/sales/pages/SalesPage';
+import { BackupPage } from '@/features/settings/pages/BackupPage';
+import { SettingsPage } from '@/features/settings/pages/SettingsPage';
+import { ForbiddenPage } from '@/features/store-creation/pages/ForbiddenPage';
+import { PlatformStoreRequestDetailPage } from '@/features/store-creation/pages/PlatformStoreRequestDetailPage';
+import { PlatformStoreRequestsPage } from '@/features/store-creation/pages/PlatformStoreRequestsPage';
+import { RegisterStorePage } from '@/features/store-creation/pages/RegisterStorePage';
+import { StoreRequestStatusPage } from '@/features/store-creation/pages/StoreRequestStatusPage';
+import { AuditPage } from '@/features/audit/pages/AuditPage';
+import { StoreBillingPage } from '@/features/subscription/pages/StoreBillingPage';
+import { SystemCheckPage } from '@/features/system/pages/SystemCheckPage';
+import { MySalesPage } from '@/features/workers/pages/MySalesPage';
+import { NewWorkerPage } from '@/features/workers/pages/NewWorkerPage';
+import { ProfilePage } from '@/features/workers/pages/ProfilePage';
+import { WorkerCompensationPage } from '@/features/workers/pages/WorkerCompensationPage';
+import { WorkerCompensationPreviewPage } from '@/features/workers/pages/WorkerCompensationPreviewPage';
+import { WorkerDashboardPage } from '@/features/workers/pages/WorkerDashboardPage';
+import { WorkerDetailPage } from '@/features/workers/pages/WorkerDetailPage';
+import { WorkerEditPage } from '@/features/workers/pages/WorkerEditPage';
+import { WorkerFinancesPage } from '@/features/workers/pages/WorkerFinancesPage';
+import { WorkersPage } from '@/features/workers/pages/WorkersPage';
+
+import { ProtectedRoute, PublicOnlyRoute } from './guards';
+import {
+  canManageExpenses,
+  canManageInventory,
+  canManageStoreSettings,
+  canManageWorkers,
+  canReadAuditLog,
+  canReviewStoreCreationRequests,
+} from './navigation';
+import { ROUTES } from './paths';
+
+export { ROUTES } from './paths';
+
+function HomeDashboard() {
+  const { data: user } = useCurrentUser();
+  if (canReviewStoreCreationRequests(user)) {
+    return <PlatformDashboardPage />;
+  }
+  // Financial analytics dashboard is store ADMIN only.
+  // Employees (and cashiers) get the personal "My Work" home instead.
+  if (canManageExpenses(user)) {
+    return <DashboardPage />;
+  }
+  return <WorkerDashboardPage />;
+}
+
+function RequireWorkerManager({ children }: { children: ReactNode }) {
+  const { data: user, isPending } = useCurrentUser();
+  if (isPending) return null;
+  if (!canManageWorkers(user)) {
+    return <Navigate to={ROUTES.dashboard} replace />;
+  }
+  return children;
+}
+
+/** Compatibility: old /masters/:id URLs open the unified worker detail. */
+function MasterToWorkerRedirect() {
+  const { id } = useParams();
+  if (!id) return <Navigate to={`${ROUTES.workers}?responsibility=ASSEMBLER`} replace />;
+  return <Navigate to={ROUTES.workerDetail(id)} replace />;
+}
+
+function RequireExpenseManager({ children }: { children: ReactNode }) {
+  const { data: user, isPending } = useCurrentUser();
+  if (isPending) return null;
+  if (!canManageExpenses(user)) {
+    return <Navigate to={ROUTES.dashboard} replace />;
+  }
+  return children;
+}
+
+function RequireStoreSettingsManager({ children }: { children: ReactNode }) {
+  const { data: user, isPending } = useCurrentUser();
+  if (isPending) return null;
+  if (!canManageStoreSettings(user)) {
+    return <Navigate to={ROUTES.settings} replace />;
+  }
+  return children;
+}
+
+function RequireAuditReader({ children }: { children: ReactNode }) {
+  const { data: user, isPending } = useCurrentUser();
+  if (isPending) return null;
+  if (!canReadAuditLog(user)) {
+    return <Navigate to={ROUTES.dashboard} replace />;
+  }
+  return children;
+}
+
+function RequirePlatformAdmin({ children }: { children: ReactNode }) {
+  const { data: user, isPending } = useCurrentUser();
+  if (isPending) return null;
+  if (!canReviewStoreCreationRequests(user)) {
+    return <ForbiddenPage />;
+  }
+  return children;
+}
+
+function platformOnly(page: ReactNode) {
+  return <RequirePlatformAdmin>{page}</RequirePlatformAdmin>;
+}
+
+function RequireInventoryManager({ children }: { children: ReactNode }) {
+  const { data: user, isPending } = useCurrentUser();
+  if (isPending) return null;
+  if (!canManageInventory(user)) {
+    return <Navigate to={ROUTES.dashboard} replace />;
+  }
+  return children;
+}
+
+/**
+ * Exported separately from the router so tests can mount the same tree in memory
+ * and check the real guards, redirects and layout rather than a copy of them.
+ */
+export const routes: RouteObject[] = [
+  {
+    element: <PublicOnlyRoute />,
+    children: [{ path: ROUTES.login, element: <LoginPage /> }],
+  },
+  { path: ROUTES.registerStore, element: <RegisterStorePage /> },
+  { path: '/register-store/:id', element: <StoreRequestStatusPage /> },
+  {
+    element: <ProtectedRoute />,
+    children: [
+      { index: true, element: <Navigate to={ROUTES.dashboard} replace /> },
+      { path: ROUTES.systemCheck, element: <SystemCheckPage /> },
+      { path: ROUTES.accessBlocked, element: <AccessBlockedPage /> },
+      {
+        element: <AppLayout />,
+        children: [
+          { path: ROUTES.dashboard, element: <HomeDashboard /> },
+          { path: ROUTES.billing, element: <StoreBillingPage /> },
+          { path: ROUTES.platformStoreRequests, element: platformOnly(<PlatformStoreRequestsPage />) },
+          {
+            path: '/platform/stores/requests/:id',
+            element: platformOnly(<PlatformStoreRequestDetailPage />),
+          },
+          { path: ROUTES.platformShops, element: platformOnly(<PlatformShopsPage filter="all" />) },
+          {
+            path: ROUTES.platformShopsActive,
+            element: platformOnly(<PlatformShopsPage filter="active" />),
+          },
+          {
+            path: ROUTES.platformShopsPendingPayment,
+            element: platformOnly(<PlatformShopsPage filter="pending-payment" />),
+          },
+          {
+            path: ROUTES.platformShopsBlocked,
+            element: platformOnly(<PlatformShopsPage filter="blocked" />),
+          },
+          {
+            path: '/platform/shops/:id',
+            element: platformOnly(<PlatformShopDetailPage />),
+          },
+          { path: ROUTES.platformPayments, element: platformOnly(<PlatformPaymentsHistoryPage />) },
+          {
+            path: ROUTES.platformPaymentsPending,
+            element: platformOnly(<PlatformPaymentsPendingPage />),
+          },
+          {
+            path: ROUTES.platformPaymentsOverdue,
+            element: platformOnly(<PlatformPaymentsOverduePage />),
+          },
+          { path: ROUTES.platformPlans, element: platformOnly(<PlatformPlansPage />) },
+          { path: ROUTES.platformExpenses, element: platformOnly(<PlatformExpensesPage />) },
+          { path: ROUTES.platformPnl, element: platformOnly(<PlatformPnlPage />) },
+          { path: ROUTES.platformAnalytics, element: platformOnly(<PlatformAnalyticsPage />) },
+          {
+            path: ROUTES.platformAnalyticsStores,
+            element: platformOnly(<PlatformAnalyticsStoresPage />),
+          },
+          {
+            path: ROUTES.platformAnalyticsRevenue,
+            element: platformOnly(<PlatformAnalyticsRevenuePage />),
+          },
+          {
+            path: ROUTES.platformAnalyticsExpenses,
+            element: platformOnly(<PlatformAnalyticsExpensesPage />),
+          },
+          {
+            path: ROUTES.platformAnalyticsProfit,
+            element: platformOnly(<PlatformAnalyticsProfitPage />),
+          },
+          { path: ROUTES.platformSettings, element: platformOnly(<PlatformSettingsPage />) },
+          { path: ROUTES.sales, element: <SalesPage /> },
+          { path: ROUTES.saleNew, element: <NewSalePage /> },
+          { path: '/sales/:id', element: <SaleDetailPage /> },
+          { path: ROUTES.assemblyTasks, element: <AssemblyTasksPage /> },
+          { path: ROUTES.mySales, element: <MySalesPage /> },
+          { path: ROUTES.profile, element: <ProfilePage /> },
+          {
+            path: ROUTES.products,
+            element: (
+              <RequireInventoryManager>
+                <ProductsPage />
+              </RequireInventoryManager>
+            ),
+          },
+          {
+            path: '/products/:id',
+            element: (
+              <RequireInventoryManager>
+                <ProductDetailPage />
+              </RequireInventoryManager>
+            ),
+          },
+          {
+            path: ROUTES.inventory,
+            element: (
+              <RequireInventoryManager>
+                <InventoryPage />
+              </RequireInventoryManager>
+            ),
+          },
+          {
+            path: ROUTES.purchases,
+            element: (
+              <RequireInventoryManager>
+                <PurchasesPage />
+              </RequireInventoryManager>
+            ),
+          },
+          {
+            path: ROUTES.purchaseNew,
+            element: (
+              <RequireInventoryManager>
+                <NewPurchasePage />
+              </RequireInventoryManager>
+            ),
+          },
+          {
+            path: '/purchases/:id',
+            element: (
+              <RequireInventoryManager>
+                <PurchaseDetailPage />
+              </RequireInventoryManager>
+            ),
+          },
+          {
+            path: ROUTES.suppliers,
+            element: (
+              <RequireInventoryManager>
+                <SuppliersPage />
+              </RequireInventoryManager>
+            ),
+          },
+          {
+            path: '/suppliers/:id',
+            element: (
+              <RequireInventoryManager>
+                <SupplierDetailPage />
+              </RequireInventoryManager>
+            ),
+          },
+          { path: ROUTES.customers, element: <CustomersPage /> },
+          { path: '/customers/:id', element: <CustomerDetailPage /> },
+          { path: ROUTES.debts, element: <DebtsPage /> },
+          {
+            path: ROUTES.expenses,
+            element: (
+              <RequireExpenseManager>
+                <ExpensesPage />
+              </RequireExpenseManager>
+            ),
+          },
+          {
+            path: ROUTES.workers,
+            element: (
+              <RequireWorkerManager>
+                <WorkersPage />
+              </RequireWorkerManager>
+            ),
+          },
+          {
+            path: ROUTES.workerNew,
+            element: (
+              <RequireWorkerManager>
+                <NewWorkerPage />
+              </RequireWorkerManager>
+            ),
+          },
+          {
+            path: '/workers/:id/edit',
+            element: (
+              <RequireWorkerManager>
+                <WorkerEditPage />
+              </RequireWorkerManager>
+            ),
+          },
+          {
+            path: '/workers/:id/finances',
+            element: (
+              <RequireWorkerManager>
+                <WorkerFinancesPage />
+              </RequireWorkerManager>
+            ),
+          },
+          {
+            path: '/workers/:id/compensation/preview',
+            element: (
+              <RequireWorkerManager>
+                <WorkerCompensationPreviewPage />
+              </RequireWorkerManager>
+            ),
+          },
+          {
+            path: '/workers/:id/compensation',
+            element: (
+              <RequireWorkerManager>
+                <WorkerCompensationPage />
+              </RequireWorkerManager>
+            ),
+          },
+          {
+            path: '/workers/:id',
+            element: (
+              <RequireWorkerManager>
+                <WorkerDetailPage />
+              </RequireWorkerManager>
+            ),
+          },
+          {
+            path: ROUTES.masters,
+            element: (
+              <Navigate to={`${ROUTES.workers}?responsibility=ASSEMBLER`} replace />
+            ),
+          },
+          {
+            path: '/masters/:id',
+            element: <MasterToWorkerRedirect />,
+          },
+          {
+            path: ROUTES.reports,
+            element: (
+              <RequireExpenseManager>
+                <ReportsPage />
+              </RequireExpenseManager>
+            ),
+          },
+          {
+            path: ROUTES.audit,
+            element: (
+              <RequireAuditReader>
+                <AuditPage />
+              </RequireAuditReader>
+            ),
+          },
+          {
+            path: ROUTES.settingsBackup,
+            element: (
+              <RequireStoreSettingsManager>
+                <BackupPage />
+              </RequireStoreSettingsManager>
+            ),
+          },
+          { path: ROUTES.settings, element: <SettingsPage /> },
+        ],
+      },
+    ],
+  },
+  {
+    path: '*',
+    element: <Navigate to={ROUTES.dashboard} replace />,
+  },
+];
+
+export const router = createBrowserRouter(routes);

@@ -1,0 +1,10 @@
+{
+  // The seed script lives outside `src`, so the build config cannot see it.
+  // This config exists purely so `npm run typecheck` still covers it.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".."
+  },
+  "include": ["prisma/**/*.ts", "scripts/clean-demo-data.ts", "scripts/store-creation-e2e.ts", "scripts/platform-billing-e2e.ts", "scripts/empty-platform-e2e.ts", "scripts/saas-trial-e2e.ts", "src/**/*.ts"]
+}
