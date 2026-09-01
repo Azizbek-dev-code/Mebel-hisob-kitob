@@ -138,9 +138,17 @@ export function compensationDateRangesOverlap(
   return aFrom.getTime() <= bEnd && bFrom.getTime() <= aEnd;
 }
 
+/** UTC civil day `YYYY-MM-DD` — matches parseFlexibleDate noon-UTC calendar dates. */
+export function utcCalendarDay(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
+
 /**
- * Inclusive: rule covers `eventDate` when
- * effectiveFrom <= eventDate and (effectiveTo is null or eventDate <= effectiveTo).
+ * Inclusive civil-day window (UTC date of each instant).
+ *
+ * Calendar inputs are stored at noon UTC so Asia/Tashkent still shows the intended
+ * day. Instant comparison would miss morning sales on the start day
+ * (`04:00Z` < `12:00Z` on the same date). Compare `YYYY-MM-DD` instead.
  *
  * Soft `isActive` is not used here — historical inactive rules still apply inside
  * their effective window (set effectiveTo to close a rule for future events).
@@ -149,9 +157,9 @@ export function isCompensationRuleEffectiveOn(
   rule: { effectiveFrom: Date; effectiveTo: Date | null },
   eventDate: Date,
 ): boolean {
-  const t = eventDate.getTime();
-  if (t < rule.effectiveFrom.getTime()) return false;
-  if (rule.effectiveTo && t > rule.effectiveTo.getTime()) return false;
+  const eventDay = utcCalendarDay(eventDate);
+  if (eventDay < utcCalendarDay(rule.effectiveFrom)) return false;
+  if (rule.effectiveTo && eventDay > utcCalendarDay(rule.effectiveTo)) return false;
   return true;
 }
 

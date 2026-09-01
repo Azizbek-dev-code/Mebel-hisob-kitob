@@ -1,13 +1,15 @@
 import {
   DEFAULT_STORE_TIMEZONE,
+  STORE_RESET_CONFIRMATION,
   STORE_TIMEZONE_OPTIONS,
   SUBSCRIPTION_STATUS_LABELS,
   UserRole,
   type StoreProfile,
 } from '@furniture-erp/shared';
-import { DatabaseBackup, Settings, Tags } from 'lucide-react';
+import { AlertTriangle, DatabaseBackup, Settings, Tags } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 
 import { ErrorState } from '@/components/feedback/ErrorState';
@@ -22,7 +24,7 @@ import { ROUTES } from '@/routes/paths';
 import { formatDate, formatDateTime } from '@/utils/format';
 import { storeBillingService } from '@/services/store-billing.service';
 
-import { useStoreSettings, useUpdateStoreSettings } from '../hooks/use-settings';
+import { useResetStore, useStoreSettings, useUpdateStoreSettings } from '../hooks/use-settings';
 
 const fieldClass =
   'w-full rounded-input border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100';
@@ -36,16 +38,16 @@ function fieldError(error: unknown, field: string): string | null {
   return error.details.find((d) => d.field === field)?.message ?? null;
 }
 
-function loadErrorMessage(error: unknown): string {
+function loadErrorMessage(error: unknown, t: (key: string) => string): string {
   if (error instanceof ApiClientError) {
-    if (error.isForbidden) return 'Do‘kon sozlamalarini ko‘rish uchun ruxsat yo‘q.';
-    return error.message || 'Qayta urinib ko‘ring.';
+    if (error.isForbidden) return t('settings.forbiddenView');
+    return error.message || t('common.retry');
   }
-  return 'Qayta urinib ko‘ring.';
+  return t('common.retry');
 }
 
-function timezoneLabel(value: string): string {
-  if (value === DEFAULT_STORE_TIMEZONE) return 'Toshkent (Asia/Tashkent)';
+function timezoneLabel(value: string, t: (key: string) => string): string {
+  if (value === DEFAULT_STORE_TIMEZONE) return t('settings.timezoneTashkent');
   return value;
 }
 
@@ -55,6 +57,7 @@ interface StoreSettingsFormProps {
 }
 
 function StoreSettingsForm({ store, editable }: StoreSettingsFormProps) {
+  const { t } = useTranslation();
   const updateStore = useUpdateStoreSettings();
 
   const [name, setName] = useState(store.name);
@@ -73,8 +76,8 @@ function StoreSettingsForm({ store, editable }: StoreSettingsFormProps) {
 
   useEffect(() => {
     if (!message) return;
-    const t = window.setTimeout(() => setMessage(null), 3500);
-    return () => window.clearTimeout(t);
+    const timer = window.setTimeout(() => setMessage(null), 3500);
+    return () => window.clearTimeout(timer);
   }, [message]);
 
   const busy = updateStore.isPending;
@@ -88,7 +91,7 @@ function StoreSettingsForm({ store, editable }: StoreSettingsFormProps) {
     setMessage(null);
 
     if (!name.trim()) {
-      setFormError('Do‘kon nomi majburiy');
+      setFormError(t('settings.storeNameRequired'));
       return;
     }
 
@@ -99,17 +102,17 @@ function StoreSettingsForm({ store, editable }: StoreSettingsFormProps) {
         address: address.trim() ? address.trim() : null,
         timezone,
       });
-      setMessage('Sozlamalar saqlandi');
+      setMessage(t('settings.saved'));
     } catch (error) {
       if (error instanceof ApiClientError && error.isForbidden) {
-        setFormError('Sozlamalarni tahrirlash uchun ruxsat yo‘q.');
+        setFormError(t('settings.forbiddenEdit'));
         return;
       }
       if (error instanceof ApiClientError) {
-        setFormError(error.message || 'Saqlashda xatolik yuz berdi.');
+        setFormError(error.message || t('settings.saveError'));
         return;
       }
-      setFormError('Saqlashda xatolik yuz berdi.');
+      setFormError(t('settings.saveError'));
     }
   }
 
@@ -120,17 +123,15 @@ function StoreSettingsForm({ store, editable }: StoreSettingsFormProps) {
 
   return (
     <SectionCard
-      title="Do‘kon profili"
+      title={t('settings.storeProfile')}
       description={
-        editable
-          ? 'Do‘kon nomi, aloqa va vaqt mintaqasini yangilang.'
-          : 'Do‘kon ma’lumotlari faqat ko‘rish uchun.'
+        editable ? t('settings.storeProfileEditHint') : t('settings.storeProfileViewHint')
       }
     >
       <form className="space-y-4" onSubmit={(event) => void handleSubmit(event)}>
         <div>
           <label className="mb-1 block text-sm text-ink-soft" htmlFor="store-name">
-            Do‘kon nomi
+            {t('settings.storeName')}
           </label>
           <input
             id="store-name"
@@ -146,7 +147,7 @@ function StoreSettingsForm({ store, editable }: StoreSettingsFormProps) {
 
         <div>
           <label className="mb-1 block text-sm text-ink-soft" htmlFor="store-phone">
-            Telefon
+            {t('common.phone')}
           </label>
           <input
             id="store-phone"
@@ -162,7 +163,7 @@ function StoreSettingsForm({ store, editable }: StoreSettingsFormProps) {
 
         <div>
           <label className="mb-1 block text-sm text-ink-soft" htmlFor="store-address">
-            Manzil
+            {t('sales.address')}
           </label>
           <textarea
             id="store-address"
@@ -178,7 +179,7 @@ function StoreSettingsForm({ store, editable }: StoreSettingsFormProps) {
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm text-ink-soft" htmlFor="store-currency">
-              Valyuta
+              {t('settings.currency')}
             </label>
             <input
               id="store-currency"
@@ -190,7 +191,7 @@ function StoreSettingsForm({ store, editable }: StoreSettingsFormProps) {
 
           <div>
             <label className="mb-1 block text-sm text-ink-soft" htmlFor="store-timezone">
-              Vaqt mintaqasi
+              {t('settings.timezone')}
             </label>
             {editable ? (
               <select
@@ -201,7 +202,7 @@ function StoreSettingsForm({ store, editable }: StoreSettingsFormProps) {
               >
                 {STORE_TIMEZONE_OPTIONS.map((option) => (
                   <option key={option} value={option}>
-                    {timezoneLabel(option)}
+                    {timezoneLabel(option, t)}
                   </option>
                 ))}
               </select>
@@ -209,7 +210,7 @@ function StoreSettingsForm({ store, editable }: StoreSettingsFormProps) {
               <input
                 id="store-timezone"
                 className={cn(fieldClass, 'bg-surface-muted text-ink-muted')}
-                value={timezoneLabel(store.timezone)}
+                value={timezoneLabel(store.timezone, t)}
                 readOnly
               />
             )}
@@ -218,7 +219,7 @@ function StoreSettingsForm({ store, editable }: StoreSettingsFormProps) {
         </div>
 
         <p className="text-xs text-ink-subtle">
-          Oxirgi yangilanish: {formatDateTime(store.updatedAt)}
+          {t('settings.lastUpdated', { date: formatDateTime(store.updatedAt) })}
         </p>
 
         {formError ? <p className="text-sm text-danger">{formError}</p> : null}
@@ -231,7 +232,7 @@ function StoreSettingsForm({ store, editable }: StoreSettingsFormProps) {
               className="rounded-input bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={busy}
             >
-              {busy ? 'Saqlanmoqda…' : 'Saqlash'}
+              {busy ? t('common.saving') : t('common.save')}
             </button>
           </div>
         ) : null}
@@ -241,6 +242,7 @@ function StoreSettingsForm({ store, editable }: StoreSettingsFormProps) {
 }
 
 export function SettingsPage() {
+  const { t } = useTranslation();
   const { data: currentUser } = useCurrentUser();
   const settings = useStoreSettings(Boolean(currentUser));
   const editable = canManageSettings(currentUser?.role);
@@ -249,8 +251,8 @@ export function SettingsPage() {
     return (
       <PageContainer>
         <ErrorState
-          title="Sozlamalarni yuklab bo‘lmadi"
-          message={loadErrorMessage(settings.error)}
+          title={t('settings.loadFailed')}
+          message={loadErrorMessage(settings.error, t)}
           onRetry={() => void settings.refetch()}
         />
       </PageContainer>
@@ -272,10 +274,8 @@ export function SettingsPage() {
           <Settings className="size-5" aria-hidden="true" />
         </span>
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-ink">Sozlamalar</h2>
-          <p className="mt-1 text-sm text-ink-muted">
-            Joriy do‘kon profili va standartlar.
-          </p>
+          <h2 className="text-2xl font-semibold tracking-tight text-ink">{t('settings.title')}</h2>
+          <p className="mt-1 text-sm text-ink-muted">{t('settings.subtitle')}</p>
         </div>
       </div>
 
@@ -284,24 +284,109 @@ export function SettingsPage() {
       {editable ? <StoreSubscriptionSettings /> : null}
 
       {editable ? (
-        <SectionCard
-          title="Zaxira nusxa"
-          description="Do‘kon ma’lumotlarini eksport qilish va tiklash — faqat administrator."
-        >
+        <SectionCard title={t('settings.backup')} description={t('settings.backupHint')}>
           <Link
             to={ROUTES.settingsBackup}
             className="inline-flex items-center gap-2 rounded-input border border-line bg-surface px-4 py-2.5 text-sm font-medium text-ink hover:border-brand-200 hover:bg-brand-50"
           >
             <DatabaseBackup className="size-4 text-brand-600" aria-hidden="true" />
-            Zaxira / tiklash
+            {t('settings.backupLink')}
           </Link>
         </SectionCard>
       ) : null}
+
+      {editable ? <StoreResetSection /> : null}
     </PageContainer>
   );
 }
 
+function StoreResetSection() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const resetStore = useResetStore();
+  const [confirmation, setConfirmation] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [doneMessage, setDoneMessage] = useState<string | null>(null);
+
+  const busy = resetStore.isPending;
+  const phraseOk = confirmation === STORE_RESET_CONFIRMATION;
+
+  async function handleReset(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    setDoneMessage(null);
+
+    if (!phraseOk) {
+      setError(t('settings.resetConfirmMismatch'));
+      return;
+    }
+
+    try {
+      const result = await resetStore.mutateAsync({ confirmation });
+      setConfirmation('');
+      setDoneMessage(
+        t('settings.resetSuccess', { count: result.totalDeletedRows }),
+      );
+      navigate(ROUTES.dashboard, { replace: true });
+    } catch (err) {
+      if (err instanceof ApiClientError && err.isForbidden) {
+        setError(t('settings.forbiddenEdit'));
+        return;
+      }
+      if (err instanceof ApiClientError) {
+        setError(err.message || t('settings.resetFailed'));
+        return;
+      }
+      setError(t('settings.resetFailed'));
+    }
+  }
+
+  return (
+    <SectionCard title={t('settings.resetTitle')} description={t('settings.resetHint')}>
+      <div className="space-y-4">
+        <div className="flex gap-3 rounded-input border border-danger-100 bg-danger-50 px-3 py-3 text-sm text-danger-700">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger-600" aria-hidden="true" />
+          <div className="space-y-1">
+            <p className="font-medium">{t('settings.resetWarning')}</p>
+            <p>{t('settings.resetKeeps')}</p>
+          </div>
+        </div>
+
+        <form className="space-y-3" onSubmit={(event) => void handleReset(event)}>
+          <div>
+            <label className="mb-1 block text-sm text-ink-soft" htmlFor="store-reset-confirm">
+              {t('settings.resetTypePhrase', { phrase: STORE_RESET_CONFIRMATION })}
+            </label>
+            <input
+              id="store-reset-confirm"
+              className={fieldClass}
+              value={confirmation}
+              onChange={(event) => setConfirmation(event.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+              placeholder={STORE_RESET_CONFIRMATION}
+              disabled={busy}
+            />
+          </div>
+
+          {error ? <p className="text-sm text-danger">{error}</p> : null}
+          {doneMessage ? <p className="text-sm text-success">{doneMessage}</p> : null}
+
+          <button
+            type="submit"
+            className="rounded-input bg-danger-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-danger-700 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={busy || !phraseOk}
+          >
+            {busy ? t('settings.resetting') : t('settings.resetAction')}
+          </button>
+        </form>
+      </div>
+    </SectionCard>
+  );
+}
+
 function StoreSubscriptionSettings() {
+  const { t } = useTranslation();
   const subscription = useQuery({
     queryKey: ['store-billing-subscription'],
     queryFn: ({ signal }) => storeBillingService.getSubscription(signal),
@@ -310,21 +395,20 @@ function StoreSubscriptionSettings() {
   const isTrial = sub?.status === 'TRIAL';
 
   return (
-    <SectionCard
-      title="Tarif / Obuna"
-      description="Joriy obuna holati. Tarifni o‘zgartirish billing sahifasida."
-    >
+    <SectionCard title={t('settings.subscription')} description={t('settings.subscriptionHint')}>
       {subscription.isPending && !subscription.data ? (
         <Skeleton className="h-24 w-full" />
       ) : !sub ? (
-        <p className="text-sm text-ink-muted">Obuna ma’lumoti yo‘q.</p>
+        <p className="text-sm text-ink-muted">{t('settings.noSubscription')}</p>
       ) : (
         <div className="space-y-3 text-sm">
           <div className="flex flex-wrap items-center gap-2">
             <span className="flex size-8 items-center justify-center rounded-input bg-brand-50 text-brand-600">
               <Tags className="size-4" aria-hidden="true" />
             </span>
-            <p className="font-semibold text-ink">{isTrial ? 'FREE TRIAL' : sub.planName}</p>
+            <p className="font-semibold text-ink">
+              {isTrial ? t('settings.freeTrial') : sub.planName}
+            </p>
             <Badge
               tone={
                 sub.status === 'ACTIVE' || sub.status === 'TRIAL'
@@ -337,15 +421,15 @@ function StoreSubscriptionSettings() {
               {SUBSCRIPTION_STATUS_LABELS[sub.status]}
             </Badge>
           </div>
-          {isTrial ? <p className="text-ink-muted">7 kunlik sinov</p> : null}
+          {isTrial ? <p className="text-ink-muted">{t('settings.trialDays')}</p> : null}
           <p className="text-ink-muted">
-            Boshlangan: {formatDate(sub.startedAt)}
+            {t('settings.started', { date: formatDate(sub.startedAt) })}
             <br />
-            Tugash: {formatDate(sub.expiresAt)}
+            {t('settings.expires', { date: formatDate(sub.expiresAt) })}
             {sub.daysRemaining != null ? (
               <>
                 <br />
-                Qolgan: {sub.daysRemaining} kun
+                {t('settings.daysLeft', { count: sub.daysRemaining })}
               </>
             ) : null}
           </p>
@@ -358,7 +442,11 @@ function StoreSubscriptionSettings() {
             {(sub.usage ?? []).map((row) => (
               <li key={row.resourceKey}>
                 {row.name}: {row.used}
-                {row.unlimited ? ' / cheksiz' : row.limitValue != null ? ` / ${row.limitValue}` : ''}
+                {row.unlimited
+                  ? ` / ${t('settings.unlimited')}`
+                  : row.limitValue != null
+                    ? ` / ${row.limitValue}`
+                    : ''}
               </li>
             ))}
           </ul>
@@ -366,7 +454,7 @@ function StoreSubscriptionSettings() {
             to={ROUTES.billing}
             className="inline-flex items-center rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
           >
-            {isTrial ? 'Tarif tanlash' : 'Tarifni o‘zgartirish'}
+            {isTrial ? t('settings.choosePlan') : t('settings.changePlan')}
           </Link>
         </div>
       )}

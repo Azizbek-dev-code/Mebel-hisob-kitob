@@ -3,6 +3,7 @@ import {
   WORKER_FINANCIAL_CREATABLE_TYPES,
   WorkerFinancialReferenceType,
   WorkerFinancialTransactionType,
+  WorkerResponsibility,
 } from '@furniture-erp/shared';
 import { z } from 'zod';
 
@@ -69,7 +70,8 @@ export const createWorkerFinancialTransactionBodySchema = z.object({
   transactionDate: flexibleDateSchema,
   description: z.string().trim().max(1000).optional(),
   referenceType: referenceTypeSchema.optional(),
-  referenceId: cuidSchema.optional(),
+  referenceId: z.string().trim().min(1).max(120).optional(),
+  responsibility: z.nativeEnum(WorkerResponsibility).optional(),
 });
 
 export const reverseWorkerFinancialTransactionBodySchema = z

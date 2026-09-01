@@ -25,6 +25,7 @@ const { prismaMock } = vi.hoisted(() => {
       count: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      delete: vi.fn(),
     },
     saleItem: { findMany: vi.fn() },
     payment: { create: vi.fn() },
@@ -39,6 +40,7 @@ const { prismaMock } = vi.hoisted(() => {
     },
     workerActivity: {
       create: vi.fn(),
+      deleteMany: vi.fn(),
     },
     stockMovement: {
       create: vi.fn(),
@@ -49,6 +51,8 @@ const { prismaMock } = vi.hoisted(() => {
     },
     workerFinancialTransaction: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
     },
     workerCompensationRule: {
       findMany: vi.fn(),
@@ -70,6 +74,11 @@ vi.mock('./audit.service.js', () => ({
 vi.mock('./entitlement.service.js', () => ({
   assertCanUseFeature: vi.fn(),
   assertCanCreateResource: vi.fn(),
+}));
+
+vi.mock('./seller-commission.service.js', () => ({
+  syncSellerCommissionForSale: vi.fn(async () => ({ posted: 0, reversed: 0 })),
+  decorateSellerSales: vi.fn(async () => []),
 }));
 
 import * as saleService from './sale.service.js';
@@ -154,6 +163,7 @@ function detailSale(overrides: Record<string, unknown> = {}) {
     installationDate: null,
     installationNotes: null,
     deliveryStatus: FulfilmentStatus.NOT_REQUIRED,
+    deliveryDueDate: null,
     deliveryDate: null,
     deliveryAddress: null,
     deliveryNotes: null,
@@ -273,6 +283,7 @@ beforeEach(() => {
   (prismaMock.workerFinancialTransaction.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
     null,
   );
+  (prismaMock.workerFinancialTransaction.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
   (prismaMock.workerCompensationRule.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 });
 
@@ -529,7 +540,7 @@ describe('assembly assignment', () => {
     );
 
     (prismaMock.assemblyTask.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { id: 'task_1', assigneeId: ALI_ID, status: AssemblyTaskStatus.PENDING },
+      { id: 'task_1', assigneeId: ALI_ID, status: AssemblyTaskStatus.PENDING, assignedAt: new Date() },
     ]);
     (prismaMock.assemblyTask.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
     (prismaMock.assemblyTask.create as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'task_2' });
@@ -552,6 +563,33 @@ describe('assembly assignment', () => {
         data: expect.objectContaining({ assigneeId: 'user_bek' }),
       }),
     );
+  });
+
+  it('does not create another assembly task when sale is edited with the same usta', async () => {
+    (prismaMock.sale.findFirst as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(detailSale())
+      .mockResolvedValueOnce(detailSale())
+      .mockResolvedValue(detailSale({ notes: 'Narx yangilandi' }));
+    (prismaMock.sale.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    (prismaMock.assemblyTask.create as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'task_x' });
+
+    await saleService.updateSale(STORE_ID, { id: ADMIN_ID, role: UserRole.ADMIN }, SALE_ID, {
+      assemblerId: ALI_ID,
+      notes: 'Narx yangilandi',
+    });
+
+    expect(prismaMock.assemblyTask.create).not.toHaveBeenCalled();
+    expect(prismaMock.assemblyTask.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.sale.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          notes: 'Narx yangilandi',
+        }),
+      }),
+    );
+    const updateData = (prismaMock.sale.update as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]
+      ?.data as Record<string, unknown>;
+    expect(updateData.assemblyStatus).toBeUndefined();
   });
 
   it('completes an assembly task and updates the sale', async () => {
@@ -754,6 +792,53 @@ describe('cancelSale', () => {
         reason: 'Wrong store',
       }),
     ).rejects.toMatchObject({ statusCode: 404 });
+  });
+});
+
+describe('deleteCancelledSale', () => {
+  beforeEach(() => {
+    (prismaMock.$transaction as ReturnType<typeof vi.fn>).mockImplementation(
+      async (fn: (tx: typeof prismaMock) => Promise<unknown>) => fn(prismaMock),
+    );
+  });
+
+  it('permanently deletes a cancelled sale', async () => {
+    (prismaMock.sale.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: SALE_ID,
+      saleNumber: 123,
+      status: 'CANCELLED',
+    });
+    (prismaMock.workerActivity.deleteMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 1,
+    });
+    (prismaMock.sale.delete as ReturnType<typeof vi.fn>).mockResolvedValue({});
+
+    await expect(
+      saleService.deleteCancelledSale(STORE_ID, { id: ADMIN_ID, role: UserRole.ADMIN }, SALE_ID),
+    ).resolves.toBeUndefined();
+
+    expect(prismaMock.workerActivity.deleteMany).toHaveBeenCalledWith({
+      where: { storeId: STORE_ID, relatedSaleId: SALE_ID },
+    });
+    expect(prismaMock.sale.delete).toHaveBeenCalledWith({ where: { id: SALE_ID } });
+  });
+
+  it('refuses to delete an active sale', async () => {
+    (prismaMock.sale.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: SALE_ID,
+      saleNumber: 123,
+      status: 'ACTIVE',
+    });
+
+    await expect(
+      saleService.deleteCancelledSale(STORE_ID, { id: ADMIN_ID, role: UserRole.ADMIN }, SALE_ID),
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it('forbids non-admin delete', async () => {
+    await expect(
+      saleService.deleteCancelledSale(STORE_ID, { id: SELLER_ID, role: UserRole.EMPLOYEE }, SALE_ID),
+    ).rejects.toMatchObject({ statusCode: 403 });
   });
 });
 
@@ -1092,5 +1177,199 @@ describe('sale cost fees (usta / shopir)', () => {
         { driverFee: 10_000 },
       ),
     ).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('posts shopir DELIVERY_FEE commission when delivery is completed', async () => {
+    const shopirId = 'user_shopir';
+    const scheduled = detailSale({
+      deliveryStatus: FulfilmentStatus.SCHEDULED,
+      deliveryPersonId: shopirId,
+      deliveryCost: 130_000n,
+      deliveryPerson: { id: shopirId, fullName: 'Shopir', role: UserRole.EMPLOYEE },
+      assemblyTasks: [],
+    });
+    const completed = {
+      ...scheduled,
+      deliveryStatus: FulfilmentStatus.COMPLETED,
+      deliveryDate: new Date('2026-08-25T12:00:00.000Z'),
+    };
+
+    (prismaMock.sale.findFirst as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(scheduled) // findSaleDetail
+      .mockResolvedValueOnce(scheduled) // findSaleForUpdate
+      .mockResolvedValueOnce({
+        id: SALE_ID,
+        saleNumber: 123,
+        deliveryCost: 130_000n,
+        deliveryPersonId: shopirId,
+        items: [{ productName: PRODUCT.name }],
+      }) // saleForFee after update
+      .mockResolvedValue(completed); // getSale
+
+    (prismaMock.sale.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    (prismaMock.workerFinancialTransaction.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
+      null,
+    );
+    (prismaMock.workerFinancialTransaction.findMany as ReturnType<typeof vi.fn>).mockResolvedValue(
+      [],
+    );
+    (prismaMock.workerFinancialTransaction.create as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 'tx_delivery',
+      storeId: STORE_ID,
+      workerId: shopirId,
+      type: 'COMMISSION',
+      amount: 130_000n,
+      transactionDate: new Date(),
+      description: 'Yetkazib berish haqi',
+      referenceType: 'SALE',
+      referenceId: `${SALE_ID}:DELIVERY_FEE`,
+      reversesType: null,
+      createdById: ADMIN_ID,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      worker: { id: shopirId, fullName: 'Shopir', isActive: true },
+      createdBy: { id: ADMIN_ID, fullName: 'Admin' },
+    });
+
+    await saleService.updateSale(STORE_ID, { id: ADMIN_ID, role: UserRole.ADMIN }, SALE_ID, {
+      deliveryStatus: FulfilmentStatus.COMPLETED,
+    });
+
+    expect(prismaMock.workerFinancialTransaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          workerId: shopirId,
+          type: 'COMMISSION',
+          amount: 130_000n,
+          referenceType: 'SALE',
+          referenceId: `${SALE_ID}:DELIVERY_FEE`,
+        }),
+      }),
+    );
+  });
+
+  it('does not duplicate shopir fee when delivery complete is repeated', async () => {
+    const shopirId = 'user_shopir';
+    const completed = detailSale({
+      deliveryStatus: FulfilmentStatus.COMPLETED,
+      deliveryPersonId: shopirId,
+      deliveryCost: 130_000n,
+      deliveryPerson: { id: shopirId, fullName: 'Shopir', role: UserRole.EMPLOYEE },
+      assemblyTasks: [],
+    });
+
+    (prismaMock.sale.findFirst as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(completed)
+      .mockResolvedValueOnce(completed)
+      .mockResolvedValueOnce({
+        id: SALE_ID,
+        saleNumber: 123,
+        deliveryCost: 130_000n,
+        deliveryPersonId: shopirId,
+        items: [{ productName: PRODUCT.name }],
+      })
+      .mockResolvedValue(completed);
+
+    (prismaMock.sale.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    // Open commission already exists for this ref → postDeliveryFeeOnComplete skips create.
+    const existingCommission = {
+      id: 'tx_existing',
+      storeId: STORE_ID,
+      workerId: shopirId,
+      type: 'COMMISSION',
+      amount: 130_000n,
+      transactionDate: new Date(),
+      description: 'Yetkazib berish haqi',
+      referenceType: 'SALE',
+      referenceId: `${SALE_ID}:DELIVERY_FEE`,
+      reversesType: null,
+      createdById: ADMIN_ID,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      worker: { id: shopirId, fullName: 'Shopir', isActive: true },
+      createdBy: { id: ADMIN_ID, fullName: 'Admin' },
+    };
+    (prismaMock.workerFinancialTransaction.findFirst as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(existingCommission) // open COMMISSION for DELIVERY_FEE
+      .mockResolvedValue(null); // no REVERSAL (and any later ref checks)
+
+    await saleService.updateSale(STORE_ID, { id: ADMIN_ID, role: UserRole.ADMIN }, SALE_ID, {
+      deliveryStatus: FulfilmentStatus.COMPLETED,
+      notes: 'again',
+    });
+
+    expect(prismaMock.workerFinancialTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('posts missing shopir fee when driverFee is saved on an already-completed delivery', async () => {
+    const shopirId = 'user_shopir';
+    const completed = detailSale({
+      deliveryStatus: FulfilmentStatus.COMPLETED,
+      deliveryPersonId: shopirId,
+      deliveryCost: 0n,
+      deliveryPerson: { id: shopirId, fullName: 'Shopir', role: UserRole.EMPLOYEE },
+      assemblyTasks: [],
+    });
+
+    (prismaMock.sale.findFirst as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(completed) // findSaleDetail
+      .mockResolvedValueOnce(completed) // findSaleForUpdate
+      .mockResolvedValueOnce({
+        id: SALE_ID,
+        saleNumber: 123,
+        deliveryCost: 130_000n,
+        deliveryPersonId: shopirId,
+        items: [{ productName: PRODUCT.name }],
+      }) // ensure delivery fee read (after money patch + update)
+      .mockResolvedValue({
+        ...completed,
+        deliveryCost: 130_000n,
+      }); // getSale
+
+    (prismaMock.saleItem.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        quantity: 1,
+        unitCostPrice: 7_000_000n,
+        unitSalePrice: 9_500_000n,
+      },
+    ]);
+    (prismaMock.sale.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    (prismaMock.workerFinancialTransaction.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
+      null,
+    );
+    (prismaMock.workerFinancialTransaction.findMany as ReturnType<typeof vi.fn>).mockResolvedValue(
+      [],
+    );
+    (prismaMock.workerFinancialTransaction.create as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 'tx_delivery',
+      storeId: STORE_ID,
+      workerId: shopirId,
+      type: 'COMMISSION',
+      amount: 130_000n,
+      transactionDate: new Date(),
+      description: 'Yetkazib berish haqi',
+      referenceType: 'SALE',
+      referenceId: `${SALE_ID}:DELIVERY_FEE`,
+      reversesType: null,
+      createdById: ADMIN_ID,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      worker: { id: shopirId, fullName: 'Shopir', isActive: true },
+      createdBy: { id: ADMIN_ID, fullName: 'Admin' },
+    });
+
+    await saleService.updateSale(STORE_ID, { id: ADMIN_ID, role: UserRole.ADMIN }, SALE_ID, {
+      driverFee: 130_000,
+    });
+
+    expect(prismaMock.workerFinancialTransaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          workerId: shopirId,
+          referenceId: `${SALE_ID}:DELIVERY_FEE`,
+          amount: 130_000n,
+        }),
+      }),
+    );
   });
 });

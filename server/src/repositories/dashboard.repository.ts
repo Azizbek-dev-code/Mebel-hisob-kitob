@@ -171,6 +171,7 @@ export interface RecentSaleRow {
   id: string;
   saleNumber: number;
   saleDate: Date;
+  deliveryDueDate: Date | null;
   customerFirstName: string;
   customerLastName: string;
   firstProductName: string | null;
@@ -198,6 +199,7 @@ export async function findRecentSales(
       id: true,
       saleNumber: true,
       saleDate: true,
+      deliveryDueDate: true,
       totalSalePrice: true,
       paidAmount: true,
       remainingAmount: true,
@@ -213,6 +215,7 @@ export async function findRecentSales(
     id: row.id,
     saleNumber: row.saleNumber,
     saleDate: row.saleDate,
+    deliveryDueDate: row.deliveryDueDate,
     customerFirstName: row.customer.firstName,
     customerLastName: row.customer.lastName,
     firstProductName: row.items[0]?.productName ?? null,

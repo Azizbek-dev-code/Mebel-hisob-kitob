@@ -11,7 +11,7 @@ import type { Request, Response } from 'express';
 import * as catalogueService from '../services/product-catalogue.service.js';
 import { ApiError } from '../utils/api-error.js';
 import { asyncHandler } from '../utils/async-handler.js';
-import { sendCreated, sendSuccess } from '../utils/http-response.js';
+import { sendCreated, sendNoContent, sendSuccess } from '../utils/http-response.js';
 import type {
   CreateProductBody,
   CreateProductCategoryBody,
@@ -78,6 +78,12 @@ export const restoreProduct = asyncHandler(async (req: Request, res: Response) =
     user.id,
   );
   sendSuccess<ProductMutationResponse>(res, { product });
+});
+
+export const deleteProduct = asyncHandler(async (req: Request, res: Response) => {
+  const user = requireUser(req);
+  await catalogueService.deleteProduct(user.storeId, user.role, req.params.id!, user.id);
+  sendNoContent(res);
 });
 
 export const uploadProductImage = asyncHandler(async (req: Request, res: Response) => {

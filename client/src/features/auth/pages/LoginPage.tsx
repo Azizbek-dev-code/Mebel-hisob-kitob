@@ -1,24 +1,25 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, Eye, EyeOff, Loader2, Lock, LogIn, User } from 'lucide-react';
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 
+import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
 import { ApiClientError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { ROUTES } from '@/routes/paths';
 
 import { useLogin } from '../hooks/use-auth';
 
-const loginFormSchema = z.object({
-  identifier: z.string().trim().min(1, 'Enter your username or email'),
-  password: z.string().min(1, 'Enter your password'),
-});
-
-type LoginFormValues = z.infer<typeof loginFormSchema>;
+type LoginFormValues = {
+  identifier: string;
+  password: string;
+};
 
 export function LoginPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const login = useLogin();
@@ -26,6 +27,15 @@ export function LoginPage() {
   const [isPasswordVisible, setPasswordVisible] = useState(false);
   const identifierId = useId();
   const passwordId = useId();
+
+  const loginFormSchema = useMemo(
+    () =>
+      z.object({
+        identifier: z.string().trim().min(1, { message: t('auth.enterUsername') }),
+        password: z.string().min(1, { message: t('auth.enterPassword') }),
+      }),
+    [t],
+  );
 
   const {
     register,
@@ -37,7 +47,9 @@ export function LoginPage() {
   });
 
   const isSubmitting = login.isPending;
-  const authError = login.error ? describeLoginFailure(login.error) : null;
+  const authError = login.error
+    ? describeLoginFailure(login.error, t('auth.loginFailed'))
+    : null;
 
   const onSubmit = handleSubmit((values) => {
     login.mutate(values, {
@@ -50,7 +62,11 @@ export function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-canvas px-4 py-10 sm:px-6">
       <div className="w-full max-w-md">
-        <div className="flex flex-col items-center gap-3 text-center">
+        <div className="flex items-start justify-end">
+          <LanguageSwitcher />
+        </div>
+
+        <div className="mt-4 flex flex-col items-center gap-3 text-center">
           <div className="flex size-12 items-center justify-center rounded-card bg-brand-500 text-white shadow-raised">
             <svg viewBox="0 0 32 32" className="size-7" aria-hidden="true">
               <path
@@ -60,14 +76,14 @@ export function LoginPage() {
             </svg>
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-ink">Furniture ERP</h1>
-            <p className="mt-1 text-sm text-ink-muted">Sales, customers and accounting</p>
+            <h1 className="text-xl font-semibold tracking-tight text-ink">{t('app.name')}</h1>
+            <p className="mt-1 text-sm text-ink-muted">{t('app.tagline')}</p>
           </div>
         </div>
 
         <div className="mt-7 rounded-panel border border-line bg-surface p-6 shadow-card sm:p-8">
-          <h2 className="text-base font-semibold text-ink">Sign in</h2>
-          <p className="mt-1 text-sm text-ink-muted">Enter your details to open the workspace.</p>
+          <h2 className="text-base font-semibold text-ink">{t('auth.login')}</h2>
+          <p className="mt-1 text-sm text-ink-muted">{t('auth.enterDetails')}</p>
 
           {authError ? (
             <div
@@ -82,7 +98,7 @@ export function LoginPage() {
           <form onSubmit={onSubmit} noValidate className="mt-5 space-y-4">
             <Field
               id={identifierId}
-              label="Username or email"
+              label={t('auth.usernameOrEmail')}
               error={errors.identifier?.message}
               icon={<User className="size-4" aria-hidden="true" />}
             >
@@ -103,7 +119,7 @@ export function LoginPage() {
 
             <Field
               id={passwordId}
-              label="Password"
+              label={t('auth.password')}
               error={errors.password?.message}
               icon={<Lock className="size-4" aria-hidden="true" />}
             >
@@ -123,7 +139,7 @@ export function LoginPage() {
                 onClick={() => setPasswordVisible((visible) => !visible)}
                 // The label already names the field; this control only toggles how
                 // it is rendered, so it stays out of the tab order of the form flow.
-                aria-label={isPasswordVisible ? 'Hide password' : 'Show password'}
+                aria-label={isPasswordVisible ? t('auth.hidePassword') : t('auth.showPassword')}
                 aria-pressed={isPasswordVisible}
                 className="absolute inset-y-0 right-0 flex items-center rounded-r-input px-3 text-ink-subtle transition-colors hover:text-ink-soft"
               >
@@ -145,19 +161,15 @@ export function LoginPage() {
               ) : (
                 <LogIn className="size-4" aria-hidden="true" />
               )}
-              {isSubmitting ? 'Signing in…' : 'Sign in'}
+              {isSubmitting ? t('app.loading') : t('auth.login')}
             </button>
           </form>
         </div>
 
         <p className="mt-6 text-center text-sm text-ink-muted">
           <Link to={ROUTES.registerStore} className="font-medium text-brand-700 hover:underline">
-            Yangi do&apos;kon ochish
+            {t('auth.requestStore')}
           </Link>
-        </p>
-
-        <p className="mt-3 text-center text-xs text-ink-subtle">
-          Lost your password? Ask a store administrator to reset it.
         </p>
       </div>
     </main>
@@ -209,14 +221,14 @@ function Field({
  * The API answers every bad sign-in with the same wording on purpose, so this
  * only has to pick the most specific message available rather than interpret it.
  */
-function describeLoginFailure(error: Error): string {
+function describeLoginFailure(error: Error, fallback: string): string {
   if (error instanceof ApiClientError) {
     if (error.isValidationError && error.details?.length) {
       return error.details[0]?.message ?? error.message;
     }
     return error.message;
   }
-  return 'Something went wrong. Please try again.';
+  return fallback;
 }
 
 /**

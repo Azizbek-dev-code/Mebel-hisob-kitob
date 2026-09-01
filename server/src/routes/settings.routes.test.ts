@@ -12,6 +12,7 @@ const { prismaMock, settingsServiceMock } = vi.hoisted(() => ({
   settingsServiceMock: {
     getStoreProfile: vi.fn(),
     updateStoreProfile: vi.fn(),
+    resetStoreProfile: vi.fn(),
   },
 }));
 
@@ -143,5 +144,39 @@ describe('settings.routes', () => {
 
     expect(res.status).toBe(422);
     expect(settingsServiceMock.updateStoreProfile).not.toHaveBeenCalled();
+  });
+
+  it('resets store data for admin with confirmation', async () => {
+    const cookie = await loginAs(ADMIN_RECORD);
+    settingsServiceMock.resetStoreProfile.mockResolvedValue({
+      deletedCounts: { sales: 2 },
+      totalDeletedRows: 2,
+      retainedUserId: 'user_admin',
+    });
+
+    const res = await request(app)
+      .post('/api/settings/store/reset')
+      .set('Cookie', cookie)
+      .send({ confirmation: 'RESET' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.totalDeletedRows).toBe(2);
+    expect(settingsServiceMock.resetStoreProfile).toHaveBeenCalledWith(
+      'store_1',
+      { id: 'user_admin', role: UserRole.ADMIN },
+      'RESET',
+    );
+  });
+
+  it('rejects reset without exact confirmation', async () => {
+    const cookie = await loginAs(ADMIN_RECORD);
+
+    const res = await request(app)
+      .post('/api/settings/store/reset')
+      .set('Cookie', cookie)
+      .send({ confirmation: 'reset' });
+
+    expect(res.status).toBe(422);
+    expect(settingsServiceMock.resetStoreProfile).not.toHaveBeenCalled();
   });
 });

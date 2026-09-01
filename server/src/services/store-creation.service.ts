@@ -2,6 +2,7 @@ import {
   AuditEntityType,
   AuditEventType,
   DEFAULT_EXPENSE_CATEGORIES,
+  DEFAULT_PRODUCT_CATEGORIES,
   StoreCreationRequestStatus,
   UserRole,
   WorkerResponsibility,
@@ -242,6 +243,16 @@ export async function approveStoreRequest(
           name: category.name,
           color: category.color,
           sortOrder: index,
+        })),
+      });
+    }
+
+    if (DEFAULT_PRODUCT_CATEGORIES.length > 0) {
+      await tx.productCategory.createMany({
+        data: DEFAULT_PRODUCT_CATEGORIES.map((category) => ({
+          storeId: store.id,
+          name: category.name,
+          sortOrder: category.sortOrder,
         })),
       });
     }

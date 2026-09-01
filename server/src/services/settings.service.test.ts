@@ -1,27 +1,37 @@
-import { UserRole } from '@furniture-erp/shared';
+import { STORE_RESET_CONFIRMATION, UserRole } from '@furniture-erp/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '../utils/api-error.js';
 
-const { settingsRepoMock } = vi.hoisted(() => ({
+const { settingsRepoMock, backupRepoMock, auditMock } = vi.hoisted(() => ({
   settingsRepoMock: {
     findStoreProfile: vi.fn(),
     updateStoreProfile: vi.fn(),
   },
+  backupRepoMock: {
+    resetStoreData: vi.fn(),
+  },
+  auditMock: {
+    recordAudit: vi.fn(async () => undefined),
+  },
 }));
 
 vi.mock('../repositories/settings.repository.js', () => settingsRepoMock);
+vi.mock('../repositories/backup.repository.js', () => backupRepoMock);
+vi.mock('./audit.service.js', () => auditMock);
 
 const {
   assertCanManageStoreSettings,
   canManageStoreSettings,
   getStoreProfile,
+  resetStoreProfile,
   updateStoreProfile,
 } = await import('./settings.service.js');
 
 const STORE_ID = 'store_1';
 const ADMIN = UserRole.ADMIN;
 const EMPLOYEE = UserRole.EMPLOYEE;
+const ADMIN_ID = 'user_admin';
 
 const STORE = {
   id: STORE_ID,
@@ -119,5 +129,42 @@ describe('settings.service update', () => {
     settingsRepoMock.findStoreProfile.mockResolvedValue(null);
 
     await expect(getStoreProfile(STORE_ID, ADMIN)).rejects.toThrow(ApiError);
+  });
+});
+
+describe('settings.service reset', () => {
+  it('resets store data for admin with exact confirmation', async () => {
+    backupRepoMock.resetStoreData.mockResolvedValue({
+      deletedCounts: { sales: 3, customers: 1 },
+      totalDeletedRows: 4,
+      retainedUserId: ADMIN_ID,
+    });
+
+    const result = await resetStoreProfile(
+      STORE_ID,
+      { id: ADMIN_ID, role: ADMIN },
+      STORE_RESET_CONFIRMATION,
+    );
+
+    expect(backupRepoMock.resetStoreData).toHaveBeenCalledWith({
+      storeId: STORE_ID,
+      actorId: ADMIN_ID,
+    });
+    expect(result.totalDeletedRows).toBe(4);
+    expect(auditMock.recordAudit).toHaveBeenCalled();
+  });
+
+  it('rejects wrong confirmation phrase', async () => {
+    await expect(
+      resetStoreProfile(STORE_ID, { id: ADMIN_ID, role: ADMIN }, 'reset'),
+    ).rejects.toThrow(ApiError);
+    expect(backupRepoMock.resetStoreData).not.toHaveBeenCalled();
+  });
+
+  it('forbids employees from reset', async () => {
+    await expect(
+      resetStoreProfile(STORE_ID, { id: 'user_ali', role: EMPLOYEE }, STORE_RESET_CONFIRMATION),
+    ).rejects.toThrow(ApiError);
+    expect(backupRepoMock.resetStoreData).not.toHaveBeenCalled();
   });
 });

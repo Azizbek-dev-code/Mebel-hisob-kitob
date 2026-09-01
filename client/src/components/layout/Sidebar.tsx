@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
 
 import { useCurrentUser } from '@/features/auth/hooks/use-auth';
@@ -34,6 +35,7 @@ function groupIsActive(pathname: string, item: NavItem): boolean {
 
 /** The module list. Rendered once as the fixed desktop rail and once inside the mobile drawer. */
 export function Sidebar({ onNavigate, onRequestClose }: SidebarProps) {
+  const { t } = useTranslation();
   const { pathname } = useLocation();
   const { data: user, isPending } = useCurrentUser();
   const items = user ? navItemsForUser(user) : isPending ? [...NAV_ITEMS] : [];
@@ -52,14 +54,14 @@ export function Sidebar({ onNavigate, onRequestClose }: SidebarProps) {
           </svg>
         </div>
         <span className="truncate text-sm font-semibold tracking-tight text-ink">
-          {canReviewStoreCreationRequests(user) ? 'Platform Admin' : 'Furniture ERP'}
+          {canReviewStoreCreationRequests(user) ? 'Platform Admin' : t('app.name')}
         </span>
 
         {onRequestClose ? (
           <button
             type="button"
             onClick={onRequestClose}
-            aria-label="Close navigation"
+            aria-label={t('common.close')}
             className="ml-auto -mr-1 flex size-8 shrink-0 items-center justify-center rounded-input text-ink-muted transition-colors hover:bg-surface-hover hover:text-ink"
           >
             <X className="size-4" aria-hidden="true" />
@@ -67,7 +69,7 @@ export function Sidebar({ onNavigate, onRequestClose }: SidebarProps) {
         ) : null}
       </div>
 
-      <nav aria-label="Modules" className="flex-1 overflow-y-auto overflow-x-hidden p-3">
+      <nav aria-label={t('nav.modules')} className="flex-1 overflow-y-auto overflow-x-hidden p-3">
         <ul className="space-y-0.5">
           {items.map((item) => (
             <li key={item.key}>
@@ -80,7 +82,7 @@ export function Sidebar({ onNavigate, onRequestClose }: SidebarProps) {
                 >
                   <SidebarItem
                     to={item.to}
-                    label={item.label}
+                    label={t(item.labelKey)}
                     icon={item.icon}
                     onNavigate={onNavigate}
                     end
@@ -91,7 +93,7 @@ export function Sidebar({ onNavigate, onRequestClose }: SidebarProps) {
                       <li key={child.key}>
                         <SidebarItem
                           to={child.to}
-                          label={child.label}
+                          label={t(child.labelKey)}
                           icon={child.icon}
                           onNavigate={onNavigate}
                           nested
@@ -104,7 +106,7 @@ export function Sidebar({ onNavigate, onRequestClose }: SidebarProps) {
               ) : (
                 <SidebarItem
                   to={item.to}
-                  label={item.label}
+                  label={t(item.labelKey)}
                   icon={item.icon}
                   onNavigate={onNavigate}
                   end={item.to === '/dashboard'}

@@ -6,6 +6,7 @@ import {
   createProduct,
   createProductCategory,
   deactivateProductCategory,
+  deleteProduct,
   getProduct,
   listProductCategories,
   listProducts,
@@ -60,6 +61,7 @@ productsRouter.patch(
 );
 productsRouter.post('/:id/archive', validate({ params: idParamsSchema }), archiveProduct);
 productsRouter.post('/:id/restore', validate({ params: idParamsSchema }), restoreProduct);
+productsRouter.delete('/:id', validate({ params: idParamsSchema }), deleteProduct);
 productsRouter.post(
   '/:id/image',
   validate({ params: idParamsSchema }),

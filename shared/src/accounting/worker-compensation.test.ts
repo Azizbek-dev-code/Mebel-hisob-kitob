@@ -134,4 +134,28 @@ describe('isCompensationRuleEffectiveOn / findCompensationRuleForTypeOnDate', ()
     expect(isCompensationRuleEffectiveOn(ruleA, d('2025-12-31'))).toBe(false);
     expect(isCompensationRuleEffectiveOn(ruleA, d('2026-06-30'))).toBe(true);
   });
+
+  it('covers morning instants on the start civil day (noon-UTC calendar dates)', () => {
+    expect(
+      isCompensationRuleEffectiveOn(
+        { effectiveFrom: d('2026-08-26'), effectiveTo: null },
+        new Date('2026-08-26T04:33:00.000Z'),
+      ),
+    ).toBe(true);
+    expect(
+      isCompensationRuleEffectiveOn(
+        { effectiveFrom: d('2026-08-26'), effectiveTo: null },
+        new Date('2026-08-25T23:59:59.000Z'),
+      ),
+    ).toBe(false);
+  });
+
+  it('includes the whole UTC civil end day, not only up to noon', () => {
+    expect(
+      isCompensationRuleEffectiveOn(
+        { effectiveFrom: d('2026-08-01'), effectiveTo: d('2026-08-26') },
+        new Date('2026-08-26T18:00:00.000Z'),
+      ),
+    ).toBe(true);
+  });
 });

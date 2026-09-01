@@ -144,7 +144,7 @@ describe('WorkerCompensationPage', () => {
     renderPage();
     expect(await screen.findByText('10%')).toBeInTheDocument();
     expect(screen.getByText(moneyMatcher(150_000))).toBeInTheDocument();
-    expect(screen.getByText('Sotish summasidan foiz')).toBeInTheDocument();
+    expect(screen.getByText('Sotuv summasidan foiz')).toBeInTheDocument();
     expect(screen.getByText('Har bir terlash uchun summa')).toBeInTheDocument();
     expect(screen.getAllByText('Faol').length).toBeGreaterThan(0);
     expect(screen.getByText('Faol emas')).toBeInTheDocument();
@@ -175,7 +175,7 @@ describe('WorkerCompensationPage', () => {
     await user.selectOptions(within(dialog).getByLabelText(/Mas/i), WorkerResponsibility.SELLER);
 
     const typeSelect = within(dialog).getByLabelText(/Hisoblash turi/i);
-    expect(within(typeSelect).getByRole('option', { name: /Sotish summasidan foiz/i })).toBeInTheDocument();
+    expect(within(typeSelect).getByRole('option', { name: /Sotuv summasidan foiz/i })).toBeInTheDocument();
     expect(
       within(typeSelect).queryByRole('option', { name: /Har bir terlash/i }),
     ).not.toBeInTheDocument();
@@ -557,6 +557,62 @@ describe('WorkerDetailPage compensation link', () => {
       [`/workers/${WORKER_ID}/activity`]: {
         status: 200,
         body: { success: true, data: { items: [] } },
+      },
+      [`/workers/${WORKER_ID}/profile-modules`]: {
+        status: 200,
+        body: {
+          success: true,
+          data: {
+            modules: {
+              worker: {
+                id: WORKER_ID,
+                fullName: 'Ali Usta',
+                username: 'ali',
+                phone: null,
+                role: 'EMPLOYEE',
+                isActive: true,
+                responsibilities: [],
+                createdAt: '2026-01-01T00:00:00.000Z',
+              },
+              tabs: ['GENERAL'],
+              general: {
+                finance: {
+                  earned: 0,
+                  paid: 0,
+                  outstanding: 0,
+                  monthEarned: 0,
+                  monthPaid: 0,
+                  bonuses: 0,
+                  advances: 0,
+                  debt: 0,
+                  adjustments: 0,
+                  reversals: 0,
+                  commissions: 0,
+                },
+                breakdown: [],
+              },
+              seller: null,
+              assembler: null,
+              delivery: null,
+              installer: null,
+              smm: null,
+              other: null,
+              ledgerSummary: {
+                workerId: WORKER_ID,
+                worker: { id: WORKER_ID, fullName: 'Ali Usta', isActive: true },
+                totalBonuses: 0,
+                totalCommissions: 0,
+                totalAdvances: 0,
+                totalDebt: 0,
+                totalPayments: 0,
+                totalAdjustments: 0,
+                totalReversals: 0,
+                netFinancialPosition: 0,
+                transactionCount: 0,
+              },
+            },
+          },
+        },
       },
       [`/workers/${WORKER_ID}`]: workerOk(),
     });

@@ -60,6 +60,7 @@ const SALE = {
   paymentType: 'DEPOSIT',
   assemblyStatus: 'PENDING',
   deliveryStatus: 'NOT_REQUIRED',
+  deliveryDueDate: null,
   installationStatus: 'PENDING',
   subtotal: 9_500_000,
   discountAmount: 0,
@@ -67,6 +68,7 @@ const SALE = {
   depositAmount: 2_000_000,
   sellerBonus: 0,
   installationCost: 300_000,
+  installerFee: 0,
   deliveryCost: 150_000,
   assemblerFee: 300_000,
   driverFee: 150_000,
@@ -103,7 +105,8 @@ const SALE = {
   ],
   installmentPlan: null,
   assembler: { id: 'user_ali', fullName: 'Ali Usta', role: 'EMPLOYEE' },
-  deliveryPerson: null,
+  installationWorker: { id: 'user_ali', fullName: 'Ali Usta', role: 'EMPLOYEE' },
+  deliveryPerson: { id: 'user_shopir', fullName: 'Azizbek Shopir', role: 'EMPLOYEE' },
   createdBy: { id: 'user_admin', fullName: 'Admin', role: 'ADMIN' },
   cancelledBy: null,
   cancellationReason: null,
@@ -175,11 +178,11 @@ describe('SaleDetailPage', () => {
 
     expect(await screen.findByText('#S-000123')).toBeInTheDocument();
     expect(screen.getByTestId('sale-profit-waterfall')).toBeInTheDocument();
-    expect(screen.getByText('Sotuv narxi')).toBeInTheDocument();
+    expect(screen.getAllByText('Sotuv narxi').length).toBeGreaterThan(0);
     expect(screen.getByText('= Yalpi foyda')).toBeInTheDocument();
-    expect(screen.getByText('= Sotuvdan qolgan foyda')).toBeInTheDocument();
+    expect(screen.getByText('= Sof foyda')).toBeInTheDocument();
     expect(screen.getByText('Initial deposit')).toBeInTheDocument();
-    expect(screen.getByText('Ali Usta')).toBeInTheDocument();
+    expect(screen.getAllByText('Ali Usta').length).toBeGreaterThan(0);
     expect(screen.getAllByText(moneyMatcher(7_500_000)).length).toBeGreaterThan(0);
   });
 
@@ -187,11 +190,15 @@ describe('SaleDetailPage', () => {
     const user = userEvent.setup();
     renderPage();
 
-    await screen.findByText('Add payment');
-    const amountLabel = screen.getByText('Amount');
+    await screen.findByText('Summa');
+    const amountLabel = screen.getByText('Summa');
     const amountInput = amountLabel.parentElement?.querySelector('input');
     await user.type(amountInput!, '3000000');
-    await user.click(screen.getByRole('button', { name: /Record payment/i }));
+    const paymentSave = screen
+      .getAllByRole('button', { name: /Saqlash/i })
+      .find((btn) => btn.getAttribute('data-testid') !== 'sale-fees-save');
+    expect(paymentSave).toBeTruthy();
+    await user.click(paymentSave!);
 
     await waitFor(() => {
       expect(addPaymentMock).toHaveBeenCalledWith(
@@ -203,12 +210,16 @@ describe('SaleDetailPage', () => {
 
   it('shows Sotuvchilar va xizmat haqlari with seller estimate and fees', async () => {
     renderPage();
-    expect(await screen.findByTestId('sale-service-fees-section')).toBeInTheDocument();
-    expect(screen.getByText(/Sotuvchilar va xizmat haqlari/i)).toBeInTheDocument();
+    expect(await screen.findByTestId('sale-people-services-section')).toBeInTheDocument();
+    expect(screen.getByText(/Odamlar va xizmatlar/i)).toBeInTheDocument();
     expect(screen.getByTestId('sale-seller-commission')).toHaveTextContent(/Sardor/);
     expect(screen.getByTestId('sale-seller-commission')).toHaveTextContent(/10%/);
-    expect(screen.getByText('Usta haqqi')).toBeInTheDocument();
-    expect(screen.getByText('Shopir haqqi')).toBeInTheDocument();
+    expect(screen.getAllByText(/Ali Usta/i).length).toBeGreaterThan(0);
+    expect(screen.getByTestId('sale-assembler-fee')).toBeInTheDocument();
+    expect(screen.getByTestId('sale-delivery-fee')).toBeInTheDocument();
+    expect(screen.queryByTestId('sale-installer-fee')).not.toBeInTheDocument();
+    // Installer row can appear when an installation worker is assigned (fee may be 0).
+    expect(screen.getByText(/O‘rnatuvchi/i)).toBeInTheDocument();
     expect(screen.queryByTestId('worker-compensation-empty')).not.toBeInTheDocument();
   });
 
@@ -228,5 +239,6 @@ describe('SaleDetailPage', () => {
         }),
       );
     });
+    expect(updateMock.mock.calls[0]?.[1]?.installerFee).toBeUndefined();
   });
 });

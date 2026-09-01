@@ -16,6 +16,7 @@ import type {
   SupplierListQuery,
   SupplierMutationResponse,
   SupplierPaymentMutationResponse,
+  UpdatePurchaseDeliveryRequest,
   UpdateSupplierRequest,
 } from '@furniture-erp/shared';
 
@@ -99,6 +100,16 @@ export const purchasingService = {
 
   async createPurchase(body: CreatePurchaseRequest): Promise<PurchaseDetail> {
     const { purchase } = await apiClient.post<PurchaseMutationResponse>('/purchases', { body });
+    return purchase;
+  },
+
+  async updatePurchaseDelivery(
+    id: string,
+    body: UpdatePurchaseDeliveryRequest,
+  ): Promise<PurchaseDetail> {
+    const { purchase } = await apiClient.patch<PurchaseMutationResponse>(`/purchases/${id}`, {
+      body,
+    });
     return purchase;
   },
 

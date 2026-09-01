@@ -15,7 +15,7 @@ import { ApiClientError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { ROUTES } from '@/routes/paths';
 import { WriteGuard } from '@/features/subscription/WriteGuard';
-import { formatDate, formatMoney } from '@/utils/format';
+import { formatDate, formatMoney, formatMoneyCompact } from '@/utils/format';
 import {
   purchaseListFilterLabel,
   purchasePaymentStatusLabel,
@@ -171,7 +171,14 @@ export function PurchasesPage() {
                       </Link>
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
-                      {formatDate(purchase.purchaseDate)}
+                      <div>
+                        {formatDate(purchase.deliveredAt ?? purchase.purchaseDate)}
+                      </div>
+                      {purchase.driverFee > 0 ? (
+                        <div className="text-xs text-ink-muted">
+                          Shopir: {formatMoneyCompact(purchase.driverFee)}
+                        </div>
+                      ) : null}
                     </td>
                     <td className="px-3 py-2">
                       <Link

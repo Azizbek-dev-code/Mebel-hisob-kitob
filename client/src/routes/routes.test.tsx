@@ -4,6 +4,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { EMPTY_EXPENSE_ANALYTICS, EMPTY_FINANCIAL_SUMMARY, EMPTY_FINANCIAL_TREND } from '@/features/dashboard/test/financial-fixtures';
+import i18n from '@/i18n';
 import { mockApi, SIGNED_OUT_RESPONSE } from '@/test/mock-api';
 import { renderWithProviders, screen } from '@/test/test-utils';
 
@@ -156,9 +157,15 @@ describe('application routes', () => {
     renderApp('/');
 
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Dashboard' }, { timeout: 8_000 }),
+      await screen.findByRole(
+        'heading',
+        { level: 1, name: i18n.t('nav.dashboard') },
+        { timeout: 8_000 },
+      ),
     ).toBeInTheDocument();
-    expect(await screen.findByRole('heading', { level: 2, name: 'Dashboard' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 2, name: i18n.t('dashboard.title') }),
+    ).toBeInTheDocument();
   });
 
   it('shows the store name on the dashboard from the financial summary', async () => {
@@ -166,24 +173,26 @@ describe('application routes', () => {
     renderApp(ROUTES.dashboard);
 
     expect(await screen.findByText(/Mebel Savdo/)).toBeInTheDocument();
-    expect(screen.getByText('Sotuv')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('sales.totalSale'))).toBeInTheDocument();
   });
 
   it('falls back to the dashboard for an unknown address', async () => {
     mockSignedInApp();
     renderApp('/not-a-page');
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Dashboard' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: i18n.t('nav.dashboard') }),
+    ).toBeInTheDocument();
   });
 
-  it.each(NAV_ITEMS.map((item) => [item.label, item.to]))(
+  it.each(NAV_ITEMS.map((item) => [i18n.t(item.labelKey), item.to]))(
     'opens %s inside the shell',
     async (label, to) => {
       mockSignedInApp();
       renderApp(to);
 
       expect(await screen.findByRole('heading', { level: 1, name: label })).toBeInTheDocument();
-      expect(screen.getByRole('navigation', { name: 'Modules' })).toBeInTheDocument();
+      expect(screen.getByRole('navigation', { name: i18n.t('nav.modules') })).toBeInTheDocument();
     },
   );
 
@@ -192,22 +201,24 @@ describe('application routes', () => {
     const user = userEvent.setup();
     renderApp(ROUTES.dashboard);
 
-    await screen.findByRole('heading', { level: 1, name: 'Dashboard' });
-    await user.click(screen.getByRole('link', { name: 'Mijozlar' }));
-    await user.click(screen.getByRole('link', { name: 'Hisobotlar' }));
+    await screen.findByRole('heading', { level: 1, name: i18n.t('nav.dashboard') });
+    await user.click(screen.getByRole('link', { name: i18n.t('nav.customers') }));
+    await user.click(screen.getByRole('link', { name: i18n.t('nav.reports') }));
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Hisobotlar' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { level: 1, name: i18n.t('nav.reports') }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Store Administrator')).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Sign in' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: i18n.t('auth.login') })).not.toBeInTheDocument();
   });
 
-  it.each(NAV_ITEMS.map((item) => [item.label, item.to]))(
+  it.each(NAV_ITEMS.map((item) => [i18n.t(item.labelKey), item.to]))(
     'keeps %s behind the login form',
     async (_label, to) => {
       mockApi({ '/auth/me': SIGNED_OUT_RESPONSE });
       renderApp(to);
 
-      expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: i18n.t('auth.login') })).toBeInTheDocument();
     },
   );
 
@@ -215,6 +226,8 @@ describe('application routes', () => {
     mockSignedInApp();
     renderApp(ROUTES.login);
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Dashboard' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: i18n.t('nav.dashboard') }),
+    ).toBeInTheDocument();
   });
 });

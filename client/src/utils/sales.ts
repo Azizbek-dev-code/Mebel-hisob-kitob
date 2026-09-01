@@ -1,11 +1,6 @@
 import {
-  ASSEMBLY_STATUS_LABELS,
   AssemblyTaskStatus,
-  FULFILMENT_STATUS_LABELS,
   FulfilmentStatus,
-  INSTALLATION_STATUS_LABELS,
-  PAYMENT_METHOD_LABELS,
-  PAYMENT_TYPE_LABELS,
   SalePaymentStatus,
   SaleStatus,
   type PaymentMethod,
@@ -13,24 +8,12 @@ import {
 } from '@furniture-erp/shared';
 
 import type { BadgeTone } from '@/components/ui/Badge';
-
-const PAYMENT_STATUS_LABELS: Record<SalePaymentStatus, string> = {
-  [SalePaymentStatus.PAID]: 'Paid',
-  [SalePaymentStatus.PARTIALLY_PAID]: 'Part paid',
-  [SalePaymentStatus.UNPAID]: 'Unpaid',
-};
+import i18n from '@/i18n';
 
 const PAYMENT_STATUS_TONES: Record<SalePaymentStatus, BadgeTone> = {
   [SalePaymentStatus.PAID]: 'success',
   [SalePaymentStatus.PARTIALLY_PAID]: 'warning',
   [SalePaymentStatus.UNPAID]: 'danger',
-};
-
-const SALE_STATUS_LABELS: Record<SaleStatus, string> = {
-  [SaleStatus.DRAFT]: 'Draft',
-  [SaleStatus.ACTIVE]: 'Active',
-  [SaleStatus.COMPLETED]: 'Completed',
-  [SaleStatus.CANCELLED]: 'Cancelled',
 };
 
 const SALE_STATUS_TONES: Record<SaleStatus, BadgeTone> = {
@@ -57,7 +40,7 @@ const FULFILMENT_TONES: Record<FulfilmentStatus, BadgeTone> = {
 };
 
 export function paymentStatusLabel(status: SalePaymentStatus): string {
-  return PAYMENT_STATUS_LABELS[status];
+  return i18n.t(`status.payment.${status}`);
 }
 
 export function paymentStatusTone(status: SalePaymentStatus): BadgeTone {
@@ -65,7 +48,7 @@ export function paymentStatusTone(status: SalePaymentStatus): BadgeTone {
 }
 
 export function saleStatusLabel(status: SaleStatus): string {
-  return SALE_STATUS_LABELS[status];
+  return i18n.t(`status.sale.${status}`);
 }
 
 export function saleStatusTone(status: SaleStatus): BadgeTone {
@@ -73,16 +56,16 @@ export function saleStatusTone(status: SaleStatus): BadgeTone {
 }
 
 export function paymentMethodLabel(method: PaymentMethod): string {
-  return PAYMENT_METHOD_LABELS[method];
+  return i18n.t(`status.paymentMethod.${method}`);
 }
 
 export function paymentTypeLabel(type: PaymentType): string {
-  return PAYMENT_TYPE_LABELS[type];
+  return i18n.t(`status.paymentType.${type}`);
 }
 
 export function assemblyStatusLabel(status: AssemblyTaskStatus | null | undefined): string {
-  if (!status) return 'Not required';
-  return ASSEMBLY_STATUS_LABELS[status];
+  if (!status) return i18n.t('status.notRequired');
+  return i18n.t(`status.assembly.${status}`);
 }
 
 export function assemblyStatusTone(status: AssemblyTaskStatus | null | undefined): BadgeTone {
@@ -91,7 +74,7 @@ export function assemblyStatusTone(status: AssemblyTaskStatus | null | undefined
 }
 
 export function deliveryStatusLabel(status: FulfilmentStatus): string {
-  return FULFILMENT_STATUS_LABELS[status];
+  return i18n.t(`status.fulfilment.${status}`);
 }
 
 export function deliveryStatusTone(status: FulfilmentStatus): BadgeTone {
@@ -99,7 +82,7 @@ export function deliveryStatusTone(status: FulfilmentStatus): BadgeTone {
 }
 
 export function installationStatusLabel(status: FulfilmentStatus): string {
-  return INSTALLATION_STATUS_LABELS[status];
+  return i18n.t(`status.installation.${status}`);
 }
 
 export function formatSaleNumber(saleNumber: number): string {

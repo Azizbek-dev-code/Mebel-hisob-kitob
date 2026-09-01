@@ -33,15 +33,17 @@ import {
 } from '@/features/dashboard/period';
 import { AddWorkerFinancialTransactionDialog } from '@/features/workers/components/AddWorkerFinancialTransactionDialog';
 import { ReverseWorkerFinancialTransactionDialog } from '@/features/workers/components/ReverseWorkerFinancialTransactionDialog';
+import { WorkerAttributedFeesPanel } from '@/features/workers/components/WorkerAttributedFeesPanel';
 import {
   useWorkerFinanceSummary,
   useWorkerFinanceTransactions,
 } from '@/features/workers/hooks/use-worker-finances';
-import { useWorker } from '@/features/workers/hooks/use-workers';
+import { useWorker, useWorkerAttributedFees } from '@/features/workers/hooks/use-workers';
 import {
   canReverseWorkerFinancialTransaction,
   collectReversedOriginalIds,
   workerFinanceTypeDisplayLabel,
+  WORKER_FINANCE_SOURCE_FILTER_OPTIONS,
   WORKER_FINANCE_TYPE_FILTER_OPTIONS,
 } from '@/features/workers/utils/finance-labels';
 import {
@@ -105,6 +107,7 @@ function ReverseActionButton({
 export function WorkerFinancesPage() {
   const { id = '' } = useParams();
   const worker = useWorker(id);
+  const attributedFees = useWorkerAttributedFees(id);
 
   const [period, setPeriod] = useState<DashboardPeriod>(DEFAULT_PERIOD);
   const [typeFilter, setTypeFilter] = useState<'' | WorkerFinancialType>('');
@@ -287,7 +290,7 @@ export function WorkerFinancesPage() {
             isEmpty={(summary.data?.totalBonuses ?? 0) === 0}
           />
           <KpiCard
-            title="Komissiya"
+            title="Komissiya / haqlar"
             context={periodLabel}
             value={formatMoney(summary.data?.totalCommissions ?? 0)}
             icon={Percent}
@@ -334,6 +337,13 @@ export function WorkerFinancesPage() {
         </div>
       )}
 
+      <WorkerAttributedFeesPanel
+        fees={attributedFees.data}
+        isLoading={attributedFees.isLoading}
+        isError={attributedFees.isError}
+        onRetry={() => void attributedFees.refetch()}
+      />
+
       <SectionCard title="Operatsiyalar">
         <div className="mb-4 grid gap-3 sm:grid-cols-2">
           <label className="block text-sm">
@@ -368,6 +378,33 @@ export function WorkerFinancesPage() {
               />
             </span>
           </label>
+        </div>
+
+        <div className="mb-4 flex flex-wrap gap-1.5" role="group" aria-label="Manba filtri">
+          {WORKER_FINANCE_SOURCE_FILTER_OPTIONS.map((option) => {
+            const active =
+              option.value === ''
+                ? searchInput.trim() === ''
+                : searchInput.trim() === option.value;
+            return (
+              <button
+                key={option.label}
+                type="button"
+                onClick={() => {
+                  setSearchInput(option.value);
+                  setPage(1);
+                }}
+                className={cn(
+                  'rounded-[0.4rem] px-2.5 py-1.5 text-xs font-medium sm:text-sm',
+                  active
+                    ? 'bg-brand-50 text-brand-700'
+                    : 'text-ink-soft hover:bg-surface-hover',
+                )}
+              >
+                {option.label}
+              </button>
+            );
+          })}
         </div>
 
         {showListError ? (
@@ -542,6 +579,7 @@ export function WorkerFinancesPage() {
       <AddWorkerFinancialTransactionDialog
         open={createOpen}
         workerId={id}
+        responsibilities={detail?.responsibilities}
         onClose={() => setCreateOpen(false)}
         onCreated={() => setSuccessMessage("Moliyaviy operatsiya qo'shildi.")}
       />

@@ -28,12 +28,19 @@ export const ROUTES = {
   sales: '/sales',
   saleNew: '/sales/new',
   saleDetail: (id: string) => `/sales/${id}`,
+  saleEdit: (id: string) => `/sales/${id}/edit`,
   /** Assembly task inbox for workers with ASSEMBLER responsibility. */
   assemblyTasks: '/assembly-tasks',
+  /** Delivery (shopir) operational inbox. */
+  delivery: '/delivery',
   /** Sales where the signed-in worker is the seller. */
   mySales: '/my-sales',
+  /** Signed-in seller commission report. */
+  myReports: '/my-reports',
   /** Signed-in worker profile + activity summary. */
   profile: '/profile',
+  /** Signed-in worker read-only financial ledger. */
+  profileFinances: '/profile/finances',
   products: '/products',
   productDetail: (id: string) => `/products/${id}`,
   inventory: '/inventory',
@@ -51,6 +58,8 @@ export const ROUTES = {
   workerEdit: (id: string) => `/workers/${id}/edit`,
   /** Admin-only worker financial ledger. */
   workerFinances: (id: string) => `/workers/${id}/finances`,
+  /** Admin-only P&L vs ledger fee reconciliation. */
+  workersReconciliation: '/workers/reconciliation',
   /** Admin-only worker compensation rules (configuration, not ledger). */
   workerCompensation: (id: string) => `/workers/${id}/compensation`,
   /** Admin-only read-only compensation preview (no finance side effects). */

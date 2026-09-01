@@ -357,6 +357,10 @@ function toPurchaseListItem(
     id: string;
     purchaseNumber: number;
     purchaseDate: Date;
+    deliveredAt: Date | null;
+    deliveryDays: number;
+    driverId: string | null;
+    driverFee: bigint;
     supplierId: string;
     totalCost: bigint;
     paidAmount: bigint;
@@ -365,6 +369,7 @@ function toPurchaseListItem(
     status: PurchaseStatus;
     createdAt: Date;
     supplier: { name: string };
+    driver?: { fullName: string } | null;
     _count: { items: number };
   },
 ): PurchaseListItem {
@@ -381,6 +386,11 @@ function toPurchaseListItem(
     status: row.status,
     itemCount: row._count.items,
     createdAt: row.createdAt.toISOString(),
+    deliveredAt: row.deliveredAt?.toISOString() ?? null,
+    deliveryDays: row.deliveryDays,
+    driverId: row.driverId,
+    driverName: row.driver?.fullName ?? null,
+    driverFee: fromDbMoney(row.driverFee),
   };
 }
 
@@ -426,6 +436,7 @@ export async function listPurchases(
       where,
       include: {
         supplier: { select: { name: true } },
+        driver: { select: { fullName: true } },
         _count: { select: { items: true } },
       },
       orderBy: [{ purchaseDate: 'desc' }, { purchaseNumber: 'desc' }],
@@ -448,6 +459,7 @@ export async function getPurchaseDetail(
     where: { storeId, id: purchaseId },
     include: {
       supplier: { select: { name: true } },
+      driver: { select: { fullName: true } },
       items: { orderBy: { createdAt: 'asc' } },
       payments: {
         orderBy: { paidAt: 'asc' },
@@ -529,6 +541,10 @@ export async function createPurchaseInTx(
     supplierId: string;
     purchaseNumber: number;
     purchaseDate: Date;
+    deliveredAt: Date;
+    deliveryDays: number;
+    driverId: string | null;
+    driverFee: number;
     totalCost: number;
     paidAmount: number;
     remainingAmount: number;
@@ -550,6 +566,10 @@ export async function createPurchaseInTx(
       supplierId: input.supplierId,
       purchaseNumber: input.purchaseNumber,
       purchaseDate: input.purchaseDate,
+      deliveredAt: input.deliveredAt,
+      deliveryDays: input.deliveryDays,
+      driverId: input.driverId,
+      driverFee: toDbMoney(input.driverFee),
       totalCost: toDbMoney(input.totalCost),
       paidAmount: toDbMoney(input.paidAmount),
       remainingAmount: toDbMoney(input.remainingAmount),
@@ -571,6 +591,27 @@ export async function createPurchaseInTx(
     select: { id: true },
   });
   return purchase;
+}
+
+export async function updatePurchaseDeliveryInTx(
+  tx: PurchasingTxClient,
+  purchaseId: string,
+  data: {
+    deliveredAt?: Date | null;
+    deliveryDays?: number;
+    driverId?: string | null;
+    driverFee?: number;
+  },
+): Promise<void> {
+  await tx.purchase.update({
+    where: { id: purchaseId },
+    data: {
+      ...(data.deliveredAt !== undefined ? { deliveredAt: data.deliveredAt } : {}),
+      ...(data.deliveryDays !== undefined ? { deliveryDays: data.deliveryDays } : {}),
+      ...(data.driverId !== undefined ? { driverId: data.driverId } : {}),
+      ...(data.driverFee !== undefined ? { driverFee: toDbMoney(data.driverFee) } : {}),
+    },
+  });
 }
 
 export async function addPaymentInTx(

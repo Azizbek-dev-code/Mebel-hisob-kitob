@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import { WorkerFinancialTransactionType } from '../constants/enums.js';
 import {
+  computeWorkerEarnedTotal,
   computeWorkerNetFinancialPosition,
+  computeWorkerPaidTotal,
   getWorkerTransactionEffect,
   isWorkerAdvance,
   isWorkerAdjustment,
@@ -137,6 +139,32 @@ describe('worker-financial accounting helpers', () => {
         reversalsByOriginalType: { ADVANCE: 300_000 },
       }),
     ).toBe(0);
+  });
+
+  it('nets earned after commission reversal (cancel flow)', () => {
+    expect(
+      computeWorkerEarnedTotal({
+        totalBonuses: 0,
+        totalCommissions: 650_000,
+        totalAdvances: 0,
+        totalDebt: 0,
+        totalPayments: 0,
+        totalAdjustments: 0,
+        reversalsByOriginalType: { COMMISSION: 650_000 },
+      }),
+    ).toBe(0);
+
+    expect(
+      computeWorkerPaidTotal({
+        totalBonuses: 0,
+        totalCommissions: 0,
+        totalAdvances: 0,
+        totalDebt: 0,
+        totalPayments: 600_000,
+        totalAdjustments: 0,
+        reversalsByOriginalType: { PAYMENT: 100_000 },
+      }),
+    ).toBe(500_000);
   });
 
   it('identifies REVERSAL kind', () => {

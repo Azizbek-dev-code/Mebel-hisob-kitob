@@ -225,3 +225,25 @@ export function computeWorkerNetFinancialPosition(
 
   return toMoney(net);
 }
+
+/**
+ * "Jami hisoblangan" — earning credits net of reversals of those types.
+ * Gross `totalCommissions` alone stays wrong after cancel/reverse.
+ */
+export function computeWorkerEarnedTotal(totals: WorkerFinancialTotalsInput): Money {
+  const reversals = totals.reversalsByOriginalType ?? {};
+  return toMoney(
+    totals.totalBonuses +
+      totals.totalCommissions +
+      totals.totalAdjustments -
+      (reversals.BONUS ?? 0) -
+      (reversals.COMMISSION ?? 0) -
+      (reversals.ADJUSTMENT ?? 0),
+  );
+}
+
+/** Payments net of payment reversals. */
+export function computeWorkerPaidTotal(totals: WorkerFinancialTotalsInput): Money {
+  const reversals = totals.reversalsByOriginalType ?? {};
+  return toMoney(totals.totalPayments - (reversals.PAYMENT ?? 0));
+}

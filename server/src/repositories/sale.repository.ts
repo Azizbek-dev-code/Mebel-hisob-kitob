@@ -97,6 +97,8 @@ export interface SaleListFilters {
   search?: string;
   paymentStatus?: SalePaymentStatus;
   sellerId?: string;
+  /** When set, only sales where this user is seller / delivery / installer / assembly assignee. */
+  participantUserId?: string;
   assemblyStatus?: AssemblyTaskStatus;
   deliveryStatus?: FulfilmentStatus;
   /** OPEN (default) | ALL | CANCELLED | concrete SaleStatus */
@@ -137,6 +139,15 @@ export async function listSales(
 
   if (filters.paymentStatus) where.paymentStatus = filters.paymentStatus;
   if (filters.sellerId) where.sellerId = filters.sellerId;
+  if (filters.participantUserId) {
+    const uid = filters.participantUserId;
+    where.OR = [
+      { sellerId: uid },
+      { deliveryPersonId: uid },
+      { installerId: uid },
+      { assemblyTasks: { some: { assigneeId: uid } } },
+    ];
+  }
   if (filters.assemblyStatus) where.assemblyStatus = filters.assemblyStatus;
   if (filters.deliveryStatus) where.deliveryStatus = filters.deliveryStatus;
 

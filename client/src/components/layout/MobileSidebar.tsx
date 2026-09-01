@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { ModalPortal } from '@/components/ui/ModalPortal';
 import { lockBodyScroll } from '@/lib/body-scroll-lock';
@@ -17,6 +18,8 @@ export interface MobileSidebarProps {
  * appear twice in the accessibility tree alongside the desktop rail.
  */
 export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
+  const { t } = useTranslation();
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -44,7 +47,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Navigation"
+          aria-label={t('nav.navigation')}
           className="absolute inset-y-0 left-0 flex w-72 max-w-[85%] flex-col shadow-overlay"
         >
           <Sidebar onNavigate={onClose} onRequestClose={onClose} />

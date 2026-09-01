@@ -45,7 +45,7 @@ export const listWorkerFinancialTransactions = asyncHandler(
 
     const result = await workerFinancialService.listWorkerTransactions({
       storeId: user.storeId,
-      actorRole: user.role,
+      actor: { id: user.id, role: user.role },
       workerId,
       page: query.page,
       pageSize: query.pageSize,
@@ -68,10 +68,15 @@ export const getWorkerFinancialSummary = asyncHandler(async (req: Request, res: 
   const { workerId } = req.params as WorkerIdParams;
   const query = req.query as unknown as WorkerFinancialSummaryQuery;
 
-  const summary = await workerFinancialService.getWorkerSummary(user.storeId, user.role, workerId, {
-    from: query.from,
-    to: query.to,
-  });
+  const summary = await workerFinancialService.getWorkerSummary(
+    user.storeId,
+    { id: user.id, role: user.role },
+    workerId,
+    {
+      from: query.from,
+      to: query.to,
+    },
+  );
   sendSuccess<WorkerFinancialSummaryResponse>(res, { summary });
 });
 

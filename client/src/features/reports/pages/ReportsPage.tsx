@@ -1,6 +1,7 @@
 import { DateRangePreset, PAYMENT_METHOD_LABELS, type ReportsBundle } from '@furniture-erp/shared';
 import { BarChart3, Download, FileSpreadsheet } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { ErrorState } from '@/components/feedback/ErrorState';
@@ -640,6 +641,7 @@ function ExportButton({ label, onClick }: { label: string; onClick: () => void }
  * Store financial reports — admin only. Read-only; reuses analytics accounting.
  */
 export function ReportsPage() {
+  const { t } = useTranslation();
   const [period, setPeriod] = useState<DashboardPeriod>(DEFAULT_PERIOD);
   const [tab, setTab] = useState<ReportTab>('overview');
   const [productLimit, setProductLimit] = useState(10);
@@ -654,9 +656,9 @@ export function ReportsPage() {
       <div data-testid="reports-page" className="space-y-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-ink">Hisobotlar</h2>
+          <h2 className="text-2xl font-semibold tracking-tight text-ink">{t('reports.title')}</h2>
           <p className="mt-1 text-sm text-ink-muted">
-            Moliyaviy hisobotlar · {periodLabel}
+            {t('reports.subtitle', { period: periodLabel })}
           </p>
         </div>
         <PeriodSelector period={period} onChange={setPeriod} disabled={reports.isFetching} />

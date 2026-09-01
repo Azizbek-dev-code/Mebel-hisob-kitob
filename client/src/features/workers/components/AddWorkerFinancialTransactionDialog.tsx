@@ -2,6 +2,7 @@ import {
   WorkerFinancialTransactionType,
   type CreateWorkerFinancialTransactionRequest,
   type WorkerFinancialCreatableType,
+  type WorkerResponsibility as WorkerResponsibilityValue,
 } from '@furniture-erp/shared';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
@@ -14,6 +15,7 @@ import {
   WORKER_FINANCE_CREATE_TYPE_OPTIONS,
 } from '@/features/workers/utils/finance-labels';
 import { todayStoreInputDate } from '@/features/workers/utils/period-range';
+import { COMPENSATION_RESPONSIBILITY_LABELS } from '@/features/workers/utils/compensation-labels';
 import { ApiClientError } from '@/lib/api-client';
 
 const fieldClass =
@@ -25,6 +27,7 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 interface AddWorkerFinancialTransactionDialogProps {
   open: boolean;
   workerId: string;
+  responsibilities?: WorkerResponsibilityValue[];
   onClose: () => void;
   onCreated?: () => void;
 }
@@ -60,6 +63,7 @@ function toFriendlyError(error: unknown): string {
 export function AddWorkerFinancialTransactionDialog({
   open,
   workerId,
+  responsibilities = [],
   onClose,
   onCreated,
 }: AddWorkerFinancialTransactionDialogProps) {
@@ -72,6 +76,7 @@ export function AddWorkerFinancialTransactionDialog({
   const [amount, setAmount] = useState(0);
   const [transactionDate, setTransactionDate] = useState(todayStoreInputDate);
   const [description, setDescription] = useState('');
+  const [responsibility, setResponsibility] = useState<WorkerResponsibilityValue | ''>('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -81,6 +86,7 @@ export function AddWorkerFinancialTransactionDialog({
     setAmount(0);
     setTransactionDate(todayStoreInputDate());
     setDescription('');
+    setResponsibility(responsibilities.length === 1 ? responsibilities[0]! : '');
     setFieldErrors({});
     setFormError(null);
   }, [open]);
@@ -114,6 +120,7 @@ export function AddWorkerFinancialTransactionDialog({
       amount,
       transactionDate,
       description: description.trim() || undefined,
+      ...(responsibility ? { responsibility } : {}),
     };
 
     try {
@@ -182,6 +189,33 @@ export function AddWorkerFinancialTransactionDialog({
           error={fieldErrors.amount}
           disabled={isPending}
         />
+
+        {responsibilities.length > 0 ? (
+          <div className="space-y-1.5">
+            <label htmlFor="worker-finance-responsibility" className="block text-sm font-medium text-ink">
+              Mas&apos;uliyat
+            </label>
+            <select
+              id="worker-finance-responsibility"
+              className={fieldClass}
+              value={responsibility}
+              disabled={isPending}
+              onChange={(event) =>
+                setResponsibility(event.target.value as WorkerResponsibilityValue | '')
+              }
+            >
+              <option value="">Avtomatik</option>
+              {responsibilities.map((item) => (
+                <option key={item} value={item}>
+                  {COMPENSATION_RESPONSIBILITY_LABELS[item]}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-ink-muted">
+              Sotuvchi to‘lovini seller commissioniga tegishli qilish uchun Sotuvchini tanlang.
+            </p>
+          </div>
+        ) : null}
 
         <div className="space-y-1.5">
           <label htmlFor="worker-finance-date" className="block text-sm font-medium text-ink">

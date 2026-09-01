@@ -1,6 +1,7 @@
 import { ProductStatus } from '@furniture-erp/shared';
 import { ArrowLeft, Pencil, Sofa } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 
 import { ErrorState } from '@/components/feedback/ErrorState';
@@ -16,12 +17,13 @@ import { stockStatusLabel } from '@/features/inventory/utils/labels';
 import { ProductFormDialog } from '../components/ProductFormDialog';
 import { useProductDetail } from '../hooks/use-products';
 
-function errorMessage(error: unknown): string {
-  if (error instanceof ApiClientError) return error.message || 'Qayta urinib ko‘ring.';
-  return 'Qayta urinib ko‘ring.';
+function errorMessage(error: unknown, t: (key: string) => string): string {
+  if (error instanceof ApiClientError) return error.message || t('common.retry');
+  return t('common.retry');
 }
 
 export function ProductDetailPage() {
+  const { t } = useTranslation();
   const { id = '' } = useParams();
   const detail = useProductDetail(id);
   const [editOpen, setEditOpen] = useState(false);
@@ -36,13 +38,13 @@ export function ProductDetailPage() {
             className="mb-2 inline-flex items-center gap-1 text-sm text-ink-soft hover:text-ink"
           >
             <ArrowLeft className="size-4" />
-            Mebellar
+            {t('products.title')}
           </Link>
           <h2 className="text-2xl font-semibold tracking-tight text-ink">
-            {product?.name ?? 'Mebel'}
+            {product?.name ?? t('products.singular')}
           </h2>
           <p className="mt-1 text-sm text-ink-muted">
-            {product?.sku ? `SKU: ${product.sku}` : 'SKU yo‘q'}
+            {product?.sku ? `SKU: ${product.sku}` : t('products.noSku')}
           </p>
         </div>
         {product ? (
@@ -52,15 +54,15 @@ export function ProductDetailPage() {
             className="inline-flex items-center gap-1.5 rounded-input border border-line px-3 py-2 text-sm hover:bg-surface-hover"
           >
             <Pencil className="size-4" />
-            Tahrirlash
+            {t('common.edit')}
           </button>
         ) : null}
       </div>
 
       {detail.isError ? (
         <ErrorState
-          title="Mahsulot topilmadi"
-          message={errorMessage(detail.error)}
+          title={t('products.notFound')}
+          message={errorMessage(detail.error, t)}
           onRetry={() => void detail.refetch()}
         />
       ) : detail.isLoading || !product ? (
@@ -81,63 +83,76 @@ export function ProductDetailPage() {
             )}
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <Info label="Kategoriya" value={product.categoryName ?? '—'} />
+              <Info label={t('products.category')} value={product.categoryName ?? '—'} />
               <Info
-                label="Holat"
+                label={t('common.status')}
                 value={
                   <Badge tone={product.status === ProductStatus.ACTIVE ? 'success' : 'neutral'}>
-                    {product.status === ProductStatus.ACTIVE ? 'Faol' : 'Arxiv'}
+                    {product.status === ProductStatus.ACTIVE
+                      ? t('common.active')
+                      : t('common.archived')}
                   </Badge>
                 }
               />
-              <Info label="Sotuv narxi" value={formatMoney(product.defaultSalePrice)} />
-              <Info label="Tannarx" value={formatMoney(product.costPrice)} />
+              <Info label={t('sales.salePrice')} value={formatMoney(product.defaultSalePrice)} />
+              <Info label={t('sales.costPrice')} value={formatMoney(product.costPrice)} />
               <Info
-                label="Zaxira"
+                label={t('products.stock')}
                 value={
                   product.trackStock
-                    ? `${product.stockQty} dona · ${stockStatusLabel(product.stockStatus)}`
+                    ? `${product.stockQty} ${t('common.pcs')} · ${stockStatusLabel(product.stockStatus)}`
                     : stockStatusLabel(product.stockStatus)
                 }
               />
-              <Info label="Min. zaxira" value={String(product.minStockQty)} />
-              <Info label="Yaratilgan" value={formatDateTime(product.createdAt)} />
-              <Info label="Yangilangan" value={formatDateTime(product.updatedAt)} />
+              <Info label={t('products.minStock')} value={String(product.minStockQty)} />
+              <Info label={t('common.createdAt')} value={formatDateTime(product.createdAt)} />
+              <Info label={t('common.updatedAt')} value={formatDateTime(product.updatedAt)} />
               {product.description ? (
                 <div className="sm:col-span-2">
-                  <Info label="Tavsif" value={product.description} />
+                  <Info label={t('common.description')} value={product.description} />
                 </div>
               ) : null}
             </div>
           </div>
 
-          <SectionCard title="Zaxira xulosasi" description="Harakatlar yig‘indisi">
+          <SectionCard
+            title={t('products.stockSummary')}
+            description={t('products.stockSummaryHint')}
+          >
             <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 text-sm">
-              <Stat label="Kirim" value={`${product.stockSummary.stockIn}`} />
-              <Stat label="Sotilgan" value={`${product.stockSummary.sold}`} />
-              <Stat label="Bekor/qaytarilgan" value={`${product.stockSummary.cancelledRestored}`} />
-              <Stat label="Qo‘lda tuzatish" value={`${product.stockSummary.manualAdjustments}`} />
-              <Stat label="Hozirgi" value={`${product.stockSummary.currentQty}`} />
+              <Stat label={t('products.stockIn')} value={`${product.stockSummary.stockIn}`} />
+              <Stat label={t('products.sold')} value={`${product.stockSummary.sold}`} />
+              <Stat
+                label={t('products.cancelledRestored')}
+                value={`${product.stockSummary.cancelledRestored}`}
+              />
+              <Stat
+                label={t('products.manualAdjustments')}
+                value={`${product.stockSummary.manualAdjustments}`}
+              />
+              <Stat label={t('products.currentQty')} value={`${product.stockSummary.currentQty}`} />
             </dl>
             <p className="mt-3 text-xs text-ink-muted">
-              Batafsil harakatlar uchun{' '}
+              {t('products.inventoryLinkHint')}{' '}
               <Link to={ROUTES.inventory} className="text-brand-700 hover:underline">
-                Ombor
-              </Link>{' '}
-              sahifasiga o‘ting.
+                {t('inventory.title')}
+              </Link>
             </p>
           </SectionCard>
 
           <SectionCard
-            title="Sotuv xulosasi"
-            description="ACTIVE|COMPLETED sotuvlar — SaleItem snapshot"
+            title={t('products.salesSummary')}
+            description={t('products.salesSummaryHint')}
           >
             <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 text-sm">
-              <Stat label="Sotuvlar" value={String(product.salesSummary.saleCount)} />
-              <Stat label="Donalar" value={String(product.salesSummary.unitsSold)} />
-              <Stat label="Daromad" value={formatMoney(product.salesSummary.revenue)} />
-              <Stat label="COGS" value={formatMoney(product.salesSummary.cogs)} />
-              <Stat label="Yalpi foyda" value={formatMoney(product.salesSummary.grossProfit)} />
+              <Stat label={t('sales.title')} value={String(product.salesSummary.saleCount)} />
+              <Stat label={t('products.units')} value={String(product.salesSummary.unitsSold)} />
+              <Stat label={t('products.revenue')} value={formatMoney(product.salesSummary.revenue)} />
+              <Stat label={t('products.cogs')} value={formatMoney(product.salesSummary.cogs)} />
+              <Stat
+                label={t('sales.grossProfit')}
+                value={formatMoney(product.salesSummary.grossProfit)}
+              />
             </dl>
           </SectionCard>
         </>

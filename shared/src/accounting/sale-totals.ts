@@ -18,6 +18,7 @@ export interface SaleLineInput {
 export interface SaleCostsInput {
   sellerBonus?: Money;
   installationCost?: Money;
+  installerFee?: Money;
   deliveryCost?: Money;
   otherCosts?: Money;
 }
@@ -50,9 +51,10 @@ export interface SaleTotals {
 
   sellerBonus: Money;
   installationCost: Money;
+  installerFee: Money;
   deliveryCost: Money;
   otherCosts: Money;
-  /** sellerBonus + installationCost + deliveryCost + otherCosts */
+  /** sellerBonus + installationCost + installerFee + deliveryCost + otherCosts */
   additionalCosts: Money;
 
   /** totalSalePrice - totalCostPrice. May be negative when goods are sold at a loss. */
@@ -100,9 +102,16 @@ export function calculateSaleTotals(input: SaleTotalsInput): SaleTotals {
 
   const sellerBonus = toMoney(input.costs?.sellerBonus ?? 0);
   const installationCost = toMoney(input.costs?.installationCost ?? 0);
+  const installerFee = toMoney(input.costs?.installerFee ?? 0);
   const deliveryCost = toMoney(input.costs?.deliveryCost ?? 0);
   const otherCosts = toMoney(input.costs?.otherCosts ?? 0);
-  const additionalCosts = sumMoney(sellerBonus, installationCost, deliveryCost, otherCosts);
+  const additionalCosts = sumMoney(
+    sellerBonus,
+    installationCost,
+    installerFee,
+    deliveryCost,
+    otherCosts,
+  );
 
   // Profit is a signed figure: clamping it at zero would hide a loss-making sale
   // from the very report that exists to reveal one.
@@ -124,6 +133,7 @@ export function calculateSaleTotals(input: SaleTotalsInput): SaleTotals {
     totalCostPrice,
     sellerBonus,
     installationCost,
+    installerFee,
     deliveryCost,
     otherCosts,
     additionalCosts,

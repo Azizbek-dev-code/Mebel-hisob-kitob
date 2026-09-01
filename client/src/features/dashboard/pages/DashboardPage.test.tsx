@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { routes } from '@/routes/index';
 import { ROUTES } from '@/routes/paths';
+import i18n from '@/i18n';
 import { mockApi } from '@/test/mock-api';
 import { renderWithProviders, screen, waitFor } from '@/test/test-utils';
 
@@ -141,7 +142,7 @@ describe('DashboardPage (financial summary)', () => {
     mockDashboardApis();
     renderDashboard();
 
-    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: i18n.t('dashboard.title') })).toBeInTheDocument();
     expect(document.querySelector('[aria-busy="true"]')).toBeTruthy();
 
     expect(await screen.findByText('Sotuv')).toBeInTheDocument();

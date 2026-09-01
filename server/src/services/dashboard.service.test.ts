@@ -380,6 +380,7 @@ describe('recent sales', () => {
       paidAmount: 3_000_000,
       remainingAmount: 6_000_000,
       paymentStatus: 'PARTIALLY_PAID',
+      deliveryDueDate: null,
     });
   });
 

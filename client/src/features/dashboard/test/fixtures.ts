@@ -102,6 +102,7 @@ export const POPULATED_SUMMARY: DashboardSummary = {
       id: 'sale_1',
       saleNumber: 1042,
       saleDate: '2026-08-07T20:30:00.000Z',
+      deliveryDueDate: null,
       customerName: 'Anvar Aliyev',
       productSummary: 'Bedroom Set "Milano" +2',
       itemCount: 3,

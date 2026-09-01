@@ -20,6 +20,10 @@ export const workerFinanceKeys = {
     [...workerFinanceKeys.all, 'transactions', workerId, params] as const,
   detail: (transactionId: string) =>
     [...workerFinanceKeys.all, 'detail', transactionId] as const,
+  meSummary: (params: WorkerFinancialSummaryQuery) =>
+    [...workerFinanceKeys.all, 'me-summary', params] as const,
+  meTransactions: (params: WorkerFinancialTransactionListQuery) =>
+    [...workerFinanceKeys.all, 'me-transactions', params] as const,
 };
 
 export function useWorkerFinanceSummary(
@@ -44,6 +48,27 @@ export function useWorkerFinanceTransactions(
     queryKey: workerFinanceKeys.transactions(workerId, params),
     queryFn: ({ signal }) => workerFinancesService.listTransactions(workerId, params, signal),
     enabled: Boolean(workerId) && enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useMyFinanceSummary(params: WorkerFinancialSummaryQuery, enabled = true) {
+  return useQuery({
+    queryKey: workerFinanceKeys.meSummary(params),
+    queryFn: ({ signal }) => workerFinancesService.mySummary(params, signal),
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useMyFinanceTransactions(
+  params: WorkerFinancialTransactionListQuery,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: workerFinanceKeys.meTransactions(params),
+    queryFn: ({ signal }) => workerFinancesService.myTransactions(params, signal),
+    enabled,
     placeholderData: keepPreviousData,
   });
 }

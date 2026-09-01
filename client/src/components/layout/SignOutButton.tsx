@@ -1,4 +1,5 @@
 import { Loader2, LogOut } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { useLogout } from '@/features/auth/hooks/use-auth';
 import { cn } from '@/lib/cn';
@@ -16,6 +17,7 @@ export interface SignOutButtonProps {
  * there is a single logout call and a single place where its pending state lives.
  */
 export function SignOutButton({ className, onSignedOut }: SignOutButtonProps) {
+  const { t } = useTranslation();
   const logout = useLogout();
 
   return (
@@ -34,7 +36,7 @@ export function SignOutButton({ className, onSignedOut }: SignOutButtonProps) {
       ) : (
         <LogOut className="size-4 shrink-0" aria-hidden="true" />
       )}
-      Sign out
+      {t('auth.logout')}
     </button>
   );
 }

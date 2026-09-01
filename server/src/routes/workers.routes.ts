@@ -10,12 +10,17 @@ import {
 } from '../controllers/worker-compensation.controller.js';
 import {
   createWorker,
+  getFeeReconciliation,
+  getMyProfileModules,
   getWorker,
+  getWorkerProfileModules,
   getWorkerStats,
   listWorkerActivity,
+  listWorkerAttributedFees,
   listWorkers,
   listWorkerSales,
   listWorkerTasks,
+  getWorkerSellerReport,
   resetWorkerPassword,
   searchWorkerOptions,
   updateWorker,
@@ -39,6 +44,7 @@ import {
   workerOptionsQuerySchema,
   workerSalesQuerySchema,
   workerTasksQuerySchema,
+  sellerReportQuerySchema,
 } from '../validators/workers.validators.js';
 
 /**
@@ -61,6 +67,7 @@ workersRouter.get('/options', validate({ query: workerOptionsQuerySchema }), sea
 
 workersRouter.get('/', validate({ query: workerListQuerySchema }), listWorkers);
 workersRouter.post('/', validate({ body: createWorkerBodySchema }), createWorker);
+workersRouter.get('/fee-reconciliation', getFeeReconciliation);
 
 workersRouter.get('/:id', validate({ params: idParamsSchema }), getWorker);
 workersRouter.patch(
@@ -75,9 +82,19 @@ workersRouter.post(
 );
 workersRouter.get('/:id/stats', validate({ params: idParamsSchema }), getWorkerStats);
 workersRouter.get(
+  '/:id/profile-modules',
+  validate({ params: idParamsSchema }),
+  getWorkerProfileModules,
+);
+workersRouter.get(
   '/:id/sales',
   validate({ params: idParamsSchema, query: workerSalesQuerySchema }),
   listWorkerSales,
+);
+workersRouter.get(
+  '/:id/seller-report',
+  validate({ params: idParamsSchema, query: sellerReportQuerySchema }),
+  getWorkerSellerReport,
 );
 workersRouter.get(
   '/:id/tasks',
@@ -85,6 +102,11 @@ workersRouter.get(
   listWorkerTasks,
 );
 workersRouter.get('/:id/activity', validate({ params: idParamsSchema }), listWorkerActivity);
+workersRouter.get(
+  '/:id/attributed-fees',
+  validate({ params: idParamsSchema }),
+  listWorkerAttributedFees,
+);
 
 workersRouter.get(
   '/:id/compensation-preview',

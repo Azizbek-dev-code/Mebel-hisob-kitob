@@ -13,6 +13,7 @@ import {
   type SupplierListItem,
   type SupplierListQuery,
   type SupplierListResponse,
+  type UpdatePurchaseDeliveryRequest,
   type UpdateSupplierRequest,
 } from '@furniture-erp/shared';
 import { z } from 'zod';
@@ -63,6 +64,10 @@ export const createPurchaseBodySchema = z
     paymentMethod: z.nativeEnum(PaymentMethod).optional(),
     notes: z.string().trim().max(2000).nullable().optional(),
     purchaseDate: flexibleDateSchema.optional(),
+    deliveredAt: flexibleDateSchema.optional(),
+    deliveryDays: z.number().int().nonnegative().max(3650).optional(),
+    driverId: cuidSchema.nullable().optional(),
+    driverFee: optionalMoneySchema,
   })
   .superRefine((value, ctx) => {
     const paid = value.paidAmount ?? 0;
@@ -74,6 +79,22 @@ export const createPurchaseBodySchema = z
       });
     }
   }) satisfies z.ZodType<CreatePurchaseRequest>;
+
+export const updatePurchaseDeliveryBodySchema = z
+  .object({
+    deliveredAt: flexibleDateSchema.nullable().optional(),
+    deliveryDays: z.number().int().nonnegative().max(3650).optional(),
+    driverId: cuidSchema.nullable().optional(),
+    driverFee: optionalMoneySchema,
+  })
+  .refine(
+    (body) =>
+      body.deliveredAt !== undefined ||
+      body.deliveryDays !== undefined ||
+      body.driverId !== undefined ||
+      body.driverFee !== undefined,
+    { message: 'At least one delivery field is required' },
+  ) satisfies z.ZodType<UpdatePurchaseDeliveryRequest>;
 
 export const purchaseListQuerySchema = paginationQuerySchema.extend({
   search: z.string().trim().max(200).optional(),
@@ -98,6 +119,7 @@ export type CreateSupplierBody = z.infer<typeof createSupplierBodySchema>;
 export type UpdateSupplierBody = z.infer<typeof updateSupplierBodySchema>;
 export type SupplierListQueryBody = z.infer<typeof supplierListQuerySchema>;
 export type CreatePurchaseBody = z.infer<typeof createPurchaseBodySchema>;
+export type UpdatePurchaseDeliveryBody = z.infer<typeof updatePurchaseDeliveryBodySchema>;
 export type PurchaseListQueryBody = z.infer<typeof purchaseListQuerySchema>;
 export type CreateSupplierPaymentBody = z.infer<typeof createSupplierPaymentBodySchema>;
 export type CancelPurchaseBody = z.infer<typeof cancelPurchaseBodySchema>;

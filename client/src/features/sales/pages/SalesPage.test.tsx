@@ -58,6 +58,7 @@ const SALE = {
   paymentType: 'DEPOSIT',
   assemblyStatus: 'PENDING',
   deliveryStatus: 'NOT_REQUIRED',
+  deliveryDueDate: null,
   installationStatus: 'PENDING',
 };
 
@@ -94,7 +95,7 @@ describe('SalesPage', () => {
     expect(await screen.findByText('#S-000123')).toBeInTheDocument();
     expect(screen.getByText('Ali Valiyev')).toBeInTheDocument();
     expect(screen.getByText(/9[\s\u00A0]*500[\s\u00A0]*000/)).toBeInTheDocument();
-    expect(screen.getAllByText('Part paid').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Qisman to‘langan').length).toBeGreaterThan(0);
   });
 
   it('applies search filter to the list query', async () => {
@@ -102,7 +103,7 @@ describe('SalesPage', () => {
     renderPage();
 
     await screen.findByText('#S-000123');
-    await user.type(screen.getByPlaceholderText(/Search customer/i), 'Ali');
+    await user.type(screen.getByPlaceholderText(/Mijoz, telefon/i), 'Ali');
 
     await waitFor(() => {
       expect(listMock).toHaveBeenCalledWith(
@@ -114,7 +115,7 @@ describe('SalesPage', () => {
 
   it('links to the new sale form', async () => {
     renderPage();
-    const link = await screen.findByRole('link', { name: /New sale/i });
+    const link = await screen.findByRole('link', { name: /Yangi sotuv/i });
     expect(link).toHaveAttribute('href', '/sales/new');
   });
 });

@@ -5,11 +5,13 @@ import {
   WorkerResponsibility,
   type CreateSaleRequest,
 } from '@furniture-erp/shared';
-import { ArrowLeft, Loader2, PackagePlus, Plus, UserPlus } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, UserPlus } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { PageContainer } from '@/components/layout/PageContainer';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { SectionCard } from '@/components/ui/SectionCard';
 import { useCurrentUser } from '@/features/auth/hooks/use-auth';
 import { useSubscription } from '@/features/subscription/subscription-context';
@@ -20,8 +22,12 @@ import { formatMoney } from '@/utils/format';
 import { paymentMethodLabel, paymentTypeLabel } from '@/utils/sales';
 
 import { MoneyField } from '../components/MoneyField';
-import { QuickCreateProductPanel } from '../components/QuickCreateProductPanel';
+import {
+  SaleLineItemsEditor,
+  type SaleLineDraft,
+} from '../components/SaleLineItemsEditor';
 import { SearchSelect, type SearchSelectOption } from '../components/SearchSelect';
+import { WorkerFeeRow } from '../components/WorkerFeeRow';
 import {
   useCreateCustomer,
   useCreateSale,
@@ -34,6 +40,7 @@ const fieldClass =
   'w-full rounded-input border border-line bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100';
 
 export function NewSalePage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const currentUser = useCurrentUser();
   const { canWrite, openGate } = useSubscription();
@@ -44,30 +51,30 @@ export function NewSalePage() {
   const [customerQuery, setCustomerQuery] = useState('');
   const [productQuery, setProductQuery] = useState('');
   const [customer, setCustomer] = useState<SearchSelectOption | null>(null);
-  const [product, setProduct] = useState<SearchSelectOption | null>(null);
+  const [lines, setLines] = useState<SaleLineDraft[]>([]);
   const [sellerId, setSellerId] = useState('');
   const [assemblerId, setAssemblerId] = useState('');
+  const [installationWorkerId, setInstallationWorkerId] = useState('');
   const [deliveryPersonId, setDeliveryPersonId] = useState('');
 
-  const [quantity, setQuantity] = useState(1);
-  const [unitCostPrice, setUnitCostPrice] = useState(0);
-  const [unitSalePrice, setUnitSalePrice] = useState(0);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [depositAmount, setDepositAmount] = useState(0);
   const [depositMethod, setDepositMethod] = useState<PaymentMethod>(PaymentMethod.CASH);
   const [paymentType, setPaymentType] = useState<PaymentType>(PaymentType.DEPOSIT);
   const [installmentMonthCount, setInstallmentMonthCount] = useState(3);
   const [assemblerFee, setAssemblerFee] = useState(0);
+  const [installerFee, setInstallerFee] = useState(0);
   const [driverFee, setDriverFee] = useState(0);
 
-  const [deliveryRequired, setDeliveryRequired] = useState(false);
-  const [installationRequired, setInstallationRequired] = useState(true);
+  const [saleDate, setSaleDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [deliveryDueDate, setDeliveryDueDate] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [notes, setNotes] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
 
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [showNewProduct, setShowNewProduct] = useState(false);
+  const [confirmMissingCost, setConfirmMissingCost] = useState(false);
   const [newFirstName, setNewFirstName] = useState('');
   const [newLastName, setNewLastName] = useState('');
   const [newPhone, setNewPhone] = useState('');
@@ -77,48 +84,51 @@ export function NewSalePage() {
   const products = useProductLookup(productQuery);
   const sellers = useWorkerLookup('', WorkerResponsibility.SELLER);
   const assemblers = useWorkerLookup('', WorkerResponsibility.ASSEMBLER);
+  const installers = useWorkerLookup('', WorkerResponsibility.INSTALLER);
   const deliveryWorkers = useWorkerLookup('', WorkerResponsibility.DELIVERY);
 
-  // Default seller to the signed-in user once workers load.
   const effectiveSellerId = sellerId || currentUser.data?.id || '';
+  const deliveryRequired = Boolean(deliveryPersonId);
+  const effectiveAssemblerFee = assemblerId ? assemblerFee : 0;
+  const effectiveInstallerFee = installationWorkerId ? installerFee : 0;
+  const effectiveDriverFee = deliveryPersonId ? driverFee : 0;
 
   const totals = useMemo(
     () =>
       calculateSaleTotals({
-        items: product
-          ? [{ quantity, unitCostPrice, unitSalePrice }]
-          : [],
+        items: lines.map((line) => ({
+          quantity: line.quantity,
+          unitCostPrice: line.unitCostPrice,
+          unitSalePrice: line.unitSalePrice,
+        })),
         discountAmount,
         depositAmount,
         costs: {
-          installationCost: assemblerFee,
-          deliveryCost: driverFee,
+          installationCost: effectiveAssemblerFee,
+          installerFee: effectiveInstallerFee,
+          deliveryCost: effectiveDriverFee,
         },
       }),
     [
-      product,
-      quantity,
-      unitCostPrice,
-      unitSalePrice,
+      lines,
       discountAmount,
       depositAmount,
-      assemblerFee,
-      driverFee,
+      effectiveAssemblerFee,
+      effectiveInstallerFee,
+      effectiveDriverFee,
     ],
   );
 
   const customerOptions: SearchSelectOption[] = (customers.data ?? []).map((item) => ({
     id: item.id,
     label: `${item.firstName} ${item.lastName}`,
-    description: item.phone,
+    description: item.phone ?? undefined,
   }));
 
   const productOptions: SearchSelectOption[] = (products.data ?? []).map((item) => ({
     id: item.id,
     label: item.name,
-    description: `${formatMoney(item.defaultSalePrice)}${item.sku ? ` · ${item.sku}` : ''}${
-      item.trackStock ? ` · ${item.stockQty} dona` : ''
-    }`,
+    description: item.sku ?? undefined,
   }));
 
   async function handleCreateCustomer() {
@@ -133,7 +143,7 @@ export function NewSalePage() {
       setCustomer({
         id: created.id,
         label: `${created.firstName} ${created.lastName}`,
-        description: created.phone,
+        description: created.phone ?? undefined,
       });
       setShowNewCustomer(false);
       setNewFirstName('');
@@ -141,50 +151,49 @@ export function NewSalePage() {
       setNewPhone('');
       setNewAddress('');
     } catch (error) {
-      setFormError(mutationErrorMessage(error, "Mijoz saqlanmadi."));
+      setFormError(mutationErrorMessage(error, t('sales.customerSaveFailed')));
     }
   }
 
-  async function onSubmit(event: React.FormEvent) {
-    event.preventDefault();
-    if (!canWrite) {
-      openGate();
-      return;
-    }
-    setFormError(null);
-
-    if (!customer || !product) {
-      setFormError('Select a customer and a product');
+  async function submitSale() {
+    if (!customer || lines.length === 0) {
+      setFormError(t('sales.selectCustomerProduct'));
       return;
     }
     if (!effectiveSellerId) {
-      setFormError('Select a seller');
+      setFormError(t('sales.selectSeller'));
+      return;
+    }
+    if (deliveryRequired && !deliveryDueDate) {
+      setFormError(t('sales.selectDeliveryDue'));
       return;
     }
 
     const body: CreateSaleRequest = {
       customerId: customer.id,
       sellerId: effectiveSellerId,
-      items: [
-        {
-          productId: product.id,
-          quantity,
-          unitCostPrice,
-          unitSalePrice,
-        },
-      ],
+      saleDate: saleDate || undefined,
+      items: lines.map((line) => ({
+        productId: line.productId,
+        quantity: line.quantity,
+        unitCostPrice: line.unitCostPrice,
+        unitSalePrice: line.unitSalePrice,
+      })),
       discountAmount,
       paymentType,
       depositAmount,
       depositMethod,
       installmentMonthCount:
         paymentType === PaymentType.INSTALLMENT ? installmentMonthCount : undefined,
-      assemblerFee,
-      driverFee,
+      assemblerFee: effectiveAssemblerFee,
+      installerFee: effectiveInstallerFee,
+      driverFee: effectiveDriverFee,
       assemblerId: assemblerId || undefined,
-      installationRequired: installationRequired || Boolean(assemblerId),
+      installationWorkerId: installationWorkerId || undefined,
+      installationRequired: Boolean(assemblerId || installationWorkerId),
       deliveryRequired,
-      deliveryPersonId: deliveryRequired ? deliveryPersonId || undefined : undefined,
+      deliveryPersonId: deliveryPersonId || undefined,
+      deliveryDueDate: deliveryRequired && deliveryDueDate ? deliveryDueDate : undefined,
       deliveryAddress: deliveryRequired ? deliveryAddress || undefined : undefined,
       notes: notes.trim() || undefined,
     };
@@ -197,28 +206,55 @@ export function NewSalePage() {
     }
   }
 
+  async function onSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!canWrite) {
+      openGate();
+      return;
+    }
+    setFormError(null);
+
+    if (!customer || lines.length === 0) {
+      setFormError(t('sales.selectCustomerProduct'));
+      return;
+    }
+    if (!effectiveSellerId) {
+      setFormError(t('sales.selectSeller'));
+      return;
+    }
+    if (deliveryRequired && !deliveryDueDate) {
+      setFormError(t('sales.selectDeliveryDue'));
+      return;
+    }
+
+    if (lines.some((line) => line.unitCostPrice <= 0) && !confirmMissingCost) {
+      setConfirmMissingCost(true);
+      return;
+    }
+
+    await submitSale();
+  }
+
   return (
     <PageContainer className="space-y-6">
       <div className="flex items-start gap-3">
         <Link
           to={ROUTES.sales}
           className="mt-1 rounded-input border border-line p-2 text-ink-muted hover:bg-surface-hover hover:text-ink"
-          aria-label="Back to sales"
+          aria-label={t('sales.backToSales')}
         >
           <ArrowLeft className="size-4" />
         </Link>
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-ink">New sale</h2>
-          <p className="mt-1 text-sm text-ink-muted">
-            Customer, furniture, deposit and assembly — aim for under two minutes.
-          </p>
+          <h2 className="text-2xl font-semibold tracking-tight text-ink">{t('sales.new')}</h2>
+          <p className="mt-1 text-sm text-ink-muted">{t('sales.newHint')}</p>
         </div>
       </div>
 
       <form onSubmit={onSubmit} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-6">
           <SectionCard
-            title="Customer"
+            title={t('sales.customer')}
             action={
               <button
                 type="button"
@@ -226,45 +262,45 @@ export function NewSalePage() {
                 className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-700"
               >
                 <UserPlus className="size-4" />
-                New customer
+                {t('sales.newCustomer')}
               </button>
             }
           >
             <SearchSelect
-              label="Existing customer"
-              placeholder="Search by name or phone"
+              label={t('sales.existingCustomer')}
+              placeholder={t('sales.searchNamePhone')}
               value={customer}
               options={customerOptions}
               isLoading={customers.isFetching}
               query={customerQuery}
               onQueryChange={setCustomerQuery}
               onChange={setCustomer}
-              emptyMessage="No customer found"
+              emptyMessage={t('sales.customerNotFound')}
             />
 
             {showNewCustomer ? (
               <div className="mt-4 grid gap-3 rounded-card border border-line bg-surface-muted p-4 sm:grid-cols-2">
                 <input
                   className={fieldClass}
-                  placeholder="First name"
+                  placeholder={t('sales.firstName')}
                   value={newFirstName}
                   onChange={(event) => setNewFirstName(event.target.value)}
                 />
                 <input
                   className={fieldClass}
-                  placeholder="Last name"
+                  placeholder={t('sales.lastName')}
                   value={newLastName}
                   onChange={(event) => setNewLastName(event.target.value)}
                 />
                 <input
                   className={fieldClass}
-                  placeholder="Phone"
+                  placeholder={t('sales.phone')}
                   value={newPhone}
                   onChange={(event) => setNewPhone(event.target.value)}
                 />
                 <input
                   className={fieldClass}
-                  placeholder="Address (optional)"
+                  placeholder={`${t('sales.address')} (${t('common.optional')})`}
                   value={newAddress}
                   onChange={(event) => setNewAddress(event.target.value)}
                 />
@@ -275,85 +311,49 @@ export function NewSalePage() {
                     disabled={createCustomer.isPending}
                     className="inline-flex items-center gap-2 rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
                   >
-                    {createCustomer.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-                    Create and select
+                    {createCustomer.isPending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Plus className="size-4" />
+                    )}
+                    {t('common.saveAndSelect')}
                   </button>
                 </div>
               </div>
             ) : null}
           </SectionCard>
 
-          <SectionCard
-            title="Furniture"
-            action={
-              canQuickCreateProduct ? (
-                <button
-                  type="button"
-                  onClick={() => setShowNewProduct((value) => !value)}
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-700"
-                  data-testid="sale-quick-product-toggle"
-                >
-                  <PackagePlus className="size-4" />
-                  Yangi mebel qo‘shish
-                </button>
-              ) : undefined
-            }
-          >
-            <div className="space-y-4">
-              <SearchSelect
-                label="Mavjud mebelni tanlash"
-                placeholder="Mebel qidirish (nomi, SKU, kategoriya)…"
-                value={product}
-                options={productOptions}
-                isLoading={products.isFetching}
-                query={productQuery}
-                onQueryChange={setProductQuery}
-                onChange={(option) => {
-                  setProduct(option);
-                  const match = products.data?.find((item) => item.id === option?.id);
-                  if (match) {
-                    setUnitCostPrice(match.costPrice);
-                    setUnitSalePrice(match.defaultSalePrice);
-                  }
-                }}
-                emptyMessage="Mebel topilmadi"
-              />
-
-              {showNewProduct && canQuickCreateProduct ? (
-                <QuickCreateProductPanel
-                  onCancel={() => setShowNewProduct(false)}
-                  onCreated={({ option, costPrice, salePrice, quantity: createdQty }) => {
-                    setProduct(option);
-                    setUnitCostPrice(costPrice);
-                    setUnitSalePrice(salePrice);
-                    setQuantity(createdQty);
-                    setShowNewProduct(false);
-                    setFormError(null);
-                  }}
-                />
-              ) : null}
-
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-ink">Quantity</label>
-                  <input
-                    type="number"
-                    min={1}
-                    className={fieldClass}
-                    value={quantity}
-                    onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))}
-                  />
-                </div>
-                <MoneyField label="Cost price" value={unitCostPrice} onChange={setUnitCostPrice} />
-                <MoneyField label="Sale price" value={unitSalePrice} onChange={setUnitSalePrice} />
-              </div>
-            </div>
+          <SectionCard title={t('sales.furniture')}>
+            <SaleLineItemsEditor
+              lines={lines}
+              onChange={(next) => {
+                setLines(next);
+                setFormError(null);
+              }}
+              productOptions={productOptions}
+              productQuery={productQuery}
+              onProductQueryChange={setProductQuery}
+              productsLoading={products.isFetching}
+              resolveProductPrices={(productId) => {
+                const match = products.data?.find((item) => item.id === productId);
+                if (!match) return null;
+                return {
+                  costPrice: match.costPrice,
+                  defaultSalePrice: match.defaultSalePrice,
+                };
+              }}
+              showQuickCreate={canQuickCreateProduct}
+              showNewProduct={showNewProduct}
+              onToggleNewProduct={() => setShowNewProduct((value) => !value)}
+              onCancelNewProduct={() => setShowNewProduct(false)}
+              emptyMessage={t('sales.productNotFound')}
+            />
           </SectionCard>
 
-          <SectionCard title="Payment">
+          <SectionCard title={t('sales.payment')}>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-ink">Payment type</label>
+                <label className="block text-sm font-medium text-ink">{t('sales.paymentType')}</label>
                 <select
                   className={fieldClass}
                   value={paymentType}
@@ -366,8 +366,17 @@ export function NewSalePage() {
                   ))}
                 </select>
               </div>
+
+              <MoneyField
+                label={t('sales.deposit')}
+                value={depositAmount}
+                onChange={setDepositAmount}
+              />
+
               <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-ink">Deposit method</label>
+                <label className="block text-sm font-medium text-ink">
+                  {t('sales.depositMethod')}
+                </label>
                 <select
                   className={fieldClass}
                   value={depositMethod}
@@ -380,11 +389,12 @@ export function NewSalePage() {
                   ))}
                 </select>
               </div>
-              <MoneyField label="Deposit / zaklat" value={depositAmount} onChange={setDepositAmount} />
-              <MoneyField label="Discount / bonus off" value={discountAmount} onChange={setDiscountAmount} />
+
               {paymentType === PaymentType.INSTALLMENT ? (
                 <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-ink">Installment months</label>
+                  <label className="block text-sm font-medium text-ink">
+                    {t('sales.installmentMonths')}
+                  </label>
                   <input
                     type="number"
                     min={1}
@@ -397,20 +407,35 @@ export function NewSalePage() {
                   />
                 </div>
               ) : null}
+
+              <MoneyField
+                label={t('sales.discount')}
+                value={discountAmount}
+                onChange={setDiscountAmount}
+              />
+
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-ink">{t('sales.orderDate')}</label>
+                <input
+                  type="date"
+                  className={fieldClass}
+                  value={saleDate}
+                  onChange={(event) => setSaleDate(event.target.value)}
+                />
+              </div>
             </div>
           </SectionCard>
 
-          <SectionCard title="People & fulfilment">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-ink">Sotuvchi</label>
+          <SectionCard title={t('sales.peopleAndServices')}>
+            <div className="grid gap-3 sm:grid-cols-2" data-testid="sale-people-services">
+              <div className="space-y-1.5 sm:col-span-2">
+                <label className="block text-sm font-medium text-ink">{t('sales.seller')}</label>
                 <select
                   className={fieldClass}
                   value={effectiveSellerId}
                   onChange={(event) => setSellerId(event.target.value)}
                   data-testid="sale-seller-select"
                 >
-                  <option value="">Select seller</option>
                   {(sellers.data ?? []).map((worker) => (
                     <option key={worker.id} value={worker.id}>
                       {worker.fullName}
@@ -419,71 +444,92 @@ export function NewSalePage() {
                 </select>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-ink">Assembly worker</label>
-                <select
-                  className={fieldClass}
-                  value={assemblerId}
-                  onChange={(event) => setAssemblerId(event.target.value)}
-                >
-                  <option value="">None</option>
-                  {(assemblers.data ?? []).map((worker) => (
-                    <option key={worker.id} value={worker.id}>
-                      {worker.fullName}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <WorkerFeeRow
+                workerLabel={t('sales.assembler')}
+                feeLabel={t('sales.assemblerFee')}
+                workerId={assemblerId}
+                onWorkerChange={(id) => {
+                  setAssemblerId(id);
+                  if (!id) setAssemblerFee(0);
+                }}
+                workers={assemblers.data ?? []}
+                noneLabel={t('sales.workerNotNeeded')}
+                fee={assemblerFee}
+                onFeeChange={setAssemblerFee}
+                selectTestId="sale-assembler-select"
+                feeTestId="sale-assembler-fee"
+              />
 
-              <label className="flex items-center gap-2 text-sm text-ink">
-                <input
-                  type="checkbox"
-                  checked={installationRequired || Boolean(assemblerId)}
-                  onChange={(event) => setInstallationRequired(event.target.checked)}
-                />
-                Installation required
-              </label>
+              <WorkerFeeRow
+                workerLabel={t('sales.installer')}
+                feeLabel={t('sales.installerFee')}
+                workerId={installationWorkerId}
+                onWorkerChange={(id) => {
+                  setInstallationWorkerId(id);
+                  if (!id) setInstallerFee(0);
+                }}
+                workers={installers.data ?? []}
+                noneLabel={t('sales.workerNotNeeded')}
+                fee={installerFee}
+                onFeeChange={setInstallerFee}
+                selectTestId="sale-installer-select"
+                feeTestId="sale-installer-fee"
+              />
 
-              <label className="flex items-center gap-2 text-sm text-ink">
-                <input
-                  type="checkbox"
-                  checked={deliveryRequired}
-                  onChange={(event) => setDeliveryRequired(event.target.checked)}
-                />
-                Delivery required
-              </label>
-
-              {deliveryRequired ? (
-                <>
-                  <div className="space-y-1.5">
-                    <label className="block text-sm font-medium text-ink">Delivery person</label>
-                    <select
-                      className={fieldClass}
-                      value={deliveryPersonId}
-                      onChange={(event) => setDeliveryPersonId(event.target.value)}
-                    >
-                      <option value="">Unassigned</option>
-                      {(deliveryWorkers.data ?? []).map((worker) => (
-                        <option key={worker.id} value={worker.id}>
-                          {worker.fullName}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1.5 sm:col-span-2">
-                    <label className="block text-sm font-medium text-ink">Delivery address</label>
-                    <input
-                      className={fieldClass}
-                      value={deliveryAddress}
-                      onChange={(event) => setDeliveryAddress(event.target.value)}
-                      placeholder="Customer address"
-                    />
-                  </div>
-                </>
-              ) : null}
+              <WorkerFeeRow
+                workerLabel={t('sales.deliveryPerson')}
+                feeLabel={t('sales.driverFee')}
+                workerId={deliveryPersonId}
+                onWorkerChange={(id) => {
+                  setDeliveryPersonId(id);
+                  if (!id) {
+                    setDriverFee(0);
+                    setDeliveryDueDate('');
+                    setDeliveryAddress('');
+                  }
+                }}
+                workers={deliveryWorkers.data ?? []}
+                noneLabel={t('sales.workerNotNeeded')}
+                fee={driverFee}
+                onFeeChange={setDriverFee}
+                selectTestId="sale-delivery-select"
+                feeTestId="sale-delivery-fee"
+                extra={
+                  <>
+                    {deliveryPersonId && driverFee > 0 ? (
+                      <p className="text-xs text-ink-muted" data-testid="sale-delivery-fee-hint">
+                        {formatMoney(driverFee)} — {t('sales.completeDeliveryHint')}
+                      </p>
+                    ) : null}
+                    <div className="space-y-1.5">
+                      <label className="block text-sm font-medium text-ink">
+                        {t('sales.deliveryDueRequired')}
+                      </label>
+                      <input
+                        type="date"
+                        className={fieldClass}
+                        value={deliveryDueDate}
+                        onChange={(event) => setDeliveryDueDate(event.target.value)}
+                        data-testid="sale-delivery-due-date"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="block text-sm font-medium text-ink">
+                        {t('sales.deliveryAddress')}
+                      </label>
+                      <input
+                        className={fieldClass}
+                        value={deliveryAddress}
+                        onChange={(event) => setDeliveryAddress(event.target.value)}
+                        placeholder={t('sales.address')}
+                      />
+                    </div>
+                  </>
+                }
+              />
 
               <div className="space-y-1.5 sm:col-span-2">
-                <label className="block text-sm font-medium text-ink">Notes</label>
+                <label className="block text-sm font-medium text-ink">{t('common.notes')}</label>
                 <textarea
                   className={`${fieldClass} min-h-20`}
                   value={notes}
@@ -492,53 +538,41 @@ export function NewSalePage() {
               </div>
             </div>
           </SectionCard>
-
-          <SectionCard
-            title="Xizmat haqlari"
-            description="Ixtiyoriy. Usta va shopir summalari sotuv tannarxiga kiradi (netProfit)."
-          >
-            <div className="grid gap-3 sm:grid-cols-2" data-testid="sale-service-fees">
-              <MoneyField
-                label="Usta haqqi"
-                value={assemblerFee}
-                onChange={setAssemblerFee}
-              />
-              <MoneyField
-                label="Shopir haqqi"
-                value={driverFee}
-                onChange={setDriverFee}
-              />
-            </div>
-          </SectionCard>
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
-          <SectionCard title="Totals">
+          <SectionCard title={t('sales.totals')}>
             <dl className="space-y-2 text-sm">
+              {lines.length > 1 ? (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-ink-muted">{t('sales.lineCount')}</dt>
+                  <dd className="text-ink-soft">{lines.length}</dd>
+                </div>
+              ) : null}
               <div className="flex justify-between gap-3">
-                <dt className="text-ink-muted">Sale amount</dt>
+                <dt className="text-ink-muted">{t('sales.totalSale')}</dt>
                 <dd className="font-medium text-ink">{formatMoney(totals.totalSalePrice)}</dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="text-ink-muted">Cost</dt>
+                <dt className="text-ink-muted">{t('sales.costPrice')}</dt>
                 <dd className="text-ink-soft">{formatMoney(totals.totalCostPrice)}</dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="text-ink-muted">Gross profit</dt>
+                <dt className="text-ink-muted">{t('sales.grossProfit')}</dt>
                 <dd className="text-ink-soft">{formatMoney(totals.grossProfit)}</dd>
               </div>
-              {(assemblerFee > 0 || driverFee > 0) && (
+              {(effectiveAssemblerFee > 0 || effectiveDriverFee > 0) && (
                 <div className="flex justify-between gap-3">
-                  <dt className="text-ink-muted">Net profit</dt>
+                  <dt className="text-ink-muted">{t('sales.netProfit')}</dt>
                   <dd className="text-ink-soft">{formatMoney(totals.netProfit)}</dd>
                 </div>
               )}
               <div className="flex justify-between gap-3">
-                <dt className="text-ink-muted">Deposit</dt>
+                <dt className="text-ink-muted">{t('sales.deposit')}</dt>
                 <dd className="text-ink-soft">{formatMoney(totals.depositAmount)}</dd>
               </div>
               <div className="flex justify-between gap-3 border-t border-line pt-2">
-                <dt className="font-medium text-ink">Remaining</dt>
+                <dt className="font-medium text-ink">{t('sales.remaining')}</dt>
                 <dd className="font-semibold text-ink">{formatMoney(totals.remainingAmount)}</dd>
               </div>
             </dl>
@@ -555,11 +589,25 @@ export function NewSalePage() {
               className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-input bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
             >
               {createSale.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-              Save sale
+              {t('sales.saveSale')}
             </button>
           </SectionCard>
         </aside>
       </form>
+
+      <ConfirmDialog
+        open={confirmMissingCost}
+        title={t('sales.missingCostTitle')}
+        message={<p>{t('sales.missingCostMessage')}</p>}
+        confirmLabel={t('common.confirmContinue')}
+        cancelLabel={t('common.goBack')}
+        busy={createSale.isPending}
+        onCancel={() => setConfirmMissingCost(false)}
+        onConfirm={() => {
+          setConfirmMissingCost(false);
+          void submitSale();
+        }}
+      />
     </PageContainer>
   );
 }

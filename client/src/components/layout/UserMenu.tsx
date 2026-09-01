@@ -1,5 +1,6 @@
 import { ChevronDown } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
 import { useCurrentUser } from '@/features/auth/hooks/use-auth';
@@ -12,6 +13,7 @@ import { SignOutButton } from './SignOutButton';
 
 /** Who is signed in, and the way out. Reads the session from the Phase 2 auth query. */
 export function UserMenu() {
+  const { t } = useTranslation();
   const { data: user } = useCurrentUser();
   const [isOpen, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -68,7 +70,7 @@ export function UserMenu() {
       {isOpen ? (
         <div
           role="menu"
-          aria-label="Account"
+          aria-label={t('nav.account')}
           className="absolute right-0 top-full z-40 mt-2 w-60 rounded-card border border-line bg-surface p-1.5 shadow-overlay"
         >
           <div className="px-2.5 py-2">
@@ -86,7 +88,7 @@ export function UserMenu() {
             onClick={() => setOpen(false)}
             className="flex w-full items-center rounded-input px-2.5 py-2 text-sm text-ink-soft hover:bg-surface-hover hover:text-ink"
           >
-            Profile
+            {t('auth.profile')}
           </Link>
 
           <SignOutButton

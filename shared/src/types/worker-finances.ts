@@ -1,6 +1,7 @@
 import type {
   WorkerFinancialReferenceType,
   WorkerFinancialTransactionType,
+  WorkerResponsibility,
 } from '../constants/enums.js';
 import type { IsoDateString, Money, PaginatedResult, PaginationQuery } from './api.js';
 
@@ -33,6 +34,13 @@ export interface WorkerFinancialTransaction {
   referenceId: string | null;
   /** Present on REVERSAL rows: the original transaction type being offset. */
   reversesType: WorkerFinancialTransactionType | null;
+  /** Responsibility bucket for filters / profile modules. */
+  responsibility: WorkerResponsibility | null;
+  /**
+   * COMMISSION credits that still count toward balance.
+   * Closed (`false`) after a REVERSAL so the same business ref may re-post.
+   */
+  isOpen: boolean;
   worker: WorkerFinancialWorkerSummary;
   createdBy: WorkerFinancialCreatedBySummary | null;
   createdAt: IsoDateString;
@@ -57,6 +65,16 @@ export interface WorkerFinancialSummary {
   /** Gross sum of REVERSAL row amounts (always ≥ 0). */
   totalReversals: Money;
   /**
+   * Positive REVERSAL amounts keyed by the original type they offset.
+   * Used so UI "earned/paid" can net correctly after cancel.
+   */
+  reversalsByOriginalType?: Partial<
+    Record<
+      'BONUS' | 'COMMISSION' | 'ADVANCE' | 'DEBT' | 'PAYMENT' | 'ADJUSTMENT',
+      Money
+    >
+  >;
+  /**
    * Ledger net including reversal offsets. Positive credits the worker overall;
    * negative means advances/debt/payments exceed earning credits.
    * This is NOT salary and NOT final payroll.
@@ -76,6 +94,7 @@ export interface CreateWorkerFinancialTransactionRequest {
   description?: string;
   referenceType?: Exclude<WorkerFinancialReferenceType, 'REVERSAL'>;
   referenceId?: string;
+  responsibility?: WorkerResponsibility;
 }
 
 export interface ReverseWorkerFinancialTransactionRequest {
@@ -87,6 +106,7 @@ export interface ReverseWorkerFinancialTransactionRequest {
 
 export interface WorkerFinancialTransactionListQuery extends PaginationQuery {
   type?: WorkerFinancialTransactionType;
+  responsibility?: WorkerResponsibility;
   from?: string;
   to?: string;
   search?: string;

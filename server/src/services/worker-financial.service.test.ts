@@ -19,6 +19,7 @@ const { prismaMock } = vi.hoisted(() => ({
       findMany: vi.fn(),
       count: vi.fn(),
       create: vi.fn(),
+      updateMany: vi.fn(),
       groupBy: vi.fn(),
       deleteMany: vi.fn(),
     },
@@ -52,6 +53,7 @@ const ACTIVE_WORKER = {
   role: UserRole.EMPLOYEE,
   isActive: true,
   fullName: 'Ali Usta',
+  responsibilities: [],
 };
 
 function txRecord(overrides: Record<string, unknown> = {}) {
@@ -81,6 +83,15 @@ beforeEach(() => {
     id: STORE_ID,
     timezone: 'Asia/Tashkent',
   });
+  prismaMock.workerFinancialTransaction.groupBy.mockResolvedValue([
+    {
+      type: WorkerFinancialTransactionType.COMMISSION,
+      reversesType: null,
+      _sum: { amount: 5_000_000n },
+      _count: { _all: 1 },
+    },
+  ]);
+  prismaMock.workerFinancialTransaction.findMany.mockResolvedValue([]);
   prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
     fn(prismaMock),
   );
@@ -89,7 +100,6 @@ beforeEach(() => {
 describe('worker-financial.service createTransaction', () => {
   it.each([
     [WorkerFinancialTransactionType.BONUS, 500_000, 'Ali ga bonus'],
-    [WorkerFinancialTransactionType.COMMISSION, 200_000, 'August commission'],
     [WorkerFinancialTransactionType.ADVANCE, 100_000, 'Avgust uchun avans'],
     [WorkerFinancialTransactionType.DEBT, 50_000, 'Oldingi qarz'],
     [WorkerFinancialTransactionType.PAYMENT, 150_000, 'Partial payment'],
@@ -115,17 +125,75 @@ describe('worker-financial.service createTransaction', () => {
     expect(transaction.type).toBe(type);
     expect(transaction.amount).toBe(amount);
     expect(transaction.description).toBe(description);
-    expect(prismaMock.workerFinancialTransaction.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          storeId: STORE_ID,
+  });
+
+  it('blocks PAYMENT that exceeds earned', async () => {
+    prismaMock.user.findFirst.mockResolvedValue(ACTIVE_WORKER);
+    prismaMock.workerFinancialTransaction.groupBy.mockResolvedValue([
+      {
+        type: WorkerFinancialTransactionType.COMMISSION,
+        reversesType: null,
+        _sum: { amount: 200_000n },
+        _count: { _all: 1 },
+      },
+    ]);
+
+    await expect(
+      createTransaction(
+        STORE_ID,
+        { id: ADMIN_ID, role: UserRole.ADMIN },
+        {
           workerId: WORKER_ID,
-          type,
-          amount: BigInt(amount),
-          createdById: ADMIN_ID,
-        }),
+          type: WorkerFinancialTransactionType.PAYMENT,
+          amount: 300_000,
+          transactionDate: '2026-08-09',
+          description: 'Overpay',
+        },
+      ),
+    ).rejects.toMatchObject({ statusCode: 422 });
+  });
+
+  it('creates COMMISSION with required reference', async () => {
+    prismaMock.user.findFirst.mockResolvedValue(ACTIVE_WORKER);
+    prismaMock.workerFinancialTransaction.create.mockResolvedValue(
+      txRecord({
+        type: WorkerFinancialTransactionType.COMMISSION,
+        amount: 200_000n,
+        description: 'August commission',
+        referenceType: 'MANUAL',
+        referenceId: 'manual:aug',
       }),
     );
+
+    const transaction = await createTransaction(
+      STORE_ID,
+      { id: ADMIN_ID, role: UserRole.ADMIN },
+      {
+        workerId: WORKER_ID,
+        type: WorkerFinancialTransactionType.COMMISSION,
+        amount: 200_000,
+        transactionDate: '2026-08-09',
+        description: 'August commission',
+        referenceType: 'MANUAL',
+        referenceId: 'manual:aug',
+      },
+    );
+    expect(transaction.referenceId).toBe('manual:aug');
+  });
+
+  it('rejects COMMISSION without reference', async () => {
+    await expect(
+      createTransaction(
+        STORE_ID,
+        { id: ADMIN_ID, role: UserRole.ADMIN },
+        {
+          workerId: WORKER_ID,
+          type: WorkerFinancialTransactionType.COMMISSION,
+          amount: 200_000,
+          transactionDate: '2026-08-09',
+        },
+      ),
+    ).rejects.toMatchObject({ statusCode: 422 });
   });
 
   it('persists amount as BigInt so\'m and preserves transactionDate', async () => {
@@ -348,7 +416,7 @@ describe('worker-financial.service list + summary', () => {
 
     const result = await listWorkerTransactions({
       storeId: STORE_ID,
-      actorRole: UserRole.ADMIN,
+      actor: { id: ADMIN_ID, role: UserRole.ADMIN },
       workerId: WORKER_ID,
     });
 
@@ -360,12 +428,24 @@ describe('worker-financial.service list + summary', () => {
     );
   });
 
-  it('forbids EMPLOYEE from listing', async () => {
+  it('allows EMPLOYEE to list own finances and forbids other workers', async () => {
+    prismaMock.user.findFirst.mockResolvedValue(ACTIVE_WORKER);
+    prismaMock.workerFinancialTransaction.findMany.mockResolvedValue([txRecord()]);
+    prismaMock.workerFinancialTransaction.count.mockResolvedValue(1);
+
     await expect(
       listWorkerTransactions({
         storeId: STORE_ID,
-        actorRole: UserRole.EMPLOYEE,
+        actor: { id: WORKER_ID, role: UserRole.EMPLOYEE },
         workerId: WORKER_ID,
+      }),
+    ).resolves.toMatchObject({ items: expect.any(Array) });
+
+    await expect(
+      listWorkerTransactions({
+        storeId: STORE_ID,
+        actor: { id: WORKER_ID, role: UserRole.EMPLOYEE },
+        workerId: 'other_worker',
       }),
     ).rejects.toMatchObject({ statusCode: 403 });
   });
@@ -382,7 +462,7 @@ describe('worker-financial.service list + summary', () => {
 
     const result = await listWorkerTransactions({
       storeId: STORE_ID,
-      actorRole: UserRole.ADMIN,
+      actor: { id: ADMIN_ID, role: UserRole.ADMIN },
       workerId: WORKER_ID,
     });
 
@@ -437,7 +517,7 @@ describe('worker-financial.service list + summary', () => {
       },
     ]);
 
-    const summary = await getWorkerSummary(STORE_ID, UserRole.ADMIN, WORKER_ID);
+    const summary = await getWorkerSummary(STORE_ID, { id: ADMIN_ID, role: UserRole.ADMIN }, WORKER_ID);
 
     expect(summary.totalBonuses).toBe(500_000);
     expect(summary.totalCommissions).toBe(200_000);
@@ -464,7 +544,7 @@ describe('worker-financial.service list + summary', () => {
 
     await listWorkerTransactions({
       storeId: STORE_ID,
-      actorRole: UserRole.ADMIN,
+      actor: { id: ADMIN_ID, role: UserRole.ADMIN },
       workerId: WORKER_ID,
       from: '2026-08-01',
       to: '2026-08-31',
@@ -487,7 +567,7 @@ describe('worker-financial.service list + summary', () => {
       }),
     );
 
-    await getWorkerSummary(STORE_ID, UserRole.ADMIN, WORKER_ID, {
+    await getWorkerSummary(STORE_ID, { id: ADMIN_ID, role: UserRole.ADMIN }, WORKER_ID, {
       from: '2026-08-01',
       to: '2026-08-31',
     });
@@ -511,7 +591,7 @@ describe('worker-financial.service list + summary', () => {
 
     const result = await listWorkerTransactions({
       storeId: STORE_ID,
-      actorRole: UserRole.ADMIN,
+      actor: { id: ADMIN_ID, role: UserRole.ADMIN },
       workerId: WORKER_ID,
       page: 2,
       pageSize: 10,
@@ -532,7 +612,7 @@ describe('worker-financial.service list + summary', () => {
     prismaMock.user.findFirst.mockResolvedValue(null);
 
     await expect(
-      getWorkerSummary(STORE_ID, UserRole.ADMIN, WORKER_ID),
+      getWorkerSummary(STORE_ID, { id: ADMIN_ID, role: UserRole.ADMIN }, WORKER_ID),
     ).rejects.toMatchObject({ statusCode: 404 });
   });
 });
@@ -658,7 +738,7 @@ describe('worker-financial.service getTransaction + reverse', () => {
       },
     ]);
 
-    const summary = await getWorkerSummary(STORE_ID, UserRole.ADMIN, WORKER_ID);
+    const summary = await getWorkerSummary(STORE_ID, { id: ADMIN_ID, role: UserRole.ADMIN }, WORKER_ID);
     expect(summary.totalBonuses).toBe(500_000);
     expect(summary.totalReversals).toBe(500_000);
     expect(summary.netFinancialPosition).toBe(0);

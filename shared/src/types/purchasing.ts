@@ -122,6 +122,25 @@ export interface CreatePurchaseRequest {
   paymentMethod?: PaymentMethod;
   notes?: string | null;
   purchaseDate?: IsoDateString;
+  /** When goods physically arrived (defaults to today / purchaseDate). */
+  deliveredAt?: IsoDateString;
+  /** Days from order/agreement to arrival (>= 0). */
+  deliveryDays?: number;
+  /** Optional delivery worker (Shopir). Distinct from supplier (Yetkazuvchi). */
+  driverId?: string | null;
+  /**
+   * Freight / shopir fee. Stored on Purchase only — does NOT change item
+   * unitCost, totalCost, or supplier remainingAmount.
+   */
+  driverFee?: Money;
+}
+
+/** Admin-only patch for ACTIVE purchase delivery fields. */
+export interface UpdatePurchaseDeliveryRequest {
+  deliveredAt?: IsoDateString | null;
+  deliveryDays?: number;
+  driverId?: string | null;
+  driverFee?: Money;
 }
 
 export interface CreateSupplierPaymentRequest {
@@ -148,6 +167,11 @@ export interface PurchaseListItem {
   status: PurchaseStatus;
   itemCount: number;
   createdAt: IsoDateString;
+  deliveredAt: IsoDateString | null;
+  deliveryDays: number;
+  driverId: string | null;
+  driverName: string | null;
+  driverFee: Money;
 }
 
 export interface PurchaseLineItem {

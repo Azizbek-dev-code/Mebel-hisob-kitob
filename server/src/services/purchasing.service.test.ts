@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '../utils/api-error.js';
 
-const { purchasingRepoMock, inventoryRepoMock, prismaMock } = vi.hoisted(() => ({
+const { purchasingRepoMock, inventoryRepoMock, prismaMock, workerRepoMock } = vi.hoisted(() => ({
   purchasingRepoMock: {
     listSuppliers: vi.fn(),
     getSupplierDetail: vi.fn(),
@@ -21,6 +21,7 @@ const { purchasingRepoMock, inventoryRepoMock, prismaMock } = vi.hoisted(() => (
     getPurchaseDetail: vi.fn(),
     nextPurchaseNumber: vi.fn(),
     createPurchaseInTx: vi.fn(),
+    updatePurchaseDeliveryInTx: vi.fn(),
     addPaymentInTx: vi.fn(),
     cancelPurchaseInTx: vi.fn(),
     findPurchaseForUpdate: vi.fn(),
@@ -36,11 +37,24 @@ const { purchasingRepoMock, inventoryRepoMock, prismaMock } = vi.hoisted(() => (
       findMany: vi.fn(),
       update: vi.fn(),
     },
+    workerFinancialTransaction: {
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+    },
+  },
+  workerRepoMock: {
+    findActiveWorkerWithResponsibility: vi.fn(),
   },
 }));
 
 vi.mock('../repositories/purchasing.repository.js', () => purchasingRepoMock);
 vi.mock('../repositories/inventory.repository.js', () => inventoryRepoMock);
+vi.mock('../repositories/worker.repository.js', () => workerRepoMock);
+vi.mock('./worker-operational-fees.service.js', () => ({
+  postPurchaseDriverFee: vi.fn(async () => true),
+  reversePurchaseDriverFee: vi.fn(async () => undefined),
+}));
 vi.mock('../lib/prisma.js', () => ({
   prisma: prismaMock,
   connectDatabase: vi.fn(),
@@ -60,6 +74,7 @@ const {
   createSupplier,
   listSuppliers,
   paymentStatusFromAmounts,
+  updatePurchaseDelivery,
   updateSupplier,
 } = await import('./purchasing.service.js');
 
@@ -92,6 +107,11 @@ const PURCHASE_DETAIL = {
   status: PurchaseStatus.ACTIVE,
   itemCount: 1,
   createdAt: '2026-08-20T00:00:00.000Z',
+  deliveredAt: '2026-08-20T00:00:00.000Z',
+  deliveryDays: 0,
+  driverId: null,
+  driverName: null,
+  driverFee: 0,
   notes: null,
   items: [
     {
@@ -123,6 +143,13 @@ beforeEach(() => {
   (prismaMock.$transaction as ReturnType<typeof vi.fn>).mockImplementation(
     async (fn: (tx: typeof prismaMock) => Promise<unknown>) => fn(prismaMock),
   );
+  (prismaMock.workerFinancialTransaction.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
+    null,
+  );
+  (prismaMock.workerFinancialTransaction.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+  (prismaMock.workerFinancialTransaction.create as ReturnType<typeof vi.fn>).mockResolvedValue({
+    id: 'wft_1',
+  });
 });
 
 describe('purchasing.service permissions', () => {
@@ -318,6 +345,166 @@ describe('purchasing.service create purchase', () => {
         paymentMethod: PaymentMethod.CASH,
       }),
     ).rejects.toMatchObject({ statusCode: 422 });
+  });
+
+  it('persists delivery fields without changing product totalCost', async () => {
+    const DRIVER_ID = 'clxxxxxxxxxxxxxxxxxxxxxxxx9';
+    purchasingRepoMock.findSupplierInStore.mockResolvedValue(SUPPLIER);
+    (prismaMock.product.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: 'clxxxxxxxxxxxxxxxxxxxxxxxx3',
+        name: 'Divan',
+        trackStock: true,
+        minStockQty: 2,
+      },
+    ]);
+    workerRepoMock.findActiveWorkerWithResponsibility.mockResolvedValue({ id: DRIVER_ID });
+    purchasingRepoMock.nextPurchaseNumber.mockResolvedValue(1);
+    purchasingRepoMock.createPurchaseInTx.mockResolvedValue({ id: PURCHASE_DETAIL.id });
+    inventoryRepoMock.applyStockDelta.mockResolvedValue({
+      movement: { id: 'mov_1' },
+      stockQty: 2,
+    });
+    purchasingRepoMock.getPurchaseDetail.mockResolvedValue({
+      ...PURCHASE_DETAIL,
+      deliveredAt: '2026-08-24T00:00:00.000Z',
+      deliveryDays: 3,
+      driverId: DRIVER_ID,
+      driverName: 'Abdulla',
+      driverFee: 150_000,
+      paidAmount: 0,
+      remainingAmount: 1_000_000,
+      paymentStatus: PurchasePaymentStatus.UNPAID,
+      payments: [],
+    });
+
+    const result = await createPurchase(STORE, ACTOR, {
+      supplierId: SUPPLIER.id,
+      items: [{ productId: 'clxxxxxxxxxxxxxxxxxxxxxxxx3', quantity: 2, unitCost: 500_000 }],
+      deliveredAt: '2026-08-24',
+      deliveryDays: 3,
+      driverId: DRIVER_ID,
+      driverFee: 150_000,
+    });
+
+    expect(purchasingRepoMock.createPurchaseInTx).toHaveBeenCalledWith(
+      prismaMock,
+      expect.objectContaining({
+        totalCost: 1_000_000,
+        driverFee: 150_000,
+        deliveryDays: 3,
+        driverId: DRIVER_ID,
+      }),
+    );
+    expect(result.driverFee).toBe(150_000);
+    expect(result.totalCost).toBe(1_000_000);
+    expect(result.remainingAmount).toBe(1_000_000);
+  });
+
+  it('allows shopir fee without a driver', async () => {
+    purchasingRepoMock.findSupplierInStore.mockResolvedValue(SUPPLIER);
+    (prismaMock.product.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: 'clxxxxxxxxxxxxxxxxxxxxxxxx3',
+        name: 'Divan',
+        trackStock: true,
+        minStockQty: 2,
+      },
+    ]);
+    purchasingRepoMock.nextPurchaseNumber.mockResolvedValue(1);
+    purchasingRepoMock.createPurchaseInTx.mockResolvedValue({ id: PURCHASE_DETAIL.id });
+    inventoryRepoMock.applyStockDelta.mockResolvedValue({
+      movement: { id: 'mov_1' },
+      stockQty: 2,
+    });
+    purchasingRepoMock.getPurchaseDetail.mockResolvedValue({
+      ...PURCHASE_DETAIL,
+      driverFee: 50_000,
+      driverId: null,
+      driverName: null,
+    });
+
+    await createPurchase(STORE, ACTOR, {
+      supplierId: SUPPLIER.id,
+      items: [{ productId: 'clxxxxxxxxxxxxxxxxxxxxxxxx3', quantity: 2, unitCost: 500_000 }],
+      driverFee: 50_000,
+    });
+
+    expect(purchasingRepoMock.createPurchaseInTx).toHaveBeenCalledWith(
+      prismaMock,
+      expect.objectContaining({ driverId: null, driverFee: 50_000 }),
+    );
+    expect(workerRepoMock.findActiveWorkerWithResponsibility).not.toHaveBeenCalled();
+  });
+
+  it('rejects negative delivery days and driver fee', async () => {
+    purchasingRepoMock.findSupplierInStore.mockResolvedValue(SUPPLIER);
+    (prismaMock.product.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: 'clxxxxxxxxxxxxxxxxxxxxxxxx3',
+        name: 'Divan',
+        trackStock: true,
+        minStockQty: 2,
+      },
+    ]);
+
+    await expect(
+      createPurchase(STORE, ACTOR, {
+        supplierId: SUPPLIER.id,
+        items: [{ productId: 'clxxxxxxxxxxxxxxxxxxxxxxxx3', quantity: 1, unitCost: 100 }],
+        deliveryDays: -1,
+      }),
+    ).rejects.toMatchObject({ statusCode: 422 });
+
+    await expect(
+      createPurchase(STORE, ACTOR, {
+        supplierId: SUPPLIER.id,
+        items: [{ productId: 'clxxxxxxxxxxxxxxxxxxxxxxxx3', quantity: 1, unitCost: 100 }],
+        driverFee: -10,
+      }),
+    ).rejects.toMatchObject({ statusCode: 422 });
+  });
+});
+
+describe('purchasing.service update delivery', () => {
+  it('updates delivery fields on ACTIVE purchase', async () => {
+    purchasingRepoMock.getPurchaseDetail
+      .mockResolvedValueOnce(PURCHASE_DETAIL)
+      .mockResolvedValueOnce({
+        ...PURCHASE_DETAIL,
+        deliveredAt: '2026-08-24T00:00:00.000Z',
+        deliveryDays: 3,
+        driverFee: 150_000,
+      });
+
+    const updated = await updatePurchaseDelivery(STORE, ACTOR, PURCHASE_DETAIL.id, {
+      deliveredAt: '2026-08-24',
+      deliveryDays: 3,
+      driverFee: 150_000,
+    });
+
+    expect(purchasingRepoMock.updatePurchaseDeliveryInTx).toHaveBeenCalled();
+    expect(updated.deliveryDays).toBe(3);
+    expect(updated.driverFee).toBe(150_000);
+  });
+
+  it('forbids employee from updating delivery', async () => {
+    await expect(
+      updatePurchaseDelivery(STORE, { id: 'emp', role: EMPLOYEE }, PURCHASE_DETAIL.id, {
+        driverFee: 1,
+      }),
+    ).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it('blocks delivery edits on cancelled purchases', async () => {
+    purchasingRepoMock.getPurchaseDetail.mockResolvedValue({
+      ...PURCHASE_DETAIL,
+      status: PurchaseStatus.CANCELLED,
+    });
+
+    await expect(
+      updatePurchaseDelivery(STORE, ACTOR, PURCHASE_DETAIL.id, { deliveryDays: 1 }),
+    ).rejects.toMatchObject({ statusCode: 409 });
   });
 });
 

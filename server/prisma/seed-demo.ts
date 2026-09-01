@@ -11,7 +11,7 @@
  * Run with `npm run db:seed:demo`.
  * Remove demo/business data with `npm run db:clean-demo -- --i-understand-dev-only`.
  */
-import { DEFAULT_EXPENSE_CATEGORIES, WorkerResponsibility } from '@furniture-erp/shared';
+import { DEFAULT_EXPENSE_CATEGORIES, DEFAULT_PRODUCT_CATEGORIES, WorkerResponsibility } from '@furniture-erp/shared';
 import { PrismaClient, ProductStatus, UserRole } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
@@ -40,20 +40,12 @@ async function setResponsibilities(
   });
 }
 
-const PRODUCT_CATEGORIES = [
-  { name: 'Bedroom', sortOrder: 1 },
-  { name: 'Living room', sortOrder: 2 },
-  { name: 'Kitchen', sortOrder: 3 },
-  { name: 'Office', sortOrder: 4 },
-  { name: 'Children', sortOrder: 5 },
-  { name: 'Mattresses', sortOrder: 6 },
-] as const;
-
+/** Demo SKUs keyed by DEFAULT_PRODUCT_CATEGORIES.key */
 const PRODUCTS = [
   {
     name: 'Bedroom Set "Milano"',
     sku: 'BR-MIL-01',
-    category: 'Bedroom',
+    categoryKey: 'BEDROOM',
     costPrice: 7_000_000n,
     defaultSalePrice: 9_000_000n,
     description: 'Wardrobe, double bed, two bedside tables and a dressing table.',
@@ -61,7 +53,7 @@ const PRODUCTS = [
   {
     name: 'Bedroom Set "Verona"',
     sku: 'BR-VER-01',
-    category: 'Bedroom',
+    categoryKey: 'BEDROOM',
     costPrice: 9_500_000n,
     defaultSalePrice: 12_500_000n,
     description: 'Full bedroom suite in dark oak.',
@@ -69,7 +61,7 @@ const PRODUCTS = [
   {
     name: 'Corner Sofa "Comfort"',
     sku: 'LR-COM-01',
-    category: 'Living room',
+    categoryKey: 'SOFT',
     costPrice: 4_200_000n,
     defaultSalePrice: 5_900_000n,
     description: 'Five-seat corner sofa with a pull-out bed.',
@@ -77,7 +69,7 @@ const PRODUCTS = [
   {
     name: 'TV Stand "Modern"',
     sku: 'LR-MOD-02',
-    category: 'Living room',
+    categoryKey: 'TV_STANDS',
     costPrice: 1_100_000n,
     defaultSalePrice: 1_750_000n,
     description: 'Wall-mounted TV unit, 180 cm.',
@@ -85,7 +77,7 @@ const PRODUCTS = [
   {
     name: 'Kitchen Set "Klassik" 3m',
     sku: 'KT-KLA-01',
-    category: 'Kitchen',
+    categoryKey: 'KITCHEN',
     costPrice: 6_000_000n,
     defaultSalePrice: 8_400_000n,
     description: 'Three-metre fitted kitchen with worktop.',
@@ -93,7 +85,7 @@ const PRODUCTS = [
   {
     name: 'Dining Table + 6 Chairs',
     sku: 'KT-DIN-02',
-    category: 'Kitchen',
+    categoryKey: 'DINING',
     costPrice: 2_300_000n,
     defaultSalePrice: 3_400_000n,
     description: 'Solid wood dining set for six.',
@@ -101,7 +93,7 @@ const PRODUCTS = [
   {
     name: 'Office Desk "Praktik"',
     sku: 'OF-PRA-01',
-    category: 'Office',
+    categoryKey: 'OFFICE',
     costPrice: 900_000n,
     defaultSalePrice: 1_450_000n,
     description: 'Desk with three drawers, 140 cm.',
@@ -109,7 +101,7 @@ const PRODUCTS = [
   {
     name: 'Children Set "Bolajon"',
     sku: 'CH-BOL-01',
-    category: 'Children',
+    categoryKey: 'CHILDREN',
     costPrice: 3_100_000n,
     defaultSalePrice: 4_500_000n,
     description: 'Bunk bed, desk and wardrobe.',
@@ -117,7 +109,7 @@ const PRODUCTS = [
   {
     name: 'Orthopaedic Mattress 160x200',
     sku: 'MT-ORT-01',
-    category: 'Mattresses',
+    categoryKey: 'MATTRESSES',
     costPrice: 1_400_000n,
     defaultSalePrice: 2_200_000n,
     description: 'Independent spring block, medium firmness.',
@@ -258,6 +250,30 @@ async function main(): Promise<void> {
     WorkerResponsibility.SELLER,
   ]);
 
+  const shopirEmail = 'shopir@furniture-erp.local';
+  const shopirPassword = 'Shopir123!';
+  const shopirPasswordHash = await bcrypt.hash(shopirPassword, PASSWORD_SALT_ROUNDS);
+  const shopir = await prisma.user.upsert({
+    where: { storeId_email: { storeId: store.id, email: shopirEmail } },
+    update: {
+      username: 'shopir',
+      passwordHash: shopirPasswordHash,
+      fullName: 'Azizbek Shopir',
+      role: UserRole.EMPLOYEE,
+      isActive: true,
+    },
+    create: {
+      storeId: store.id,
+      email: shopirEmail,
+      username: 'shopir',
+      passwordHash: shopirPasswordHash,
+      fullName: 'Azizbek Shopir',
+      role: UserRole.EMPLOYEE,
+    },
+  });
+  console.log(`  shopir: ${shopir.email} / ${shopirPassword}`);
+  await setResponsibilities(store.id, shopir.id, [WorkerResponsibility.DELIVERY]);
+
   // --- Expense categories ----------------------------------------------------
   const defaultKeys = new Set(DEFAULT_EXPENSE_CATEGORIES.map((category) => category.key));
   for (const [index, category] of DEFAULT_EXPENSE_CATEGORIES.entries()) {
@@ -313,16 +329,16 @@ async function main(): Promise<void> {
   console.log(`  expense categories: ${DEFAULT_EXPENSE_CATEGORIES.length}`);
 
   // --- Product categories ----------------------------------------------------
-  const categoryIdByName = new Map<string, string>();
-  for (const category of PRODUCT_CATEGORIES) {
+  const categoryIdByKey = new Map<string, string>();
+  for (const category of DEFAULT_PRODUCT_CATEGORIES) {
     const record = await prisma.productCategory.upsert({
       where: { storeId_name: { storeId: store.id, name: category.name } },
-      update: { sortOrder: category.sortOrder },
+      update: { sortOrder: category.sortOrder, isActive: true },
       create: { storeId: store.id, name: category.name, sortOrder: category.sortOrder },
     });
-    categoryIdByName.set(category.name, record.id);
+    categoryIdByKey.set(category.key, record.id);
   }
-  console.log(`  product categories: ${PRODUCT_CATEGORIES.length}`);
+  console.log(`  product categories: ${DEFAULT_PRODUCT_CATEGORIES.length}`);
 
   // --- Products ---------------------------------------------------------------
   for (const product of PRODUCTS) {
@@ -333,7 +349,7 @@ async function main(): Promise<void> {
         costPrice: product.costPrice,
         defaultSalePrice: product.defaultSalePrice,
         description: product.description,
-        categoryId: categoryIdByName.get(product.category) ?? null,
+        categoryId: categoryIdByKey.get(product.categoryKey) ?? null,
         trackStock: true,
         minStockQty: 2,
       },
@@ -345,7 +361,7 @@ async function main(): Promise<void> {
         costPrice: product.costPrice,
         defaultSalePrice: product.defaultSalePrice,
         status: ProductStatus.ACTIVE,
-        categoryId: categoryIdByName.get(product.category) ?? null,
+        categoryId: categoryIdByKey.get(product.categoryKey) ?? null,
         stockQty: 10,
         minStockQty: 2,
         trackStock: true,

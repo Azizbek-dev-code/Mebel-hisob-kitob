@@ -7,6 +7,7 @@ import {
   type ResetWorkerPasswordRequest,
   type UpdateWorkerRequest,
   type WorkerActivityItem,
+  type WorkerAttributedFeesSummary,
   type WorkerDetail,
   type WorkerListItem,
   type WorkerResponsibility,
@@ -25,6 +26,7 @@ import * as workerRepository from '../repositories/worker.repository.js';
 import { ApiError } from '../utils/api-error.js';
 import { recordAudit } from './audit.service.js';
 import { assertCanCreateResource, assertCanUseFeature } from './entitlement.service.js';
+import * as sellerCommissionService from './seller-commission.service.js';
 
 const WORKER_MANAGERS: ReadonlySet<string> = new Set([UserRole.ADMIN, UserRole.PLATFORM_ADMIN]);
 
@@ -326,7 +328,14 @@ export async function listWorkerSales(
   storeId: string,
   actor: { id: string; role: string },
   workerId: string,
-  options: { page?: number; pageSize?: number; search?: string; from?: string; to?: string } = {},
+  options: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    from?: string;
+    to?: string;
+    status?: string;
+  } = {},
 ): Promise<{ items: WorkerSaleItem[]; meta: PaginationMeta }> {
   if (actor.id !== workerId) {
     assertCanManageWorkers(actor.role);
@@ -335,7 +344,9 @@ export async function listWorkerSales(
   if (!record) {
     throw ApiError.notFound('Worker not found');
   }
-  return workerRepository.listWorkerSales(storeId, workerId, options);
+  const { rows, meta } = await workerRepository.listWorkerSales(storeId, workerId, options);
+  const items = await sellerCommissionService.decorateSellerSales(storeId, workerId, rows);
+  return { items, meta };
 }
 
 export async function listWorkerTasks(
@@ -372,11 +383,50 @@ export async function listWorkerActivity(
 export async function listMySales(
   storeId: string,
   workerId: string,
-  options: { page?: number; pageSize?: number; search?: string; from?: string; to?: string } = {},
-) {
-  return workerRepository.listWorkerSales(storeId, workerId, options);
+  options: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    from?: string;
+    to?: string;
+    status?: string;
+  } = {},
+): Promise<{ items: WorkerSaleItem[]; meta: PaginationMeta }> {
+  const { rows, meta } = await workerRepository.listWorkerSales(storeId, workerId, options);
+  const items = await sellerCommissionService.decorateSellerSales(storeId, workerId, rows);
+  return { items, meta };
 }
 
 export async function listMyActivity(storeId: string, workerId: string) {
   return workerRepository.listWorkerActivity(storeId, workerId);
+}
+
+/**
+ * Fees attributed from Sale / Purchase documents for the worker profile.
+ * Admin can view any worker; workers can view their own.
+ */
+export async function listWorkerAttributedFees(
+  storeId: string,
+  actor: { id: string; role: string },
+  workerId: string,
+): Promise<WorkerAttributedFeesSummary> {
+  if (actor.id !== workerId) {
+    assertCanManageWorkers(actor.role);
+  }
+  const record = await workerRepository.findWorkerInStore(storeId, workerId);
+  if (!record) {
+    throw ApiError.notFound('Worker not found');
+  }
+  return workerRepository.listWorkerAttributedFees(storeId, workerId);
+}
+
+export async function listMyAttributedFees(
+  storeId: string,
+  workerId: string,
+): Promise<WorkerAttributedFeesSummary> {
+  const record = await workerRepository.findWorkerInStore(storeId, workerId);
+  if (!record) {
+    throw ApiError.notFound('Worker not found');
+  }
+  return workerRepository.listWorkerAttributedFees(storeId, workerId);
 }

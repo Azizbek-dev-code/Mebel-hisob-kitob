@@ -148,12 +148,32 @@ function financeMocks(overrides: MockApiRoutes = {}): MockApiRoutes {
   const summaryKey = `/worker-finances/workers/${WORKER_ID}/summary`;
   const listKey = `/worker-finances/workers/${WORKER_ID}/transactions`;
   const workerKey = `/workers/${WORKER_ID}`;
+  const attributedKey = `/workers/${WORKER_ID}/attributed-fees`;
 
   // Keep worker-finances routes before `/workers/:id` — mockApi matches by substring.
   return {
     '/auth/me': overrides['/auth/me'] ?? SIGNED_IN,
     [summaryKey]: overrides[summaryKey] ?? summaryOk(),
     [listKey]: overrides[listKey] ?? listOk([TX_BONUS, TX_ADVANCE]),
+    [attributedKey]:
+      overrides[attributedKey] ??
+      ({
+        status: 200,
+        body: {
+          success: true,
+          data: {
+            fees: {
+              sellerBonusTotal: 0,
+              assemblerFeeTotal: 0,
+              installerFeeTotal: 0,
+              deliveryFeeTotal: 0,
+              purchaseDriverFeeTotal: 0,
+              grandTotal: 0,
+              items: [],
+            },
+          },
+        },
+      } satisfies MockApiRoute),
     [workerKey]: overrides[workerKey] ?? workerOk(),
   };
 }
@@ -181,7 +201,7 @@ describe('WorkerFinancesPage', () => {
     expect(screen.getByText('@ali')).toBeInTheDocument();
     expect(screen.getAllByText('Faol').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Bonus').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Komissiya').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Komissiya/).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Avans').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Qarz').length).toBeGreaterThan(0);
     expect(screen.getAllByText("To'lov").length).toBeGreaterThan(0);
@@ -517,6 +537,27 @@ describe('WorkerFinancesPage', () => {
           json: () => Promise.resolve(listOk([created, TX_BONUS, TX_ADVANCE]).body),
         } as Response);
       }
+      if (url.includes(`/workers/${WORKER_ID}/attributed-fees`)) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              success: true,
+              data: {
+                fees: {
+                  sellerBonusTotal: 0,
+                  assemblerFeeTotal: 0,
+              installerFeeTotal: 0,
+                  deliveryFeeTotal: 0,
+                  purchaseDriverFeeTotal: 0,
+                  grandTotal: 0,
+                  items: [],
+                },
+              },
+            }),
+        } as Response);
+      }
       if (url.includes(`/workers/${WORKER_ID}`)) {
         return Promise.resolve({
           ok: true,
@@ -625,6 +666,27 @@ describe('WorkerFinancesPage', () => {
           json: () => Promise.resolve(body),
         } as Response);
       }
+      if (url.includes(`/workers/${WORKER_ID}/attributed-fees`)) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              success: true,
+              data: {
+                fees: {
+                  sellerBonusTotal: 0,
+                  assemblerFeeTotal: 0,
+              installerFeeTotal: 0,
+                  deliveryFeeTotal: 0,
+                  purchaseDriverFeeTotal: 0,
+                  grandTotal: 0,
+                  items: [],
+                },
+              },
+            }),
+        } as Response);
+      }
       if (url.includes(`/workers/${WORKER_ID}`)) {
         return Promise.resolve({
           ok: true,
@@ -708,6 +770,27 @@ describe('WorkerFinancesPage', () => {
           ok: true,
           status: 200,
           json: () => Promise.resolve(listOk([TX_BONUS]).body),
+        } as Response);
+      }
+      if (url.includes(`/workers/${WORKER_ID}/attributed-fees`)) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              success: true,
+              data: {
+                fees: {
+                  sellerBonusTotal: 0,
+                  assemblerFeeTotal: 0,
+              installerFeeTotal: 0,
+                  deliveryFeeTotal: 0,
+                  purchaseDriverFeeTotal: 0,
+                  grandTotal: 0,
+                  items: [],
+                },
+              },
+            }),
         } as Response);
       }
       if (url.includes(`/workers/${WORKER_ID}`)) {
@@ -848,6 +931,27 @@ describe('WorkerFinancesPage', () => {
           json: () => Promise.resolve(body),
         } as Response);
       }
+      if (url.includes(`/workers/${WORKER_ID}/attributed-fees`)) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              success: true,
+              data: {
+                fees: {
+                  sellerBonusTotal: 0,
+                  assemblerFeeTotal: 0,
+              installerFeeTotal: 0,
+                  deliveryFeeTotal: 0,
+                  purchaseDriverFeeTotal: 0,
+                  grandTotal: 0,
+                  items: [],
+                },
+              },
+            }),
+        } as Response);
+      }
       if (url.includes(`/workers/${WORKER_ID}`)) {
         return Promise.resolve({
           ok: true,
@@ -935,6 +1039,27 @@ describe('WorkerFinancesPage', () => {
           json: () => Promise.resolve(listOk([TX_BONUS]).body),
         } as Response);
       }
+      if (url.includes(`/workers/${WORKER_ID}/attributed-fees`)) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              success: true,
+              data: {
+                fees: {
+                  sellerBonusTotal: 0,
+                  assemblerFeeTotal: 0,
+              installerFeeTotal: 0,
+                  deliveryFeeTotal: 0,
+                  purchaseDriverFeeTotal: 0,
+                  grandTotal: 0,
+                  items: [],
+                },
+              },
+            }),
+        } as Response);
+      }
       if (url.includes(`/workers/${WORKER_ID}`)) {
         return Promise.resolve({
           ok: true,
@@ -968,30 +1093,65 @@ describe('WorkerDetailPage finance link', () => {
   it('includes Moliyaviy hisob navigation', async () => {
     mockApi({
       '/auth/me': SIGNED_IN,
-      [`/workers/${WORKER_ID}/sales`]: {
+      [`/workers/${WORKER_ID}/activity`]: {
+        status: 200,
+        body: { success: true, data: { items: [] } },
+      },
+      [`/workers/${WORKER_ID}/profile-modules`]: {
         status: 200,
         body: {
           success: true,
           data: {
-            items: [],
-            meta: {
-              page: 1,
-              pageSize: 10,
-              totalItems: 0,
-              totalPages: 0,
-              hasNextPage: false,
-              hasPreviousPage: false,
+            modules: {
+              worker: {
+                id: WORKER_ID,
+                fullName: 'Ali Usta',
+                username: 'ali',
+                phone: null,
+                role: 'EMPLOYEE',
+                isActive: true,
+                responsibilities: [],
+                createdAt: '2026-01-01T00:00:00.000Z',
+              },
+              tabs: ['GENERAL'],
+              general: {
+                finance: {
+                  earned: 0,
+                  paid: 0,
+                  outstanding: 0,
+                  monthEarned: 0,
+                  monthPaid: 0,
+                  bonuses: 0,
+                  advances: 0,
+                  debt: 0,
+                  adjustments: 0,
+                  reversals: 0,
+                  commissions: 0,
+                },
+                breakdown: [],
+              },
+              seller: null,
+              assembler: null,
+              delivery: null,
+              installer: null,
+              smm: null,
+              other: null,
+              ledgerSummary: {
+                workerId: WORKER_ID,
+                worker: { id: WORKER_ID, fullName: 'Ali Usta', isActive: true },
+                totalBonuses: 0,
+                totalCommissions: 0,
+                totalAdvances: 0,
+                totalDebt: 0,
+                totalPayments: 0,
+                totalAdjustments: 0,
+                totalReversals: 0,
+                netFinancialPosition: 0,
+                transactionCount: 0,
+              },
             },
           },
         },
-      },
-      [`/workers/${WORKER_ID}/tasks`]: {
-        status: 200,
-        body: { success: true, data: { items: [] } },
-      },
-      [`/workers/${WORKER_ID}/activity`]: {
-        status: 200,
-        body: { success: true, data: { items: [] } },
       },
       [`/workers/${WORKER_ID}`]: workerOk(),
     });

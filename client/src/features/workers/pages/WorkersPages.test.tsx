@@ -43,6 +43,97 @@ const WORKER = {
   },
 };
 
+const PROFILE_MODULES = {
+  worker: {
+    id: WORKER.id,
+    fullName: WORKER.fullName,
+    username: WORKER.username,
+    phone: WORKER.phone,
+    role: WORKER.role,
+    isActive: WORKER.isActive,
+    responsibilities: WORKER.responsibilities,
+    createdAt: WORKER.createdAt,
+  },
+  tabs: ['GENERAL', 'SELLER', 'ASSEMBLER'],
+  general: {
+    finance: {
+      earned: 500_000,
+      paid: 200_000,
+      outstanding: 300_000,
+      monthEarned: 100_000,
+      monthPaid: 50_000,
+      bonuses: 0,
+      advances: 0,
+      debt: 0,
+      adjustments: 0,
+      reversals: 0,
+      commissions: 500_000,
+    },
+    breakdown: [],
+  },
+  seller: {
+    salesToday: 0,
+    salesThisMonth: 1,
+    salesTotal: 2,
+    salesAmountToday: 0,
+    salesAmountMonth: 1_000_000,
+    salesAmountTotal: 2_000_000,
+    grossProfitMonth: 300_000,
+    grossProfitTotal: 600_000,
+    netProfitMonth: 200_000,
+    netProfitTotal: 400_000,
+    averageSale: 1_000_000,
+    largestSaleMonth: 1_000_000,
+    completedSales: 2,
+    cancelledSales: 0,
+    earnedTotal: 100_000,
+    earnedMonth: 50_000,
+    pendingTotal: 0,
+    pendingMonth: 0,
+    calculatedTotal: 100_000,
+    calculatedMonth: 50_000,
+    paidTotal: 0,
+    paidMonth: 0,
+    outstandingTotal: 100_000,
+    outstandingMonth: 50_000,
+    bonusTotal: 0,
+    bonusMonth: 0,
+    commissionTotal: 100_000,
+    activeRules: [],
+    recentSales: [],
+    commissions: [],
+    payments: [],
+  },
+  assembler: {
+    pending: 1,
+    inProgress: 0,
+    completed: 2,
+    cancelled: 0,
+    completedThisMonth: 1,
+    feeTotal: 400_000,
+    paid: 200_000,
+    outstanding: 200_000,
+    tasks: [],
+  },
+  delivery: null,
+  installer: null,
+  smm: null,
+  other: null,
+  ledgerSummary: {
+    workerId: WORKER.id,
+    worker: { id: WORKER.id, fullName: WORKER.fullName, isActive: true },
+    totalBonuses: 0,
+    totalCommissions: 500_000,
+    totalAdvances: 0,
+    totalDebt: 0,
+    totalPayments: 200_000,
+    totalAdjustments: 0,
+    totalReversals: 0,
+    netFinancialPosition: 300_000,
+    transactionCount: 2,
+  },
+};
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -92,12 +183,15 @@ describe('WorkersPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Ali Usta')).toBeInTheDocument();
-    expect(screen.getByText('+998901111111')).toBeInTheDocument();
+    expect((await screen.findAllByText('Ali Usta')).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Assembler').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Seller').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Ustalar' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Yangi ishchi/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Haqlar solishtirishi' })).toHaveAttribute(
+      'href',
+      ROUTES.workersReconciliation,
+    );
   });
 });
 
@@ -152,33 +246,16 @@ describe('NewWorkerPage', () => {
 });
 
 describe('WorkerDetailPage', () => {
-  it('shows profile, responsibilities and stats', async () => {
+  it('shows profile, responsibilities and modules', async () => {
     mockApi({
       '/auth/me': SIGNED_IN,
-      [`/workers/${WORKER.id}/sales`]: {
-        status: 200,
-        body: {
-          success: true,
-          data: {
-            items: [],
-            meta: {
-              page: 1,
-              pageSize: 10,
-              totalItems: 0,
-              totalPages: 0,
-              hasNextPage: false,
-              hasPreviousPage: false,
-            },
-          },
-        },
-      },
-      [`/workers/${WORKER.id}/tasks`]: {
-        status: 200,
-        body: { success: true, data: { items: [] } },
-      },
       [`/workers/${WORKER.id}/activity`]: {
         status: 200,
         body: { success: true, data: { items: [] } },
+      },
+      [`/workers/${WORKER.id}/profile-modules`]: {
+        status: 200,
+        body: { success: true, data: { modules: PROFILE_MODULES } },
       },
       [`/workers/${WORKER.id}`]: {
         status: 200,
@@ -195,18 +272,18 @@ describe('WorkerDetailPage', () => {
     );
 
     expect(await screen.findByRole('heading', { name: 'Ali Usta' })).toBeInTheDocument();
-    expect(screen.getByText('Activity summary')).toBeInTheDocument();
-    expect(screen.getByText('Sales total')).toBeInTheDocument();
+    expect(screen.getByText('Profil modullari')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Umumiy' })).toBeInTheDocument();
   });
 });
 
 describe('WorkerDashboardPage', () => {
-  it('shows real worker metrics', async () => {
+  it('shows real worker metrics from profile modules', async () => {
     mockApi({
       '/auth/me': EMPLOYEE_SIGNED_IN,
-      '/api/me/stats': {
+      '/api/me/profile-modules': {
         status: 200,
-        body: { success: true, data: { stats: WORKER.stats } },
+        body: { success: true, data: { modules: PROFILE_MODULES } },
       },
     });
 
@@ -216,9 +293,14 @@ describe('WorkerDashboardPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText(/Welcome, Ali/i)).toBeInTheDocument();
-    expect(await screen.findByText("Today's sales")).toBeInTheDocument();
-    expect(screen.getByText('Pending tasks')).toBeInTheDocument();
+    expect(await screen.findByText(/Xush kelibsiz, Ali/i)).toBeInTheDocument();
+    expect(await screen.findByText('Bugun')).toBeInTheDocument();
+    expect(screen.getByText('Shu oy')).toBeInTheDocument();
+    expect(screen.getByText('Kutilayotgan terlash')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Moliyaviy hisob' })).toHaveAttribute(
+      'href',
+      ROUTES.profileFinances,
+    );
   });
 });
 
@@ -263,7 +345,7 @@ describe('MySalesPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Anvar Aliyev')).toBeInTheDocument();
-    expect(screen.getByText(/42/)).toBeInTheDocument();
+    expect((await screen.findAllByText('Anvar Aliyev')).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/42/).length).toBeGreaterThan(0);
   });
 });

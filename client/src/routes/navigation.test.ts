@@ -1,3 +1,4 @@
+import { WorkerResponsibility } from '@furniture-erp/shared';
 import { describe, expect, it } from 'vitest';
 
 import { TEST_ADMIN, TEST_EMPLOYEE, TEST_PLATFORM_ADMIN } from '@/test/auth-fixtures';
@@ -11,7 +12,10 @@ describe('NAV_ITEMS', () => {
       'dashboard',
       'sales',
       'my-sales',
+      'my-reports',
       'assembly',
+      'delivery',
+      'my-finances',
       'products',
       'inventory',
       'purchases',
@@ -51,11 +55,33 @@ describe('navItemsForUser', () => {
   it('adapts employee nav to responsibilities', () => {
     const keys = navItemsForUser(TEST_EMPLOYEE).map((item) => item.key);
     expect(keys).toEqual(
-      expect.arrayContaining(['dashboard', 'sales', 'my-sales', 'assembly', 'customers', 'profile']),
+      expect.arrayContaining([
+        'dashboard',
+        'sales',
+        'my-sales',
+        'my-reports',
+        'assembly',
+        'my-finances',
+        'customers',
+        'profile',
+      ]),
     );
+    expect(keys).not.toContain('delivery');
     expect(keys).not.toContain('workers');
     expect(keys).not.toContain('reports');
     expect(keys).not.toContain('expenses');
+  });
+
+  it('shows delivery nav for workers with DELIVERY responsibility', () => {
+    const deliveryWorker = {
+      ...TEST_EMPLOYEE,
+      responsibilities: [WorkerResponsibility.DELIVERY],
+    };
+    const keys = navItemsForUser(deliveryWorker).map((item) => item.key);
+    expect(keys).toEqual(
+      expect.arrayContaining(['dashboard', 'delivery', 'sales', 'my-finances', 'profile']),
+    );
+    expect(keys).not.toContain('my-sales');
   });
 
   it('shows expenses for store admins', () => {
@@ -115,7 +141,7 @@ describe('navItemsForUser', () => {
       ROUTES.platformShopsPendingPayment,
       ROUTES.platformShopsBlocked,
     ]);
-    const labels = navItemsForUser(TEST_PLATFORM_ADMIN).map((item) => item.label);
+    const labels = navItemsForUser(TEST_PLATFORM_ADMIN).map((item) => item.labelKey);
     expect(new Set(labels).size).toBe(labels.length);
   });
 });
@@ -155,17 +181,17 @@ describe('canManageExpenses', () => {
 
 describe('navItemForPath', () => {
   it('names the module a page belongs to', () => {
-    expect(navItemForPath(ROUTES.sales)?.label).toBe('Sotuvlar');
-    expect(navItemForPath(ROUTES.dashboard)?.label).toBe('Dashboard');
+    expect(navItemForPath(ROUTES.sales)?.labelKey).toBe('nav.sales');
+    expect(navItemForPath(ROUTES.dashboard)?.labelKey).toBe('nav.dashboard');
   });
 
   it('keeps naming the module on its nested pages', () => {
-    expect(navItemForPath(ROUTES.saleNew)?.label).toBe('Sotuvlar');
-    expect(navItemForPath(ROUTES.customerDetail('cust_1'))?.label).toBe('Mijozlar');
-    expect(navItemForPath(ROUTES.purchaseNew)?.label).toBe('Kirimlar');
-    expect(navItemForPath(ROUTES.supplierDetail('sup_1'))?.label).toBe('Yetkazuvchilar');
-    expect(navItemForPath(ROUTES.masterDetail('master_1'))?.label).toBe('Ishchilar');
-    expect(navItemForPath(ROUTES.workerDetail('worker_1'))?.label).toBe('Ishchilar');
+    expect(navItemForPath(ROUTES.saleNew)?.labelKey).toBe('nav.sales');
+    expect(navItemForPath(ROUTES.customerDetail('cust_1'))?.labelKey).toBe('nav.customers');
+    expect(navItemForPath(ROUTES.purchaseNew)?.labelKey).toBe('nav.purchases');
+    expect(navItemForPath(ROUTES.supplierDetail('sup_1'))?.labelKey).toBe('nav.suppliers');
+    expect(navItemForPath(ROUTES.masterDetail('master_1'))?.labelKey).toBe('nav.workers');
+    expect(navItemForPath(ROUTES.workerDetail('worker_1'))?.labelKey).toBe('nav.workers');
   });
 
   it('does not match a path that merely starts with the same letters', () => {
@@ -173,15 +199,15 @@ describe('navItemForPath', () => {
   });
 
   it('names platform store-request pages', () => {
-    expect(navItemForPath(ROUTES.platformStoreRequests)?.label).toBe("Do'kon so'rovlari");
-    expect(navItemForPath(ROUTES.platformStoreRequestDetail('req_1'))?.label).toBe(
-      "Do'kon so'rovlari",
+    expect(navItemForPath(ROUTES.platformStoreRequests)?.labelKey).toBe('nav.storeRequests');
+    expect(navItemForPath(ROUTES.platformStoreRequestDetail('req_1'))?.labelKey).toBe(
+      'nav.storeRequests',
     );
   });
 
   it('keeps platform child pages under their parent module name', () => {
-    expect(navItemForPath(ROUTES.platformShopsActive)?.label).toBe("Do'konlar");
-    expect(navItemForPath(ROUTES.platformPaymentsOverdue)?.label).toBe("To'lovlar");
-    expect(navItemForPath(ROUTES.platformAnalyticsProfit)?.label).toBe('Analytics');
+    expect(navItemForPath(ROUTES.platformShopsActive)?.labelKey).toBe('nav.shops');
+    expect(navItemForPath(ROUTES.platformPaymentsOverdue)?.labelKey).toBe('nav.payments');
+    expect(navItemForPath(ROUTES.platformAnalyticsProfit)?.labelKey).toBe('nav.analytics');
   });
 });

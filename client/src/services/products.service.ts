@@ -63,6 +63,10 @@ export const productsService = {
     return product;
   },
 
+  async deletePermanent(id: string): Promise<void> {
+    await apiClient.delete(`/products/${id}`);
+  },
+
   async uploadImage(id: string, file: File): Promise<ProductListItem> {
     const form = new FormData();
     form.append('image', file);

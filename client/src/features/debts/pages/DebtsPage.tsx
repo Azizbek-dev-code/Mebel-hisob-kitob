@@ -4,6 +4,7 @@ import {
 } from '@furniture-erp/shared';
 import { CircleDollarSign, Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
 import { EmptyState } from '@/components/feedback/EmptyState';
@@ -25,37 +26,38 @@ import { useDebtsList } from '../hooks/use-debts';
 const fieldClass =
   'w-full rounded-input border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100';
 
-const FILTERS: Array<{ id: DebtListFilter; label: string }> = [
-  { id: 'ALL', label: 'Hammasi' },
-  { id: 'OVERDUE', label: 'Muddati o‘tgan' },
-  { id: 'UNPAID', label: 'To‘lanmagan' },
-  { id: 'PARTIALLY_PAID', label: 'Qisman' },
-];
-
-function listErrorMessage(error: unknown): string {
+function listErrorMessage(error: unknown, t: (key: string) => string): string {
   if (error instanceof ApiClientError) {
-    if (error.isForbidden) return 'Qarzlar sahifasini ko‘rish uchun ruxsat yo‘q.';
-    return error.message || 'Qayta urinib ko‘ring.';
+    if (error.isForbidden) return t('debts.forbidden');
+    return error.message || t('common.retry');
   }
-  return 'Qayta urinib ko‘ring.';
+  return t('common.retry');
 }
 
 export function DebtsPage() {
+  const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filter, setFilter] = useState<DebtListFilter>('ALL');
   const [paying, setPaying] = useState<DebtListItem | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  const FILTERS: Array<{ id: DebtListFilter; label: string }> = [
+    { id: 'ALL', label: t('common.all') },
+    { id: 'OVERDUE', label: t('debts.overdue') },
+    { id: 'UNPAID', label: t('debts.filterUnpaid') },
+    { id: 'PARTIALLY_PAID', label: t('debts.filterPartial') },
+  ];
+
   useEffect(() => {
-    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
-    return () => window.clearTimeout(t);
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => window.clearTimeout(timer);
   }, [search]);
 
   useEffect(() => {
     if (!successMessage) return;
-    const t = window.setTimeout(() => setSuccessMessage(null), 4000);
-    return () => window.clearTimeout(t);
+    const timer = window.setTimeout(() => setSuccessMessage(null), 4000);
+    return () => window.clearTimeout(timer);
   }, [successMessage]);
 
   const list = useDebtsList({
@@ -71,10 +73,8 @@ export function DebtsPage() {
   return (
     <PageContainer className="space-y-6 overflow-x-hidden">
       <div>
-        <h2 className="text-2xl font-semibold tracking-tight text-ink">Qarzlar</h2>
-        <p className="mt-1 text-sm text-ink-muted">
-          Mijozlardan olinadigan qoldiq, muddati o‘tgan to‘lovlar va qabul.
-        </p>
+        <h2 className="text-2xl font-semibold tracking-tight text-ink">{t('debts.title')}</h2>
+        <p className="mt-1 text-sm text-ink-muted">{t('debts.subtitle')}</p>
       </div>
 
       {successMessage ? (
@@ -85,31 +85,31 @@ export function DebtsPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
-          title="Jami qarz"
-          context="Hozir"
+          title={t('debts.totalDebt')}
+          context={t('debts.totalDebtHint')}
           value={formatMoney(summary?.totalOutstanding ?? 0)}
           icon={CircleDollarSign}
           tone="danger"
           isLoading={list.isLoading}
         />
         <KpiCard
-          title="Qarzdor mijozlar"
-          context="Faol"
+          title={t('debts.customersInDebt')}
+          context={t('debts.customersInDebtHint')}
           value={String(summary?.customersInDebt ?? 0)}
           icon={CircleDollarSign}
           tone="brand"
           isLoading={list.isLoading}
         />
         <KpiCard
-          title="Ochiq sotuvlar"
-          context="Qoldiq > 0"
+          title={t('debts.openSales')}
+          context={t('debts.openSalesHint')}
           value={String(summary?.openSaleCount ?? 0)}
           icon={CircleDollarSign}
           tone="info"
           isLoading={list.isLoading}
         />
         <KpiCard
-          title="Muddati o‘tgan"
+          title={t('debts.overdue')}
           context={formatMoney(summary?.overdueAmount ?? 0)}
           value={String(summary?.overdueInstallmentCount ?? 0)}
           icon={CircleDollarSign}
@@ -118,13 +118,13 @@ export function DebtsPage() {
         />
       </div>
 
-      <SectionCard title="Qidiruv va filtr">
+      <SectionCard title={t('common.searchAndFilter')}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <label className="relative block min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
             <input
               className={`${fieldClass} pl-9`}
-              placeholder="Mijoz, telefon yoki sotuv №"
+              placeholder={t('debts.searchPlaceholder')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -149,32 +149,32 @@ export function DebtsPage() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Qarzlar ro‘yxati">
+      <SectionCard title={t('debts.listTitle')}>
         {list.isLoading ? (
           <div className="space-y-2">
             <Skeleton className="h-12 w-full" />
             <Skeleton className="h-12 w-full" />
           </div>
         ) : list.isError ? (
-          <ErrorState title="Qarzlar yuklanmadi" message={listErrorMessage(list.error)} />
+          <ErrorState title={t('debts.loadFailed')} message={listErrorMessage(list.error, t)} />
         ) : items.length === 0 ? (
           <EmptyState
             icon={CircleDollarSign}
-            title="Qarz yo‘q"
-            description="Tanlangan filtr bo‘yicha ochiq qarz topilmadi."
+            title={t('debts.emptyTitle')}
+            description={t('debts.emptyDescription')}
           />
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="border-b border-line text-xs uppercase tracking-wide text-ink-muted">
                 <tr>
-                  <th className="px-2 py-2 font-medium">Sotuv</th>
-                  <th className="px-2 py-2 font-medium">Mijoz</th>
-                  <th className="px-2 py-2 font-medium">Turi</th>
-                  <th className="px-2 py-2 font-medium">Holat</th>
-                  <th className="px-2 py-2 font-medium">Qolgan</th>
-                  <th className="px-2 py-2 font-medium">Muddat</th>
-                  <th className="px-2 py-2 font-medium">Amal</th>
+                  <th className="px-2 py-2 font-medium">{t('debts.sale')}</th>
+                  <th className="px-2 py-2 font-medium">{t('sales.customer')}</th>
+                  <th className="px-2 py-2 font-medium">{t('debts.type')}</th>
+                  <th className="px-2 py-2 font-medium">{t('common.status')}</th>
+                  <th className="px-2 py-2 font-medium">{t('debts.remaining')}</th>
+                  <th className="px-2 py-2 font-medium">{t('debts.due')}</th>
+                  <th className="px-2 py-2 font-medium">{t('debts.action')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -200,7 +200,7 @@ export function DebtsPage() {
                           {paymentStatusLabel(item.paymentStatus)}
                         </Badge>
                         {item.hasOverdueInstallment ? (
-                          <Badge tone="warning">Muddati o‘tgan</Badge>
+                          <Badge tone="warning">{t('debts.overdue')}</Badge>
                         ) : null}
                       </div>
                     </td>
@@ -219,7 +219,7 @@ export function DebtsPage() {
                         onClick={() => setPaying(item)}
                         className="rounded-input border border-line px-2 py-1 text-xs font-medium hover:bg-surface-hover"
                       >
-                        To‘lov
+                        {t('debts.collect')}
                       </button>
                     </td>
                   </tr>

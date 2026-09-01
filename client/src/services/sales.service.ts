@@ -7,6 +7,7 @@ import type {
   CancelSaleResponse,
   CreateSaleRequest,
   CreateSaleResponse,
+  MyDeliveriesResponse,
   PaymentDto,
   SaleDetail,
   SaleDetailResponse,
@@ -14,6 +15,8 @@ import type {
   SaleListQuery,
   SaleListResponse,
   UpdateAssemblyTaskRequest,
+  UpdateSaleDeliveryStatusRequest,
+  UpdateSaleDeliveryStatusResponse,
   UpdateSaleRequest,
 } from '@furniture-erp/shared';
 
@@ -58,6 +61,10 @@ export const salesService = {
     return sale;
   },
 
+  async deletePermanent(id: string): Promise<void> {
+    await apiClient.delete(`/sales/${id}`);
+  },
+
   async addPayment(id: string, body: AddPaymentRequest): Promise<AddPaymentResponse> {
     return apiClient.post<AddPaymentResponse>(`/sales/${id}/payments`, { body });
   },
@@ -78,6 +85,19 @@ export const salesService = {
 
   async updateAssemblyTask(id: string, body: UpdateAssemblyTaskRequest) {
     return apiClient.patch<AssemblyTaskResponse>(`/assembly-tasks/${id}`, { body });
+  },
+
+  async myDeliveries(signal?: AbortSignal): Promise<MyDeliveriesResponse> {
+    return apiClient.get<MyDeliveriesResponse>('/sales/deliveries/mine', { signal });
+  },
+
+  async updateDeliveryStatus(
+    saleId: string,
+    body: UpdateSaleDeliveryStatusRequest,
+  ): Promise<UpdateSaleDeliveryStatusResponse> {
+    return apiClient.patch<UpdateSaleDeliveryStatusResponse>(`/sales/${saleId}/delivery`, {
+      body,
+    });
   },
 };
 

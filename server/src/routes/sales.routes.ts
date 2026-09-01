@@ -5,12 +5,15 @@ import {
   assignAssembly,
   cancelSale,
   createSale,
+  deleteCancelledSale,
   getSale,
   listMyAssemblyTasks,
+  listMyDeliveries,
   listPayments,
   listSales,
   updateAssemblyTask,
   updateSale,
+  updateSaleDeliveryStatus,
 } from '../controllers/sales.controller.js';
 import { requireAuth } from '../middleware/require-auth.js';
 import { validate } from '../middleware/validate.js';
@@ -23,6 +26,7 @@ import {
   saleListQuerySchema,
   updateAssemblyTaskBodySchema,
   updateSaleBodySchema,
+  updateSaleDeliveryStatusBodySchema,
 } from '../validators/sales.validators.js';
 
 export const salesRouter = Router();
@@ -34,6 +38,8 @@ salesRouter.post('/', validate({ body: createSaleBodySchema }), createSale);
 
 // Assembly task inbox for the signed-in worker (minimal Phase 5 surface).
 salesRouter.get('/assembly-tasks/mine', listMyAssemblyTasks);
+/** Shopir operational inbox — assigned sale + purchase deliveries. */
+salesRouter.get('/deliveries/mine', listMyDeliveries);
 
 salesRouter.get('/:id', validate({ params: idParamsSchema }), getSale);
 salesRouter.patch(
@@ -41,11 +47,17 @@ salesRouter.patch(
   validate({ params: idParamsSchema, body: updateSaleBodySchema }),
   updateSale,
 );
+salesRouter.patch(
+  '/:id/delivery',
+  validate({ params: idParamsSchema, body: updateSaleDeliveryStatusBodySchema }),
+  updateSaleDeliveryStatus,
+);
 salesRouter.post(
   '/:id/cancel',
   validate({ params: idParamsSchema, body: cancelSaleBodySchema }),
   cancelSale,
 );
+salesRouter.delete('/:id', validate({ params: idParamsSchema }), deleteCancelledSale);
 
 salesRouter.get(
   '/:id/payments',

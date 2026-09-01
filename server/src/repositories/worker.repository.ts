@@ -1,5 +1,7 @@
 import type {
   WorkerActivityItem,
+  WorkerAttributedFeeItem,
+  WorkerAttributedFeesSummary,
   WorkerDetail,
   WorkerListItem,
   WorkerLookupItem,
@@ -11,8 +13,14 @@ import type {
 import {
   ACTIVE_ASSEMBLY_TASK_STATUSES,
   AssemblyTaskStatus,
+  SaleStatus,
   buildPaginationMeta,
+  computeWorkerEarnedTotal,
+  computeWorkerNetFinancialPosition,
+  computeWorkerPaidTotal,
   normalisePagination,
+  WorkerFinancialReferenceType,
+  WorkerFinancialTransactionType,
 } from '@furniture-erp/shared';
 import type { Prisma, User, WorkerActivityType } from '@prisma/client';
 
@@ -276,20 +284,167 @@ export async function listWorkers(params: ListWorkersParams) {
     }),
   ]);
 
-  const items: WorkerListItem[] = rows.map((row) => ({
-    id: row.id,
-    fullName: row.fullName,
-    username: row.username,
-    email: row.email,
-    phone: row.phone,
-    role: row.role,
-    isActive: row.isActive,
-    responsibilities: responsibilityList(row.responsibilities),
-    createdAt: row.createdAt.toISOString(),
-    salesCount: row._count.salesSold,
-    assemblyTaskCount: row._count.assemblyTasksAssigned,
-    activeTaskCount: row.assemblyTasksAssigned.length,
-  }));
+  const workerIds = rows.map((row) => row.id);
+
+  const [completedAssembly, deliveryCompleted, installationCompleted, financeRows] =
+    workerIds.length === 0
+      ? [[], [], [], []]
+      : await Promise.all([
+          prisma.assemblyTask.groupBy({
+            by: ['assigneeId'],
+            where: {
+              storeId: params.storeId,
+              assigneeId: { in: workerIds },
+              status: AssemblyTaskStatus.COMPLETED,
+            },
+            _count: { _all: true },
+          }),
+          prisma.sale.groupBy({
+            by: ['deliveryPersonId'],
+            where: {
+              storeId: params.storeId,
+              deliveryPersonId: { in: workerIds },
+              deliveryStatus: 'COMPLETED',
+              status: { not: 'CANCELLED' },
+            },
+            _count: { _all: true },
+          }),
+          prisma.sale.groupBy({
+            by: ['installerId'],
+            where: {
+              storeId: params.storeId,
+              installerId: { in: workerIds },
+              installationStatus: 'COMPLETED',
+              status: { not: 'CANCELLED' },
+            },
+            _count: { _all: true },
+          }),
+          prisma.workerFinancialTransaction.groupBy({
+            by: ['workerId', 'type', 'reversesType'],
+            where: { storeId: params.storeId, workerId: { in: workerIds } },
+            _sum: { amount: true },
+          }),
+        ]);
+
+  const assemblyCompletedMap = new Map(
+    completedAssembly.map((r) => [r.assigneeId, r._count._all]),
+  );
+  const deliveryMap = new Map(
+    deliveryCompleted.map((r) => [r.deliveryPersonId!, r._count._all]),
+  );
+  const installMap = new Map(
+    installationCompleted.map((r) => [r.installerId!, r._count._all]),
+  );
+
+  const financeByWorker = new Map<
+    string,
+    { earned: number; paid: number; outstanding: number }
+  >();
+  for (const id of workerIds) {
+    financeByWorker.set(id, { earned: 0, paid: 0, outstanding: 0 });
+  }
+
+  // Lightweight position matching aggregateWorkerTotals formula.
+  type RevKey = 'BONUS' | 'COMMISSION' | 'ADVANCE' | 'DEBT' | 'PAYMENT' | 'ADJUSTMENT';
+  const perWorker: Record<
+    string,
+    {
+      bonuses: number;
+      commissions: number;
+      advances: number;
+      debt: number;
+      payments: number;
+      adjustments: number;
+      reversalsBy: Partial<Record<RevKey, number>>;
+    }
+  > = {};
+  for (const id of workerIds) {
+    perWorker[id] = {
+      bonuses: 0,
+      commissions: 0,
+      advances: 0,
+      debt: 0,
+      payments: 0,
+      adjustments: 0,
+      reversalsBy: {},
+    };
+  }
+  for (const row of financeRows) {
+    const bucket = perWorker[row.workerId];
+    if (!bucket) continue;
+    const amount = fromDbMoney(row._sum.amount ?? 0n);
+    if (row.type === 'REVERSAL') {
+      const rt = row.reversesType as RevKey | null;
+      if (rt) bucket.reversalsBy[rt] = (bucket.reversalsBy[rt] ?? 0) + amount;
+      continue;
+    }
+    if (row.type === 'BONUS') bucket.bonuses += amount;
+    else if (row.type === 'COMMISSION') bucket.commissions += amount;
+    else if (row.type === 'ADVANCE') bucket.advances += amount;
+    else if (row.type === 'DEBT') bucket.debt += amount;
+    else if (row.type === 'PAYMENT') bucket.payments += amount;
+    else if (row.type === 'ADJUSTMENT') bucket.adjustments += amount;
+  }
+  for (const id of workerIds) {
+    const b = perWorker[id]!;
+    financeByWorker.set(id, {
+      earned: computeWorkerEarnedTotal({
+        totalBonuses: b.bonuses,
+        totalCommissions: b.commissions,
+        totalAdvances: b.advances,
+        totalDebt: b.debt,
+        totalPayments: b.payments,
+        totalAdjustments: b.adjustments,
+        reversalsByOriginalType: b.reversalsBy,
+      }),
+      paid: computeWorkerPaidTotal({
+        totalBonuses: b.bonuses,
+        totalCommissions: b.commissions,
+        totalAdvances: b.advances,
+        totalDebt: b.debt,
+        totalPayments: b.payments,
+        totalAdjustments: b.adjustments,
+        reversalsByOriginalType: b.reversalsBy,
+      }),
+      outstanding: computeWorkerNetFinancialPosition({
+        totalBonuses: b.bonuses,
+        totalCommissions: b.commissions,
+        totalAdvances: b.advances,
+        totalDebt: b.debt,
+        totalPayments: b.payments,
+        totalAdjustments: b.adjustments,
+        reversalsByOriginalType: b.reversalsBy,
+      }),
+    });
+  }
+
+  const items: WorkerListItem[] = rows.map((row) => {
+    const finance = financeByWorker.get(row.id) ?? {
+      earned: 0,
+      paid: 0,
+      outstanding: 0,
+    };
+    return {
+      id: row.id,
+      fullName: row.fullName,
+      username: row.username,
+      email: row.email,
+      phone: row.phone,
+      role: row.role,
+      isActive: row.isActive,
+      responsibilities: responsibilityList(row.responsibilities),
+      createdAt: row.createdAt.toISOString(),
+      salesCount: row._count.salesSold,
+      assemblyTaskCount: row._count.assemblyTasksAssigned,
+      activeTaskCount: row.assemblyTasksAssigned.length,
+      assemblyCompleted: assemblyCompletedMap.get(row.id) ?? 0,
+      deliveryCompleted: deliveryMap.get(row.id) ?? 0,
+      installationCompleted: installMap.get(row.id) ?? 0,
+      earned: finance.earned,
+      paid: finance.paid,
+      outstanding: finance.outstanding,
+    };
+  });
 
   return { items, meta: buildPaginationMeta(page, pageSize, totalItems) };
 }
@@ -470,14 +625,26 @@ export async function listWorkerActivity(
 export async function listWorkerSales(
   storeId: string,
   workerId: string,
-  options: { page?: number; pageSize?: number; search?: string; from?: string; to?: string } = {},
+  options: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    from?: string;
+    to?: string;
+    status?: string;
+  } = {},
 ) {
   const { page, pageSize, skip, take } = normalisePagination(options.page, options.pageSize);
 
+  const status = options.status ?? 'ALL';
   const where: Prisma.SaleWhereInput = {
     storeId,
     sellerId: workerId,
-    status: { not: 'CANCELLED' },
+    ...(status === 'OPEN' || status === ''
+      ? { status: { not: SaleStatus.CANCELLED } }
+      : status === 'ALL'
+        ? {}
+        : { status: status as Prisma.EnumSaleStatusFilter['equals'] }),
     ...(options.from || options.to
       ? {
           saleDate: {
@@ -514,19 +681,23 @@ export async function listWorkerSales(
     }),
   ]);
 
-  const items: WorkerSaleItem[] = rows.map((row) => ({
-    id: row.id,
-    saleNumber: row.saleNumber,
-    saleDate: row.saleDate.toISOString(),
-    customerName: `${row.customer.firstName} ${row.customer.lastName}`.trim(),
-    productSummary: row.items.map((item) => item.productName).join(', ') || '—',
-    totalSalePrice: fromDbMoney(row.totalSalePrice),
-    paidAmount: fromDbMoney(row.paidAmount),
-    remainingAmount: fromDbMoney(row.remainingAmount),
-    paymentStatus: row.paymentStatus,
-  }));
-
-  return { items, meta: buildPaginationMeta(page, pageSize, totalItems) };
+  return {
+    rows: rows.map((row) => ({
+      id: row.id,
+      saleNumber: row.saleNumber,
+      saleDate: row.saleDate,
+      status: row.status,
+      totalSalePrice: row.totalSalePrice,
+      totalCostPrice: row.totalCostPrice,
+      grossProfit: row.grossProfit,
+      netProfit: row.netProfit,
+      paidAmount: row.paidAmount,
+      remainingAmount: row.remainingAmount,
+      customerName: `${row.customer.firstName} ${row.customer.lastName}`.trim(),
+      productSummary: row.items.map((item) => item.productName).join(', ') || '—',
+    })),
+    meta: buildPaginationMeta(page, pageSize, totalItems),
+  };
 }
 
 export async function listWorkerTasks(
@@ -565,4 +736,244 @@ export async function listWorkerTasks(
     customerName: `${row.sale.customer.firstName} ${row.sale.customer.lastName}`.trim(),
     productSummary: row.sale.items.map((item) => item.productName).join(', ') || '—',
   }));
+}
+
+/**
+ * Posted earning breakdown for a worker profile.
+ * Reads open COMMISSION ledger rows (actual account) — not Sale field previews.
+ */
+export async function listWorkerAttributedFees(
+  storeId: string,
+  workerId: string,
+): Promise<WorkerAttributedFeesSummary> {
+  const commissions = await prisma.workerFinancialTransaction.findMany({
+    where: {
+      storeId,
+      workerId,
+      type: WorkerFinancialTransactionType.COMMISSION,
+      referenceType: {
+        in: [
+          WorkerFinancialReferenceType.COMPENSATION,
+          WorkerFinancialReferenceType.SALE,
+          WorkerFinancialReferenceType.ASSEMBLY,
+          WorkerFinancialReferenceType.PURCHASE,
+        ],
+      },
+    },
+    select: {
+      id: true,
+      amount: true,
+      transactionDate: true,
+      description: true,
+      referenceType: true,
+      referenceId: true,
+    },
+    orderBy: { transactionDate: 'desc' },
+  });
+
+  const commissionIds = commissions.map((row) => row.id);
+  const reversals =
+    commissionIds.length === 0
+      ? []
+      : await prisma.workerFinancialTransaction.findMany({
+          where: {
+            storeId,
+            type: WorkerFinancialTransactionType.REVERSAL,
+            referenceType: WorkerFinancialReferenceType.REVERSAL,
+            referenceId: { in: commissionIds },
+          },
+          select: { referenceId: true },
+        });
+  const reversed = new Set(
+    reversals.map((row) => row.referenceId).filter((id): id is string => Boolean(id)),
+  );
+
+  const items: WorkerAttributedFeeItem[] = [];
+
+  for (const row of commissions) {
+    if (reversed.has(row.id)) continue;
+    const amount = fromDbMoney(row.amount);
+    if (amount <= 0) continue;
+
+    const classified = classifyPostedCommission(row);
+    if (!classified) continue;
+
+    items.push({
+      id: row.id,
+      kind: classified.kind,
+      source: classified.source,
+      amount,
+      occurredAt: row.transactionDate.toISOString(),
+      referenceId: classified.referenceId,
+      referenceLabel: classified.referenceLabel,
+      description: row.description,
+    });
+  }
+
+  let sellerBonusTotal = 0;
+  let assemblerFeeTotal = 0;
+  let installerFeeTotal = 0;
+  let deliveryFeeTotal = 0;
+  let purchaseDriverFeeTotal = 0;
+  for (const item of items) {
+    if (item.kind === 'SELLER_COMMISSION' || item.kind === 'SELLER_BONUS') {
+      sellerBonusTotal += item.amount;
+    } else if (item.kind === 'ASSEMBLER_FEE') assemblerFeeTotal += item.amount;
+    else if (item.kind === 'INSTALLER_FEE') installerFeeTotal += item.amount;
+    else if (item.kind === 'DELIVERY_FEE') deliveryFeeTotal += item.amount;
+    else purchaseDriverFeeTotal += item.amount;
+  }
+
+  return {
+    sellerBonusTotal,
+    assemblerFeeTotal,
+    installerFeeTotal,
+    deliveryFeeTotal,
+    purchaseDriverFeeTotal,
+    grandTotal:
+      sellerBonusTotal +
+      assemblerFeeTotal +
+      installerFeeTotal +
+      deliveryFeeTotal +
+      purchaseDriverFeeTotal,
+    items,
+  };
+}
+
+function saleIdFromFeeRef(refId: string): string {
+  const suffixes = [
+    ':ASSEMBLY_FEE',
+    ':INSTALLER_FEE',
+    ':DELIVERY_FEE',
+    ':ASSEMBLY:FEE',
+    ':INSTALLATION:FEE',
+    ':DELIVERY:FEE',
+    ':INSTALLATION_COST',
+    ':DELIVERY_COST',
+  ];
+  for (const suffix of suffixes) {
+    if (refId.endsWith(suffix)) return refId.slice(0, -suffix.length);
+  }
+  return refId.includes(':') ? refId.split(':')[0]! : refId;
+}
+
+function classifyPostedCommission(row: {
+  description: string | null;
+  referenceType: string | null;
+  referenceId: string | null;
+}): {
+  kind: WorkerAttributedFeeItem['kind'];
+  source: WorkerAttributedFeeItem['source'];
+  referenceId: string;
+  referenceLabel: string;
+} | null {
+  const refId = row.referenceId ?? '';
+  const desc = row.description ?? '';
+  const saleNum = desc.match(/Sotuv\s*#(\d+)/i)?.[1];
+
+  if (row.referenceType === WorkerFinancialReferenceType.PURCHASE) {
+    const purchaseId = refId.replace(/:DRIVER_FEE$/, '') || refId;
+    const num = desc.match(/Kirim\s*#(\d+)/i)?.[1];
+    return {
+      kind: 'PURCHASE_DRIVER_FEE',
+      source: 'PURCHASE',
+      referenceId: purchaseId,
+      referenceLabel: num ? `Kirim #${num}` : 'Kirim',
+    };
+  }
+
+  if (
+    refId.endsWith(':INSTALLER_FEE') ||
+    refId.endsWith(':INSTALLATION:FEE') ||
+    /Installer haqqi/i.test(desc)
+  ) {
+    return {
+      kind: 'INSTALLER_FEE',
+      source: 'SALE',
+      referenceId: saleIdFromFeeRef(refId),
+      referenceLabel: saleNum ? `Sotuv #${saleNum}` : 'Sotuv',
+    };
+  }
+
+  if (
+    refId.endsWith(':ASSEMBLY_FEE') ||
+    refId.endsWith(':ASSEMBLY:FEE') ||
+    refId.endsWith(':INSTALLATION_COST') ||
+    row.referenceType === WorkerFinancialReferenceType.ASSEMBLY ||
+    /Usta haqqi|Terlash/i.test(desc)
+  ) {
+    return {
+      kind: 'ASSEMBLER_FEE',
+      source: 'SALE',
+      referenceId: saleIdFromFeeRef(refId),
+      referenceLabel: saleNum ? `Sotuv #${saleNum}` : 'Sotuv',
+    };
+  }
+
+  if (
+    refId.endsWith(':DELIVERY_FEE') ||
+    refId.endsWith(':DELIVERY:FEE') ||
+    refId.endsWith(':DELIVERY_COST') ||
+    /Yetkazib berish haqi/i.test(desc) ||
+    (/Yetkazib berish/i.test(desc) && !/Kirim shopir/i.test(desc))
+  ) {
+    return {
+      kind: 'DELIVERY_FEE',
+      source: 'SALE',
+      referenceId: saleIdFromFeeRef(refId),
+      referenceLabel: saleNum ? `Sotuv #${saleNum}` : 'Sotuv',
+    };
+  }
+
+  if (row.referenceType === WorkerFinancialReferenceType.COMPENSATION) {
+    const saleRef =
+      refId.includes(':MANUAL:') ||
+      refId.includes(':PERCENT_') ||
+      refId.includes(':FIXED_PER_')
+        ? refId.split(':')[0]!
+        : saleIdFromFeeRef(refId);
+
+    if (
+      refId.includes(':FIXED_PER_ASSEMBLY') ||
+      refId.includes(':MANUAL:ASSEMBLER') ||
+      /Terlash|Usta/i.test(desc)
+    ) {
+      return {
+        kind: 'ASSEMBLER_FEE',
+        source: 'SALE',
+        referenceId: saleRef,
+        referenceLabel: saleNum ? `Sotuv #${saleNum}` : 'Sotuv',
+      };
+    }
+    if (
+      refId.includes(':FIXED_PER_DELIVERY') ||
+      refId.includes(':MANUAL:SHOPIR') ||
+      refId.includes(':MANUAL:DASTAFCHI') ||
+      /Yetkazib berish/i.test(desc)
+    ) {
+      return {
+        kind: 'DELIVERY_FEE',
+        source: 'SALE',
+        referenceId: saleRef,
+        referenceLabel: saleNum ? `Sotuv #${saleNum}` : 'Sotuv',
+      };
+    }
+    if (refId.includes(':FIXED_PER_INSTALLATION') || /O'rnatish|Installer/i.test(desc)) {
+      return {
+        kind: 'INSTALLER_FEE',
+        source: 'SALE',
+        referenceId: saleRef,
+        referenceLabel: saleNum ? `Sotuv #${saleNum}` : 'Sotuv',
+      };
+    }
+
+    return {
+      kind: 'SELLER_COMMISSION',
+      source: 'SALE',
+      referenceId: saleRef,
+      referenceLabel: saleNum ? `Sotuv #${saleNum}` : 'Sotuv',
+    };
+  }
+
+  return null;
 }

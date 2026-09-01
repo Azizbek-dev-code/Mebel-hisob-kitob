@@ -24,10 +24,16 @@ export const workerKeys = {
   tasks: (id: string, status?: AssemblyTaskStatus) =>
     [...workerKeys.all, 'tasks', id, status ?? 'all'] as const,
   activity: (id: string) => [...workerKeys.all, 'activity', id] as const,
+  attributedFees: (id: string) => [...workerKeys.all, 'attributed-fees', id] as const,
+  profileModules: (id: string) => [...workerKeys.all, 'profile-modules', id] as const,
+  feeReconciliation: ['workers', 'fee-reconciliation'] as const,
   meProfile: ['me', 'profile'] as const,
   meStats: ['me', 'stats'] as const,
   meSales: (params: object) => ['me', 'sales', params] as const,
+  meSellerReport: (params: object) => ['me', 'seller-report', params] as const,
   meActivity: ['me', 'activity'] as const,
+  meAttributedFees: ['me', 'attributed-fees'] as const,
+  meProfileModules: ['me', 'profile-modules'] as const,
 };
 
 export function useWorkersList(params: WorkerListQuery) {
@@ -78,6 +84,14 @@ export function useWorkerActivity(id: string | undefined) {
   return useQuery({
     queryKey: workerKeys.activity(id ?? ''),
     queryFn: ({ signal }) => workersService.activity(id!, signal),
+    enabled: Boolean(id),
+  });
+}
+
+export function useWorkerAttributedFees(id: string | undefined) {
+  return useQuery({
+    queryKey: workerKeys.attributedFees(id ?? ''),
+    queryFn: ({ signal }) => workersService.attributedFees(id!, signal),
     enabled: Boolean(id),
   });
 }
@@ -135,6 +149,7 @@ export function useMySales(params: {
   search?: string;
   from?: string;
   to?: string;
+  status?: string;
 }) {
   return useQuery({
     queryKey: workerKeys.meSales(params),
@@ -143,10 +158,51 @@ export function useMySales(params: {
   });
 }
 
+export function useMySellerReport(params: {
+  preset?: string;
+  from?: string;
+  to?: string;
+}) {
+  return useQuery({
+    queryKey: workerKeys.meSellerReport(params),
+    queryFn: ({ signal }) => workersService.mySellerReport(params, signal),
+  });
+}
+
 export function useMyActivity() {
   return useQuery({
     queryKey: workerKeys.meActivity,
     queryFn: ({ signal }) => workersService.myActivity(signal),
+  });
+}
+
+export function useMyAttributedFees() {
+  return useQuery({
+    queryKey: workerKeys.meAttributedFees,
+    queryFn: ({ signal }) => workersService.myAttributedFees(signal),
+  });
+}
+
+export function useWorkerProfileModules(id: string | undefined) {
+  return useQuery({
+    queryKey: workerKeys.profileModules(id ?? ''),
+    queryFn: ({ signal }) => workersService.profileModules(id!, signal),
+    enabled: Boolean(id),
+  });
+}
+
+export function useMyProfileModules() {
+  return useQuery({
+    queryKey: workerKeys.meProfileModules,
+    queryFn: ({ signal }) => workersService.myProfileModules(signal),
+  });
+}
+
+export function useFeeReconciliation(enabled = true) {
+  return useQuery({
+    queryKey: workerKeys.feeReconciliation,
+    queryFn: ({ signal }) => workersService.feeReconciliation(signal),
+    enabled,
   });
 }
 

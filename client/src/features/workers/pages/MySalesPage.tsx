@@ -1,17 +1,14 @@
+import { SellerCommissionStatus, type SellerCommissionStatus as SellerStatus } from '@furniture-erp/shared';
 import { ShoppingCart } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { SectionCard } from '@/components/ui/SectionCard';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { SellerSalesTable } from '@/features/workers/components/SellerSalesTable';
 import { useMySales } from '@/features/workers/hooks/use-workers';
-import { ROUTES } from '@/routes/paths';
-import { formatDate, formatMoney } from '@/utils/format';
-import { formatSaleNumber, paymentStatusLabel, paymentStatusTone } from '@/utils/sales';
-import { Badge } from '@/components/ui/Badge';
 
 const fieldClass =
   'w-full rounded-input border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100';
@@ -20,6 +17,7 @@ export function MySalesPage() {
   const [search, setSearch] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [status, setStatus] = useState('ALL');
   const [page, setPage] = useState(1);
 
   const params = useMemo(
@@ -29,24 +27,26 @@ export function MySalesPage() {
       search: search.trim() || undefined,
       from: from || undefined,
       to: to || undefined,
+      status: status === 'ALL' ? 'ALL' : status,
     }),
-    [page, search, from, to],
+    [page, search, from, to, status],
   );
 
   const sales = useMySales(params);
+  const items = sales.data?.items ?? [];
 
   return (
     <PageContainer className="space-y-6">
       <div>
         <h2 className="text-2xl font-semibold tracking-tight text-ink">Mening sotuvlarim</h2>
-        <p className="mt-1 text-sm text-ink-muted">Sales where you are the seller.</p>
+        <p className="mt-1 text-sm text-ink-muted">Faqat siz biriktirilgan savdolar.</p>
       </div>
 
-      <SectionCard title="Filters">
-        <div className="grid gap-3 md:grid-cols-3">
+      <SectionCard title="Filtr">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <input
             className={fieldClass}
-            placeholder="Search customer or sale number"
+            placeholder="Mijoz yoki sotuv raqami"
             value={search}
             onChange={(event) => {
               setSearch(event.target.value);
@@ -61,6 +61,7 @@ export function MySalesPage() {
               setFrom(event.target.value);
               setPage(1);
             }}
+            aria-label="Boshlanish sanasi"
           />
           <input
             type="date"
@@ -70,73 +71,66 @@ export function MySalesPage() {
               setTo(event.target.value);
               setPage(1);
             }}
+            aria-label="Tugash sanasi"
           />
+          <select
+            className={fieldClass}
+            value={status}
+            onChange={(event) => {
+              setStatus(event.target.value);
+              setPage(1);
+            }}
+            aria-label="Sotuv holati"
+          >
+            <option value="ALL">Barchasi</option>
+            <option value="OPEN">Faol</option>
+            <option value="COMPLETED">Yakunlangan</option>
+            <option value="CANCELLED">Bekor qilingan</option>
+          </select>
         </div>
       </SectionCard>
 
       {sales.isError ? (
         <ErrorState
-          title="Could not load sales"
-          message={sales.error instanceof Error ? sales.error.message : 'Try again.'}
+          title="Sotuvlar yuklanmadi"
+          message={sales.error instanceof Error ? sales.error.message : 'Qayta urinib ko‘ring.'}
+          retryLabel="Qayta urinish"
           onRetry={() => void sales.refetch()}
         />
       ) : null}
 
       {sales.isLoading ? <Skeleton className="h-40 w-full" /> : null}
 
-      {sales.data && sales.data.items.length === 0 ? (
+      {sales.data && items.length === 0 ? (
         <EmptyState
           icon={ShoppingCart}
-          title="No sales yet"
-          description="When you are selected as seller on a sale, it will appear here."
+          title="Hali sotuv yo‘q"
+          description="Sizni sotuvchi sifatida tanlaganda savdolar shu yerda chiqadi."
         />
       ) : null}
 
-      {sales.data && sales.data.items.length > 0 ? (
+      {sales.data && items.length > 0 ? (
         <>
-          <div className="overflow-x-auto rounded-panel border border-line bg-surface shadow-card">
-            <table className="min-w-[860px] w-full text-left text-sm">
-              <thead className="border-b border-line bg-canvas/60 text-xs uppercase tracking-wide text-ink-muted">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Sale</th>
-                  <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium">Customer</th>
-                  <th className="px-4 py-3 font-medium">Product</th>
-                  <th className="px-4 py-3 font-medium">Amount</th>
-                  <th className="px-4 py-3 font-medium">Paid</th>
-                  <th className="px-4 py-3 font-medium">Remaining</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sales.data.items.map((sale) => (
-                  <tr key={sale.id} className="border-b border-line last:border-0">
-                    <td className="px-4 py-3">
-                      <Link to={ROUTES.saleDetail(sale.id)} className="font-medium text-brand-700 hover:underline">
-                        {formatSaleNumber(sale.saleNumber)}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">{formatDate(sale.saleDate)}</td>
-                    <td className="px-4 py-3">{sale.customerName}</td>
-                    <td className="px-4 py-3">{sale.productSummary}</td>
-                    <td className="px-4 py-3">{formatMoney(sale.totalSalePrice)}</td>
-                    <td className="px-4 py-3">{formatMoney(sale.paidAmount)}</td>
-                    <td className="px-4 py-3">{formatMoney(sale.remainingAmount)}</td>
-                    <td className="px-4 py-3">
-                      <Badge tone={paymentStatusTone(sale.paymentStatus)}>
-                        {paymentStatusLabel(sale.paymentStatus)}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <SectionCard title="Sotuvlar">
+            <SellerSalesTable
+              items={items.map((sale) => ({
+                ...sale,
+                totalCostPrice: sale.totalCostPrice ?? 0,
+                netProfit: sale.netProfit ?? 0,
+                estimatedCommission: sale.estimatedCommission ?? 0,
+                earnedCommission: sale.earnedCommission ?? 0,
+                commissionStatus: (sale.commissionStatus ??
+                  SellerCommissionStatus.NONE) as SellerStatus,
+                ruleType: sale.ruleType ?? null,
+                rateLabel: sale.rateLabel ?? null,
+              }))}
+            />
+          </SectionCard>
 
           {sales.data.meta.totalPages > 1 ? (
             <div className="flex items-center justify-between">
               <p className="text-sm text-ink-muted">
-                Page {sales.data.meta.page} of {sales.data.meta.totalPages}
+                {sales.data.meta.page}-sahifa / {sales.data.meta.totalPages}
               </p>
               <div className="flex gap-2">
                 <button
@@ -145,7 +139,7 @@ export function MySalesPage() {
                   disabled={!sales.data.meta.hasPreviousPage}
                   onClick={() => setPage((current) => Math.max(1, current - 1))}
                 >
-                  Previous
+                  Oldingi
                 </button>
                 <button
                   type="button"
@@ -153,7 +147,7 @@ export function MySalesPage() {
                   disabled={!sales.data.meta.hasNextPage}
                   onClick={() => setPage((current) => current + 1)}
                 >
-                  Next
+                  Keyingi
                 </button>
               </div>
             </div>

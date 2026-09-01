@@ -193,6 +193,8 @@ enum WorkerFinancialReferenceType {
   PAYROLL
   /// Posted from compensation settle; referenceId = breakdown line id.
   COMPENSATION
+  /// Purchase operational fees; referenceId = `${purchaseId}:DRIVER_FEE`.
+  PURCHASE
   /// referenceId points at the original WorkerFinancialTransaction being reversed.
   REVERSAL
 }
@@ -406,6 +408,7 @@ model User {
   stockMovementsCreated     StockMovement[]              @relation("StockMovementCreatedBy")
   purchasesCreated          Purchase[]                   @relation("PurchaseCreatedBy")
   purchasesCancelled        Purchase[]                   @relation("PurchaseCancelledBy")
+  purchasesDriven           Purchase[]                   @relation("PurchaseDriver")
   supplierPaymentsTaken     SupplierPayment[]            @relation("SupplierPaymentCreatedBy")
   backupJobsCreated         BackupJob[]                  @relation("BackupJobCreatedBy")
   auditLogs                 AuditLog[]                   @relation("AuditLogActor")
@@ -665,6 +668,15 @@ model Purchase {
   supplierId    String
 
   purchaseDate DateTime @default(now())
+  /// When the goods physically arrived at the store.
+  deliveredAt DateTime?
+  /// Calendar days from order/agreement to arrival (display: "3 kun").
+  deliveryDays Int @default(0)
+  /// Optional delivery worker (Shopir). Distinct from Supplier (Yetkazuvchi).
+  driverId String?
+  /// Freight / shopir fee — stored separately; does NOT change item unitCost or totalCost.
+  driverFee BigInt @default(0)
+
   /// Sum of line totals (quantity × unitCost).
   totalCost    BigInt
   paidAmount   BigInt @default(0)
@@ -684,6 +696,7 @@ model Purchase {
 
   store       Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
   supplier    Supplier          @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  driver      User?             @relation("PurchaseDriver", fields: [driverId], references: [id], onDelete: SetNull)
   items       PurchaseItem[]
   payments    SupplierPayment[]
   createdBy   User?             @relation("PurchaseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
@@ -691,9 +704,11 @@ model Purchase {
 
   @@unique([storeId, purchaseNumber])
   @@index([storeId, purchaseDate])
+  @@index([storeId, deliveredAt])
   @@index([storeId, status])
   @@index([storeId, paymentStatus])
   @@index([storeId, supplierId])
+  @@index([storeId, driverId])
   @@index([storeId, remainingAmount])
   @@map("purchases")
 }
@@ -789,13 +804,15 @@ model Sale {
   // --- Costs attributable to this sale (kept out of totalCostPrice) -----------
   sellerBonus      BigInt @default(0)
   installationCost BigInt @default(0)
+  /// Separate Installer haqqi (O'rnatish). Distinct from installationCost (Usta / Terlash).
+  installerFee     BigInt @default(0)
   deliveryCost     BigInt @default(0)
   otherCosts       BigInt @default(0)
 
   // --- Derived profit, written by the accounting service ----------------------
   /// totalSalePrice - totalCostPrice
   grossProfit BigInt @default(0)
-  /// grossProfit - sellerBonus - installationCost - deliveryCost - otherCosts
+  /// grossProfit - sellerBonus - installationCost - installerFee - deliveryCost - otherCosts
   netProfit   BigInt @default(0)
 
   // --- Fulfilment --------------------------------------------------------------
@@ -805,13 +822,16 @@ model Sale {
   installationDate   DateTime?
   installationNotes  String?
   deliveryStatus     FulfilmentStatus   @default(NOT_REQUIRED)
+  /// Promised delivery-by date (set when the sale is created with delivery).
+  deliveryDueDate    DateTime?
+  /// Actual delivery completion date (set when delivery is marked complete).
   deliveryDate       DateTime?
   deliveryAddress    String?
   deliveryNotes      String?
 
   notes String?
 
-  /// Controlled void metadata — the sale row is never hard-deleted.
+  /// Controlled void metadata — cancelled sales can later be hard-deleted by an admin.
   cancelledAt          DateTime?
   cancelledById        String?
   cancellationReason   String?
@@ -841,6 +861,7 @@ model Sale {
   @@index([storeId, sellerId])
   @@index([storeId, assemblyStatus])
   @@index([storeId, deliveryStatus])
+  @@index([storeId, deliveryDueDate])
   @@index([storeId, installationStatus])
   @@index([storeId, cancelledAt])
   @@map("sales")
@@ -1126,6 +1147,10 @@ model WorkerFinancialTransaction {
   referenceId     String?
   /// Set only on REVERSAL rows: the original transaction's type (for sign / aggregation).
   reversesType    WorkerFinancialTransactionType?
+  /// Which worker responsibility bucket this row belongs to (SELLER / ASSEMBLER / …).
+  responsibility  WorkerResponsibility?
+  /// Open COMMISSION credits participate in the partial unique index; closed after REVERSAL.
+  isOpen          Boolean                         @default(true)
   createdById     String?
 
   createdAt DateTime @default(now())
@@ -1141,6 +1166,7 @@ model WorkerFinancialTransaction {
   @@index([storeId, type])
   @@index([storeId, referenceType, referenceId])
   @@index([storeId, type, reversesType])
+  @@index([storeId, workerId, responsibility])
   @@map("worker_financial_transactions")
 }
 

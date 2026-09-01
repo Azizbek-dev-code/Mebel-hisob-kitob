@@ -12,7 +12,7 @@
  *
  * Run with `npm run db:seed`.
  */
-import { WorkerResponsibility } from '@furniture-erp/shared';
+import { DEFAULT_PRODUCT_CATEGORIES, WorkerResponsibility } from '@furniture-erp/shared';
 import { PrismaClient, UserRole } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
@@ -85,6 +85,20 @@ async function main(): Promise<void> {
     WorkerResponsibility.DELIVERY,
     WorkerResponsibility.INSTALLER,
   ]);
+
+  // Furniture catalogue groupings so the product form is usable on day one.
+  for (const category of DEFAULT_PRODUCT_CATEGORIES) {
+    await prisma.productCategory.upsert({
+      where: { storeId_name: { storeId: store.id, name: category.name } },
+      update: { sortOrder: category.sortOrder, isActive: true },
+      create: {
+        storeId: store.id,
+        name: category.name,
+        sortOrder: category.sortOrder,
+      },
+    });
+  }
+  console.log(`  product categories: ${DEFAULT_PRODUCT_CATEGORIES.length}`);
 
   // Separate principal: never promote the store ADMIN. Existing stores keep
   // working; this account only adds platform-level store-request review.

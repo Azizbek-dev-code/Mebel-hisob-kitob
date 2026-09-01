@@ -1,6 +1,7 @@
 import {
   PaymentMethod,
   SupplierStatus,
+  WorkerResponsibility,
   type CreatePurchaseRequest,
 } from '@furniture-erp/shared';
 import { ArrowLeft, Plus, Trash2, UserPlus } from 'lucide-react';
@@ -14,6 +15,8 @@ import {
   SearchSelect,
   type SearchSelectOption,
 } from '@/features/sales/components/SearchSelect';
+import { useWorkerLookup } from '@/features/sales/hooks/use-sales';
+import { todayInputDate } from '@/features/expenses/utils/date';
 import { ApiClientError } from '@/lib/api-client';
 import { ROUTES } from '@/routes/paths';
 import { formatMoney } from '@/utils/format';
@@ -61,6 +64,10 @@ export function NewPurchasePage() {
   const [paidAmount, setPaidAmount] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(PaymentMethod.CASH);
   const [notes, setNotes] = useState('');
+  const [deliveredAt, setDeliveredAt] = useState(todayInputDate());
+  const [deliveryDays, setDeliveryDays] = useState(0);
+  const [driverId, setDriverId] = useState('');
+  const [driverFee, setDriverFee] = useState(0);
   const [formError, setFormError] = useState<string | null>(null);
 
   const [showNewSupplier, setShowNewSupplier] = useState(false);
@@ -68,6 +75,7 @@ export function NewPurchasePage() {
   const [newPhone, setNewPhone] = useState('');
   const [newNotes, setNewNotes] = useState('');
 
+  const deliveryWorkers = useWorkerLookup('', WorkerResponsibility.DELIVERY);
   const suppliers = useSuppliersList({
     page: 1,
     pageSize: 20,
@@ -160,6 +168,18 @@ export function NewPurchasePage() {
       setFormError('Boshlang‘ich to‘lov jami summadan oshmasin');
       return;
     }
+    if (!Number.isInteger(deliveryDays) || deliveryDays < 0) {
+      setFormError('Yetkazib berish muddati noto‘g‘ri');
+      return;
+    }
+    if (!Number.isInteger(driverFee) || driverFee < 0) {
+      setFormError('Shopir haqi noto‘g‘ri');
+      return;
+    }
+    if (!deliveredAt) {
+      setFormError('Olib kelingan sanani kiriting');
+      return;
+    }
 
     const body: CreatePurchaseRequest = {
       supplierId: supplier.id,
@@ -171,6 +191,10 @@ export function NewPurchasePage() {
       paidAmount: paidAmount > 0 ? paidAmount : undefined,
       paymentMethod: paidAmount > 0 ? paymentMethod : undefined,
       notes: notes.trim() || null,
+      deliveredAt,
+      deliveryDays,
+      driverId: driverId || null,
+      driverFee,
     };
 
     try {
@@ -293,6 +317,72 @@ export function NewPurchasePage() {
             </div>
           </SectionCard>
 
+          <SectionCard
+            title="Yetkazib berish"
+            description="Olib kelingan sana, muddat va shopir haqi (yetkazuvchidan alohida)"
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-sm">
+                <span className="mb-1.5 block font-medium text-ink">Olib kelingan sana</span>
+                <input
+                  type="date"
+                  className={fieldClass}
+                  value={deliveredAt}
+                  onChange={(e) => setDeliveredAt(e.target.value)}
+                  data-testid="purchase-delivered-at"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1.5 block font-medium text-ink">
+                  Necha kun ichida olib kelindi
+                </span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    className={fieldClass}
+                    value={deliveryDays}
+                    onChange={(e) => setDeliveryDays(Number.parseInt(e.target.value, 10) || 0)}
+                    data-testid="purchase-delivery-days"
+                  />
+                  <span className="shrink-0 text-sm text-ink-muted">kun</span>
+                </div>
+              </label>
+            </div>
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {(deliveryWorkers.data?.length ?? 0) > 0 ? (
+                <label className="block text-sm">
+                  <span className="mb-1.5 block font-medium text-ink">Shopir</span>
+                  <select
+                    className={fieldClass}
+                    value={driverId}
+                    onChange={(e) => setDriverId(e.target.value)}
+                    data-testid="purchase-driver"
+                  >
+                    <option value="">Tanlanmagan</option>
+                    {(deliveryWorkers.data ?? []).map((worker) => (
+                      <option key={worker.id} value={worker.id}>
+                        {worker.fullName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <p className="text-sm text-ink-muted sm:col-span-1">
+                  DELIVERY ishchi yo‘q — shopir haqini baribir kiritishingiz mumkin.
+                </p>
+              )}
+              <MoneyField
+                label="Shopir haqi"
+                value={driverFee}
+                onChange={setDriverFee}
+                hint="Mahsulot narxiga qo‘shilmaydi"
+              />
+            </div>
+          </SectionCard>
+
           <SectionCard title="To‘lov" description="0 = to‘liq kredit">
             <div className="grid gap-3 sm:grid-cols-2">
               <MoneyField
@@ -336,15 +426,19 @@ export function NewPurchasePage() {
                 <span>{lines.filter((l) => l.product).length}</span>
               </li>
               <li className="flex justify-between gap-3">
-                <span className="text-ink-muted">Jami</span>
+                <span className="text-ink-muted">Mahsulotlar</span>
                 <span className="font-medium">{formatMoney(totalCost)}</span>
               </li>
               <li className="flex justify-between gap-3">
-                <span className="text-ink-muted">To‘lov</span>
+                <span className="text-ink-muted">Shopir haqi</span>
+                <span>{formatMoney(driverFee)}</span>
+              </li>
+              <li className="flex justify-between gap-3">
+                <span className="text-ink-muted">Boshlang‘ich to‘lov</span>
                 <span>{formatMoney(paidAmount)}</span>
               </li>
               <li className="flex justify-between gap-3">
-                <span className="text-ink-muted">Kredit</span>
+                <span className="text-ink-muted">Qolgan qarz</span>
                 <span className="font-medium text-danger-700">
                   {formatMoney(Math.max(0, totalCost - paidAmount))}
                 </span>

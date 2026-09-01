@@ -13,6 +13,7 @@ import {
   Search,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
 import { EmptyState } from '@/components/feedback/EmptyState';
@@ -38,13 +39,6 @@ import {
 const fieldClass =
   'w-full rounded-input border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100';
 
-const FILTERS: Array<{ id: InventoryStockFilter; label: string }> = [
-  { id: 'ALL', label: 'Hammasi' },
-  { id: 'IN_STOCK', label: 'Mavjud' },
-  { id: 'LOW_STOCK', label: 'Kam qolgan' },
-  { id: 'OUT_OF_STOCK', label: 'Tugagan' },
-];
-
 function statusTone(status: string): 'success' | 'warning' | 'danger' | 'neutral' {
   if (status === StockStatus.IN_STOCK) return 'success';
   if (status === StockStatus.LOW_STOCK) return 'warning';
@@ -52,15 +46,16 @@ function statusTone(status: string): 'success' | 'warning' | 'danger' | 'neutral
   return 'neutral';
 }
 
-function listErrorMessage(error: unknown): string {
+function listErrorMessage(error: unknown, t: (key: string) => string): string {
   if (error instanceof ApiClientError) {
-    if (error.isForbidden) return 'Ombor sahifasini ko‘rish uchun ruxsat yo‘q.';
-    return error.message || 'Qayta urinib ko‘ring.';
+    if (error.isForbidden) return t('inventory.forbidden');
+    return error.message || t('common.retry');
   }
-  return 'Qayta urinib ko‘ring.';
+  return t('common.retry');
 }
 
 export function InventoryPage() {
+  const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [stockFilter, setStockFilter] = useState<InventoryStockFilter>('ALL');
@@ -70,6 +65,13 @@ export function InventoryPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [tab, setTab] = useState<'stock' | 'history'>('stock');
+
+  const FILTERS: Array<{ id: InventoryStockFilter; label: string }> = [
+    { id: 'ALL', label: t('common.all') },
+    { id: 'IN_STOCK', label: t('inventory.inStock') },
+    { id: 'LOW_STOCK', label: t('inventory.lowStock') },
+    { id: 'OUT_OF_STOCK', label: t('inventory.outOfStock') },
+  ];
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
@@ -108,10 +110,8 @@ export function InventoryPage() {
     <PageContainer className="space-y-6 overflow-x-hidden">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-ink">Ombor</h2>
-          <p className="mt-1 text-sm text-ink-muted">
-            Mahsulot zaxirasi, kirim-chiqim va harakatlar tarixi.
-          </p>
+          <h2 className="text-2xl font-semibold tracking-tight text-ink">{t('inventory.title')}</h2>
+          <p className="mt-1 text-sm text-ink-muted">{t('inventory.subtitle')}</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -124,7 +124,7 @@ export function InventoryPage() {
                 : 'border border-line text-ink hover:bg-surface-hover',
             )}
           >
-            Zaxira
+            {t('inventory.stockTab')}
           </button>
           <button
             type="button"
@@ -136,7 +136,7 @@ export function InventoryPage() {
                 : 'border border-line text-ink hover:bg-surface-hover',
             )}
           >
-            Tarix
+            {t('inventory.historyTab')}
           </button>
         </div>
       </div>
@@ -149,32 +149,32 @@ export function InventoryPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
-          title="Jami mahsulot"
-          context="Kuzatiladigan"
+          title={t('inventory.totalProducts')}
+          context={t('inventory.totalProductsHint')}
           value={String(summary?.totalProducts ?? 0)}
           icon={Package}
           tone="brand"
           isLoading={list.isLoading}
         />
         <KpiCard
-          title="Jami birlik"
-          context="Omborda"
+          title={t('inventory.totalUnits')}
+          context={t('inventory.totalUnitsHint')}
           value={String(summary?.totalUnits ?? 0)}
           icon={Boxes}
           tone="info"
           isLoading={list.isLoading}
         />
         <KpiCard
-          title="Kam qolgan"
-          context="Minimaldan past"
+          title={t('inventory.lowStock')}
+          context={t('inventory.lowStockHint')}
           value={String(summary?.lowStockCount ?? 0)}
           icon={AlertTriangle}
           tone="warning"
           isLoading={list.isLoading}
         />
         <KpiCard
-          title="Tugagan"
-          context="0 dona"
+          title={t('inventory.outOfStock')}
+          context={t('inventory.outOfStockHint')}
           value={String(summary?.outOfStockCount ?? 0)}
           icon={PackageX}
           tone="danger"
@@ -182,13 +182,13 @@ export function InventoryPage() {
         />
       </div>
 
-      <SectionCard title="Qidiruv va filtr">
+      <SectionCard title={t('common.searchAndFilter')}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <label className="relative block min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
             <input
               className={`${fieldClass} pl-9`}
-              placeholder="Nomi yoki SKU"
+              placeholder={t('inventory.searchPlaceholder')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -214,7 +214,7 @@ export function InventoryPage() {
       </SectionCard>
 
       {tab === 'stock' ? (
-        <SectionCard title="Mahsulotlar">
+        <SectionCard title={t('inventory.products')}>
           {list.isLoading ? (
             <div className="space-y-2">
               <Skeleton className="h-12 w-full" />
@@ -222,11 +222,11 @@ export function InventoryPage() {
               <Skeleton className="h-12 w-full" />
             </div>
           ) : list.isError ? (
-            <ErrorState title="Ombor yuklanmadi" message={listErrorMessage(list.error)} />
+            <ErrorState title={t('inventory.loadFailed')} message={listErrorMessage(list.error, t)} />
           ) : items.length === 0 ? (
             <EmptyState
-              title="Mahsulot topilmadi"
-              description="Qidiruv yoki filtrni o‘zgartiring."
+              title={t('inventory.emptyTitle')}
+              description={t('inventory.emptyDescription')}
               icon={Package}
             />
           ) : (
@@ -234,13 +234,13 @@ export function InventoryPage() {
               <table className="min-w-full text-left text-sm">
                 <thead className="border-b border-line text-xs uppercase tracking-wide text-ink-muted">
                   <tr>
-                    <th className="px-2 py-2 font-medium">Mahsulot</th>
-                    <th className="px-2 py-2 font-medium">SKU</th>
-                    <th className="px-2 py-2 font-medium">Zaxira</th>
-                    <th className="px-2 py-2 font-medium">Min</th>
-                    <th className="px-2 py-2 font-medium">Holat</th>
-                    <th className="px-2 py-2 font-medium">Oxirgi</th>
-                    <th className="px-2 py-2 font-medium">Amallar</th>
+                    <th className="px-2 py-2 font-medium">{t('inventory.product')}</th>
+                    <th className="px-2 py-2 font-medium">{t('products.sku')}</th>
+                    <th className="px-2 py-2 font-medium">{t('products.stock')}</th>
+                    <th className="px-2 py-2 font-medium">{t('inventory.min')}</th>
+                    <th className="px-2 py-2 font-medium">{t('common.status')}</th>
+                    <th className="px-2 py-2 font-medium">{t('inventory.last')}</th>
+                    <th className="px-2 py-2 font-medium">{t('common.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -286,7 +286,7 @@ export function InventoryPage() {
                             onClick={() => setAction({ mode: 'in', product: item })}
                           >
                             <PackagePlus className="size-3.5" />
-                            Kirim
+                            {t('inventory.stockIn')}
                           </button>
                           <button
                             type="button"
@@ -294,14 +294,14 @@ export function InventoryPage() {
                             onClick={() => setAction({ mode: 'out', product: item })}
                           >
                             <PackageMinus className="size-3.5" />
-                            Chiqim
+                            {t('inventory.stockOut')}
                           </button>
                           <button
                             type="button"
                             className="inline-flex items-center gap-1 rounded-input border border-line px-2 py-1 text-xs hover:bg-surface-hover"
                             onClick={() => setAction({ mode: 'adjust', product: item })}
                           >
-                            Tuzatish
+                            {t('inventory.adjust')}
                           </button>
                         </div>
                       </td>
@@ -313,15 +313,18 @@ export function InventoryPage() {
           )}
         </SectionCard>
       ) : (
-        <SectionCard title="Zaxira tarixi">
+        <SectionCard title={t('inventory.historyTitle')}>
           {history.isLoading ? (
             <Skeleton className="h-40 w-full" />
           ) : history.isError ? (
-            <ErrorState title="Tarix yuklanmadi" message={listErrorMessage(history.error)} />
+            <ErrorState
+              title={t('inventory.historyLoadFailed')}
+              message={listErrorMessage(history.error, t)}
+            />
           ) : (history.data?.items.length ?? 0) === 0 ? (
             <EmptyState
-              title="Harakat yo‘q"
-              description="Hali zaxira o‘zgarishi qayd etilmagan."
+              title={t('inventory.historyEmptyTitle')}
+              description={t('inventory.historyEmptyDescription')}
               icon={Boxes}
             />
           ) : (
@@ -329,13 +332,13 @@ export function InventoryPage() {
               <table className="min-w-full text-left text-sm">
                 <thead className="border-b border-line text-xs uppercase tracking-wide text-ink-muted">
                   <tr>
-                    <th className="px-2 py-2 font-medium">Sana</th>
-                    <th className="px-2 py-2 font-medium">Mahsulot</th>
-                    <th className="px-2 py-2 font-medium">Harakat</th>
-                    <th className="px-2 py-2 font-medium">Miqdor</th>
-                    <th className="px-2 py-2 font-medium">Oldin → Keyin</th>
-                    <th className="px-2 py-2 font-medium">Sabab</th>
-                    <th className="px-2 py-2 font-medium">Foydalanuvchi</th>
+                    <th className="px-2 py-2 font-medium">{t('common.date')}</th>
+                    <th className="px-2 py-2 font-medium">{t('inventory.product')}</th>
+                    <th className="px-2 py-2 font-medium">{t('inventory.movement')}</th>
+                    <th className="px-2 py-2 font-medium">{t('inventory.qty')}</th>
+                    <th className="px-2 py-2 font-medium">{t('inventory.beforeAfter')}</th>
+                    <th className="px-2 py-2 font-medium">{t('inventory.reason')}</th>
+                    <th className="px-2 py-2 font-medium">{t('inventory.user')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -374,21 +377,23 @@ export function InventoryPage() {
               to={ROUTES.sales}
               className="text-sm font-medium text-brand-700 hover:underline"
             >
-              Sotuvlarga
+              {t('inventory.toSales')}
             </Link>
           }
         >
           <dl className="grid gap-3 sm:grid-cols-3 text-sm">
             <div>
-              <dt className="text-ink-muted">Joriy zaxira</dt>
+              <dt className="text-ink-muted">{t('inventory.currentStock')}</dt>
               <dd className="mt-0.5 font-semibold text-ink">{stockQtyLabel(selected.stockQty)}</dd>
             </div>
             <div>
-              <dt className="text-ink-muted">Minimal</dt>
-              <dd className="mt-0.5 font-semibold text-ink">{selected.minStockQty} dona</dd>
+              <dt className="text-ink-muted">{t('inventory.minimal')}</dt>
+              <dd className="mt-0.5 font-semibold text-ink">
+                {t('inventory.pcsCount', { count: selected.minStockQty })}
+              </dd>
             </div>
             <div>
-              <dt className="text-ink-muted">Holat</dt>
+              <dt className="text-ink-muted">{t('common.status')}</dt>
               <dd className="mt-0.5">
                 <Badge tone={statusTone(selected.stockStatus)}>
                   {stockStatusLabel(selected.stockStatus)}

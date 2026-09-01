@@ -83,7 +83,10 @@ export interface DashboardSalesPoint {
 export interface DashboardRecentSale {
   id: string;
   saleNumber: number;
+  /** When the order was taken (cash-desk / buyurtma sanasi). */
   saleDate: IsoDateString;
+  /** Promised delivery-by date when delivery is required. */
+  deliveryDueDate: IsoDateString | null;
   customerName: string;
   /** The first line, plus a count of the rest: `Corner Sofa "Comfort" +2`. */
   productSummary: string;

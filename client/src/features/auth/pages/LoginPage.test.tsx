@@ -41,10 +41,10 @@ describe('LoginPage', () => {
     renderLoginPage();
 
     expect(screen.getByRole('heading', { name: 'Furniture ERP' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Username or email')).toBeInTheDocument();
-    expect(screen.getByLabelText('Password')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: "Yangi do'kon ochish" })).toHaveAttribute(
+    expect(screen.getByLabelText('Login yoki email')).toBeInTheDocument();
+    expect(screen.getByLabelText('Parol')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Kirish' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Yangi do‘kon ochish' })).toHaveAttribute(
       'href',
       '/register-store',
     );
@@ -55,10 +55,10 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     renderLoginPage();
 
-    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    await user.click(screen.getByRole('button', { name: 'Kirish' }));
 
-    expect(await screen.findByText('Enter your username or email')).toBeInTheDocument();
-    expect(screen.getByText('Enter your password')).toBeInTheDocument();
+    expect(await screen.findByText('Login yoki emailni kiriting')).toBeInTheDocument();
+    expect(screen.getByText('Parolni kiriting')).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -69,9 +69,9 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     renderLoginPage();
 
-    await user.type(screen.getByLabelText('Username or email'), 'admin');
-    await user.type(screen.getByLabelText('Password'), 'Admin123!');
-    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    await user.type(screen.getByLabelText('Login yoki email'), 'admin');
+    await user.type(screen.getByLabelText('Parol'), 'Admin123!');
+    await user.click(screen.getByRole('button', { name: 'Kirish' }));
 
     expect(await screen.findByText('Workspace')).toBeInTheDocument();
 
@@ -97,9 +97,9 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     renderLoginPage();
 
-    await user.type(screen.getByLabelText('Username or email'), 'admin');
-    await user.type(screen.getByLabelText('Password'), 'wrong-password');
-    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    await user.type(screen.getByLabelText('Login yoki email'), 'admin');
+    await user.type(screen.getByLabelText('Parol'), 'wrong-password');
+    await user.click(screen.getByRole('button', { name: 'Kirish' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Incorrect username or password.');
     expect(screen.queryByText('Workspace')).not.toBeInTheDocument();
@@ -113,9 +113,9 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     renderLoginPage();
 
-    await user.type(screen.getByLabelText('Username or email'), 'admin');
-    await user.type(screen.getByLabelText('Password'), 'Admin123!');
-    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    await user.type(screen.getByLabelText('Login yoki email'), 'admin');
+    await user.type(screen.getByLabelText('Parol'), 'Admin123!');
+    await user.click(screen.getByRole('button', { name: 'Kirish' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       "Ma'lumot saqlanmadi. Server bilan bog'lanishda xatolik.",
@@ -127,13 +127,13 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     renderLoginPage();
 
-    const password = screen.getByLabelText('Password');
+    const password = screen.getByLabelText('Parol');
     expect(password).toHaveAttribute('type', 'password');
 
-    await user.click(screen.getByRole('button', { name: 'Show password' }));
+    await user.click(screen.getByRole('button', { name: 'Parolni ko‘rsatish' }));
     expect(password).toHaveAttribute('type', 'text');
 
-    await user.click(screen.getByRole('button', { name: 'Hide password' }));
+    await user.click(screen.getByRole('button', { name: 'Parolni yashirish' }));
     expect(password).toHaveAttribute('type', 'password');
   });
 
@@ -156,12 +156,12 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     renderLoginPage();
 
-    await user.type(screen.getByLabelText('Username or email'), 'admin');
-    await user.type(screen.getByLabelText('Password'), 'Admin123!');
-    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    await user.type(screen.getByLabelText('Login yoki email'), 'admin');
+    await user.type(screen.getByLabelText('Parol'), 'Admin123!');
+    await user.click(screen.getByRole('button', { name: 'Kirish' }));
 
-    expect(await screen.findByRole('button', { name: /Signing in/ })).toBeDisabled();
-    expect(screen.getByLabelText('Username or email')).toBeDisabled();
+    expect(await screen.findByRole('button', { name: /Yuklanmoqda/ })).toBeDisabled();
+    expect(screen.getByLabelText('Login yoki email')).toBeDisabled();
 
     releaseLogin?.();
     await waitFor(() => expect(screen.getByText('Workspace')).toBeInTheDocument());

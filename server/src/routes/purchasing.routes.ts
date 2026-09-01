@@ -11,6 +11,7 @@ import {
   listPurchases,
   listSuppliers,
   restoreSupplier,
+  updatePurchaseDelivery,
   updateSupplier,
 } from '../controllers/purchasing.controller.js';
 import { requireAuth } from '../middleware/require-auth.js';
@@ -23,6 +24,7 @@ import {
   createSupplierPaymentBodySchema,
   purchaseListQuerySchema,
   supplierListQuerySchema,
+  updatePurchaseDeliveryBodySchema,
   updateSupplierBodySchema,
 } from '../validators/purchasing.validators.js';
 
@@ -51,6 +53,11 @@ suppliersRouter.post('/:id/restore', validate({ params: idParamsSchema }), resto
 purchasesRouter.get('/', validate({ query: purchaseListQuerySchema }), listPurchases);
 purchasesRouter.post('/', validate({ body: createPurchaseBodySchema }), createPurchase);
 purchasesRouter.get('/:id', validate({ params: idParamsSchema }), getPurchase);
+purchasesRouter.patch(
+  '/:id',
+  validate({ params: idParamsSchema, body: updatePurchaseDeliveryBodySchema }),
+  updatePurchaseDelivery,
+);
 purchasesRouter.post(
   '/:id/payments',
   validate({ params: idParamsSchema, body: createSupplierPaymentBodySchema }),

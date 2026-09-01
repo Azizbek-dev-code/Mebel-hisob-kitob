@@ -200,6 +200,54 @@ export async function restoreProduct(
   return updated;
 }
 
+/**
+ * Hard-delete an archived product. Sale history keeps name snapshots;
+ * purchase history still referencing the product blocks deletion.
+ */
+export async function deleteProduct(
+  storeId: string,
+  actorRole: string,
+  productId: string,
+  actorUserId?: string | null,
+): Promise<void> {
+  assertCanManageCatalogue(actorRole);
+
+  const existing = await catalogueRepository.findProductInStore(storeId, productId);
+  if (!existing) throw ApiError.notFound('Product not found');
+
+  if (existing.status !== ProductStatus.ARCHIVED) {
+    throw ApiError.conflict('Faqat arxivlangan mebelni butunlay o‘chirish mumkin. Avval arxivlang.');
+  }
+
+  const purchaseCount = await catalogueRepository.countProductPurchaseItems(storeId, productId);
+  if (purchaseCount > 0) {
+    throw ApiError.conflict(
+      'Bu mebel yetkazib berish (kirim) hujjatlarida ishlatilgan — butunlay o‘chirib bo‘lmaydi.',
+    );
+  }
+
+  const deleted = await catalogueRepository.deleteProductPermanent(storeId, productId);
+  if (!deleted) throw ApiError.notFound('Product not found');
+
+  if (deleted.imageKey) {
+    try {
+      const storage = getStorageDriver();
+      await storage.delete(deleted.imageKey);
+    } catch {
+      // Image cleanup is best-effort; the catalogue row is already gone.
+    }
+  }
+
+  await recordAudit({
+    storeId,
+    actorUserId: actorUserId ?? null,
+    eventType: AuditEventType.PRODUCT_DELETED,
+    entityType: AuditEntityType.PRODUCT,
+    entityId: deleted.id,
+    summary: `Product permanently deleted: ${deleted.name}`,
+  });
+}
+
 export async function uploadProductImage(
   storeId: string,
   actorRole: string,

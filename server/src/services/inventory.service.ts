@@ -388,8 +388,11 @@ export async function restoreStockForCancelledSale(
     saleNumber: number;
     actorId: string;
     items: Array<{ productId: string | null; productName: string; quantity: number }>;
+    /** Defaults to cancelled-sale wording; override for edit/replace flows. */
+    reason?: string;
   },
 ): Promise<void> {
+  const reason = options.reason ?? `Sale #${options.saleNumber} cancelled`;
   for (const item of options.items) {
     if (!item.productId) continue;
 
@@ -407,7 +410,7 @@ export async function restoreStockForCancelledSale(
         movementType: StockMovementType.SALE_CANCEL,
         referenceType: StockReferenceType.SALE,
         referenceId: options.saleId,
-        reason: `Sale #${options.saleNumber} cancelled`,
+        reason,
         createdById: options.actorId,
         productNameForError: item.productName || product.name,
       });

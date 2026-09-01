@@ -235,6 +235,8 @@ export interface PreviewSaleRow {
   saleDate: Date;
   totalSalePrice: bigint;
   grossProfit: bigint;
+  /** Stored net after sale-attributable costs — display only, never the seller % base. */
+  netProfit: bigint;
   productNames: string[];
 }
 
@@ -259,6 +261,7 @@ export async function listSellerSalesForPreview(
       saleDate: true,
       totalSalePrice: true,
       grossProfit: true,
+      netProfit: true,
       items: { select: { productName: true }, take: 3 },
     },
     orderBy: [{ saleDate: 'asc' }, { saleNumber: 'asc' }],
@@ -270,6 +273,7 @@ export async function listSellerSalesForPreview(
     saleDate: row.saleDate,
     totalSalePrice: row.totalSalePrice,
     grossProfit: row.grossProfit,
+    netProfit: row.netProfit,
     productNames: row.items.map((item) => item.productName),
   }));
 }
@@ -280,6 +284,8 @@ export interface PreviewAssemblyRow {
   completedAt: Date;
   saleNumber: number;
   productNames: string[];
+  /** When > 0, operational usta fee is posted on complete — skip FIXED_PER_ASSEMBLY. */
+  installationCost: bigint;
 }
 
 /** Completed assembly tasks assigned to the worker with completedAt in range. */
@@ -304,6 +310,7 @@ export async function listAssembliesForPreview(
       sale: {
         select: {
           saleNumber: true,
+          installationCost: true,
           items: { select: { productName: true }, take: 3 },
         },
       },
@@ -319,6 +326,7 @@ export async function listAssembliesForPreview(
       completedAt: row.completedAt,
       saleNumber: row.sale.saleNumber,
       productNames: row.sale.items.map((item) => item.productName),
+      installationCost: row.sale.installationCost,
     }));
 }
 
@@ -327,6 +335,8 @@ export interface PreviewDeliveryRow {
   saleNumber: number;
   deliveryDate: Date;
   productNames: string[];
+  /** When > 0, operational shopir fee is posted on complete — skip FIXED_PER_DELIVERY. */
+  deliveryCost: bigint;
 }
 
 /**
@@ -360,6 +370,7 @@ export async function listDeliveriesForPreview(
       saleNumber: true,
       deliveryDate: true,
       saleDate: true,
+      deliveryCost: true,
       items: { select: { productName: true }, take: 3 },
     },
     orderBy: [{ deliveryDate: 'asc' }, { saleNumber: 'asc' }],
@@ -370,6 +381,7 @@ export async function listDeliveriesForPreview(
     saleNumber: row.saleNumber,
     deliveryDate: row.deliveryDate ?? row.saleDate,
     productNames: row.items.map((item) => item.productName),
+    deliveryCost: row.deliveryCost,
   }));
 }
 
@@ -378,11 +390,14 @@ export interface PreviewInstallationRow {
   saleNumber: number;
   installationDate: Date;
   productNames: string[];
+  /** @deprecated Prefer installerFee for operational skip. */
+  installationCost: bigint;
+  /** When > 0, operational installer fee is posted on complete — skip FIXED_PER_INSTALLATION. */
+  installerFee: bigint;
 }
 
 /**
  * Completed installations where the worker is installerId.
- * Note: installerId is also used for assembly assignment in this product —
  * FIXED_PER_INSTALLATION uses sale.installationStatus, not AssemblyTask.
  */
 export async function listInstallationsForPreview(
@@ -411,6 +426,8 @@ export async function listInstallationsForPreview(
       saleNumber: true,
       installationDate: true,
       saleDate: true,
+      installationCost: true,
+      installerFee: true,
       items: { select: { productName: true }, take: 3 },
     },
     orderBy: [{ saleDate: 'asc' }, { saleNumber: 'asc' }],
@@ -421,6 +438,8 @@ export async function listInstallationsForPreview(
     saleNumber: row.saleNumber,
     installationDate: row.installationDate ?? row.saleDate,
     productNames: row.items.map((item) => item.productName),
+    installationCost: row.installationCost,
+    installerFee: row.installerFee,
   }));
 }
 
@@ -432,6 +451,9 @@ export interface PreviewManualCompensationRow {
   workerId: string;
   role: 'SELLER' | 'ASSEMBLER' | 'DASTAFCHI' | 'SHOPIR';
   amount: bigint;
+  installationCost: bigint;
+  deliveryCost: bigint;
+  installerFee: bigint;
 }
 
 /**
@@ -464,6 +486,9 @@ export async function listManualCompensationsForPreview(
         select: {
           saleNumber: true,
           saleDate: true,
+          installationCost: true,
+          deliveryCost: true,
+          installerFee: true,
         },
       },
     },
@@ -478,6 +503,9 @@ export async function listManualCompensationsForPreview(
     workerId: row.workerId,
     role: row.role,
     amount: row.amount,
+    installationCost: row.sale.installationCost,
+    deliveryCost: row.sale.deliveryCost,
+    installerFee: row.sale.installerFee,
   }));
 }
 

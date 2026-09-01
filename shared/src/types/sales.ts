@@ -128,6 +128,8 @@ export interface SaleListItem {
   paymentType: PaymentType;
   assemblyStatus: AssemblyTaskStatus | null;
   deliveryStatus: FulfilmentStatus;
+  /** Promised delivery-by date when delivery is required. */
+  deliveryDueDate: IsoDateString | null;
   installationStatus: FulfilmentStatus;
   cancelledAt: IsoDateString | null;
 }
@@ -140,6 +142,8 @@ export interface SaleDetail extends SaleListItem {
   sellerBonus: Money;
   /** Persisted Usta haqqi (also exposed as `assemblerFee`). */
   installationCost: Money;
+  /** Persisted Installer / o'rnatish haqqi (distinct from usta). */
+  installerFee: Money;
   /** Persisted Shopir haqqi (also exposed as `driverFee`). */
   deliveryCost: Money;
   /** Alias of `installationCost` — prefer in new UI. */
@@ -152,6 +156,7 @@ export interface SaleDetail extends SaleListItem {
   /**
    * Read-only estimate from the seller's active WorkerCompensationRule
    * (PERCENT_OF_SALE / PERCENT_OF_GROSS_PROFIT / FIXED_PER_SALE). Not stored.
+   * PERCENT_OF_GROSS_PROFIT is always `max(0, grossProfit) × rate` (sale − cost).
    */
   sellerCommissionEstimate: Money;
   /** e.g. "10%" or null when no active rule ("qoida yo'q"). */
@@ -159,7 +164,10 @@ export interface SaleDetail extends SaleListItem {
   items: SaleItemDto[];
   payments: PaymentDto[];
   installmentPlan: InstallmentPlanDto | null;
+  /** Assembly / Usta worker (prefer AssemblyTask assignee). */
   assembler: SaleWorkerSummary | null;
+  /** Installation / O‘rnatuvchi worker (`Sale.installerId`). */
+  installationWorker: SaleWorkerSummary | null;
   deliveryPerson: SaleWorkerSummary | null;
   createdBy: SaleWorkerSummary | null;
   cancelledBy: SaleWorkerSummary | null;
@@ -168,6 +176,7 @@ export interface SaleDetail extends SaleListItem {
   activeAssemblyTask: AssemblyTaskDto | null;
   installationDate: IsoDateString | null;
   installationNotes: string | null;
+  /** Actual delivery completion date. */
   deliveryDate: IsoDateString | null;
   deliveryAddress: string | null;
   deliveryNotes: string | null;
@@ -225,11 +234,18 @@ export interface CreateSaleRequest {
   deliveryCost?: Money;
   /** Usta haqqi → `installationCost`. */
   assemblerFee?: Money;
+  /** Installer / o'rnatish haqqi → `installerFee`. */
+  installerFee?: Money;
   /** Shopir haqqi → `deliveryCost`. */
   driverFee?: Money;
   otherCosts?: Money;
   /** Worker who will assemble the furniture. Creates an AssemblyTask. */
   assemblerId?: string;
+  /**
+   * Worker who installs (may differ from assembler). Stored as Sale.installerId.
+   * Defaults to assemblerId when omitted.
+   */
+  installationWorkerId?: string;
   assemblyDeadline?: IsoDateString;
   assemblyNotes?: string;
   installationRequired?: boolean;
@@ -237,6 +253,8 @@ export interface CreateSaleRequest {
   installationNotes?: string;
   deliveryRequired?: boolean;
   deliveryPersonId?: string;
+  /** Promised delivery-by date (required in UI when delivery is on). */
+  deliveryDueDate?: IsoDateString;
   deliveryDate?: IsoDateString;
   deliveryAddress?: string;
   deliveryNotes?: string;
@@ -248,6 +266,13 @@ export interface CreateSaleRequest {
 export interface UpdateSaleRequest {
   saleDate?: IsoDateString;
   sellerId?: string | null;
+  /** Replace the customer (must belong to the same store). */
+  customerId?: string;
+  /**
+   * When present, replaces every sale line (stock is restored then re-deducted).
+   * Deposit / payment history is preserved; totals and remaining are recalculated.
+   */
+  items?: SaleLineInputDto[];
   discountAmount?: Money;
   sellerBonus?: Money;
   /** Legacy name for Usta haqqi — prefer `assemblerFee`. */
@@ -256,10 +281,14 @@ export interface UpdateSaleRequest {
   deliveryCost?: Money;
   /** Usta haqqi → `installationCost`. Admin-only on update. */
   assemblerFee?: Money;
+  /** Installer haqqi. Admin-only on update. */
+  installerFee?: Money;
   /** Shopir haqqi → `deliveryCost`. Admin-only on update. */
   driverFee?: Money;
   otherCosts?: Money;
   assemblerId?: string | null;
+  /** Installation worker (Sale.installerId). Null clears. */
+  installationWorkerId?: string | null;
   assemblyDeadline?: IsoDateString | null;
   assemblyNotes?: string | null;
   installationRequired?: boolean;
@@ -269,6 +298,7 @@ export interface UpdateSaleRequest {
   deliveryRequired?: boolean;
   deliveryStatus?: FulfilmentStatus;
   deliveryPersonId?: string | null;
+  deliveryDueDate?: IsoDateString | null;
   deliveryDate?: IsoDateString | null;
   deliveryAddress?: string | null;
   deliveryNotes?: string | null;

@@ -13,6 +13,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { formatMoney, formatPercentDelta } from '@/utils/format';
 
@@ -40,9 +41,10 @@ export interface FinancialKpiGridProps {
 }
 
 function ComparisonFootnote({ change }: { change?: MetricChange | null }): ReactNode {
+  const { t } = useTranslation();
   if (!change) return null;
   if (change.changePercent === null) {
-    return <span>Taqqoslash mavjud emas</span>;
+    return <span>{t('dashboard.noComparison')}</span>;
   }
 
   const positive = change.changePercent > 0;
@@ -55,7 +57,7 @@ function ComparisonFootnote({ change }: { change?: MetricChange | null }): React
       <Icon className="size-3.5 shrink-0" aria-hidden="true" />
       <span>
         {formatPercentDelta(change.changePercent)}
-        <span className="text-ink-muted"> oldingi davrga nisbatan</span>
+        <span className="text-ink-muted">{t('dashboard.vsPrevious')}</span>
       </span>
     </span>
   );
@@ -88,11 +90,13 @@ export function FinancialKpiGrid({
   changes,
   isLoading,
 }: FinancialKpiGridProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <KpiCard
-          title="Sotuv"
+          title={t('sales.totalSale')}
           context={periodLabel}
           value={moneyValue(revenue, isLoading)}
           icon={ShoppingBag}
@@ -102,7 +106,7 @@ export function FinancialKpiGrid({
           footnote={<ComparisonFootnote change={changes?.revenue} />}
         />
         <KpiCard
-          title="Tannarx"
+          title={t('dashboard.cogs')}
           context={periodLabel}
           value={moneyValue(costOfGoodsSold, isLoading)}
           icon={Package}
@@ -112,7 +116,7 @@ export function FinancialKpiGrid({
           footnote={<ComparisonFootnote change={changes?.costOfGoodsSold} />}
         />
         <KpiCard
-          title="Yalpi foyda"
+          title={t('dashboard.grossProfit')}
           context={periodLabel}
           value={moneyValue(grossProfit, isLoading)}
           icon={(grossProfit ?? 0) < 0 ? TrendingDown : TrendingUp}
@@ -122,14 +126,14 @@ export function FinancialKpiGrid({
           footnote={
             <>
               {(grossProfit ?? 0) < 0 ? (
-                <span className="block text-danger-700">Zararli yalpi foyda</span>
+                <span className="block text-danger-700">{t('dashboard.negativeGross')}</span>
               ) : null}
               <ComparisonFootnote change={changes?.grossProfit} />
             </>
           }
         />
         <KpiCard
-          title="Xarajatlar"
+          title={t('dashboard.expenses')}
           context={periodLabel}
           value={moneyValue(operatingExpenses, isLoading)}
           icon={Receipt}
@@ -139,7 +143,7 @@ export function FinancialKpiGrid({
           footnote={<ComparisonFootnote change={changes?.operatingExpenses} />}
         />
         <KpiCard
-          title="Sof foyda"
+          title={t('dashboard.netProfit')}
           context={periodLabel}
           value={moneyValue(netProfit, isLoading)}
           icon={(netProfit ?? 0) < 0 ? TrendingDown : HandCoins}
@@ -149,7 +153,7 @@ export function FinancialKpiGrid({
           footnote={
             <>
               {(netProfit ?? 0) < 0 ? (
-                <span className="block text-danger-700">Davr zarari</span>
+                <span className="block text-danger-700">{t('dashboard.periodLoss')}</span>
               ) : null}
               <ComparisonFootnote change={changes?.netProfit} />
             </>
@@ -159,7 +163,7 @@ export function FinancialKpiGrid({
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <KpiCard
-          title="Tushgan pul"
+          title={t('dashboard.cashCollected')}
           context={periodLabel}
           value={moneyValue(cashCollected, isLoading)}
           icon={Wallet}
@@ -169,28 +173,24 @@ export function FinancialKpiGrid({
           footnote={<ComparisonFootnote change={changes?.cashCollected} />}
         />
         <KpiCard
-          title="Davr qarzdorligi"
+          title={t('dashboard.periodDebt')}
           context={periodLabel}
           value={moneyValue(remainingReceivables, isLoading)}
           icon={CircleDollarSign}
           tone={(remainingReceivables ?? 0) > 0 ? 'danger' : 'success'}
           isLoading={isLoading}
           isEmpty={!isLoading && (remainingReceivables ?? 0) === 0}
-          footnote={
-            <span title="Tanlangan davrda sotilgan mahsulotlardan qolgan qarzdorlik.">
-              Sotuvlardan qolgan qarz
-            </span>
-          }
+          footnote={<span>{t('dashboard.periodDebtHint')}</span>}
         />
         <KpiCard
-          title="Xarajatlar soni"
+          title={t('dashboard.expenseCount')}
           context={periodLabel}
           value={isLoading ? '—' : String(expenseCount ?? 0)}
           icon={Receipt}
           tone="brand"
           isLoading={isLoading}
           isEmpty={!isLoading && (expenseCount ?? 0) === 0}
-          footnote={isLoading ? undefined : 'Tanlangan davrdagi xarajat yozuvlari'}
+          footnote={isLoading ? undefined : t('dashboard.expenseCountHint')}
         />
       </div>
     </div>

@@ -6,6 +6,7 @@ import type {
   CreateSupplierRequest,
   PurchaseListQuery,
   SupplierListQuery,
+  UpdatePurchaseDeliveryRequest,
   UpdateSupplierRequest,
 } from '@furniture-erp/shared';
 
@@ -136,6 +137,20 @@ export function useCreatePurchase() {
       invalidateStockSurfaces(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       void queryClient.invalidateQueries({ queryKey: ['reports'] });
+    },
+  });
+}
+
+export function useUpdatePurchaseDelivery(purchaseId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: UpdatePurchaseDeliveryRequest) =>
+      purchasingService.updatePurchaseDelivery(purchaseId, body),
+    onSuccess: () => {
+      invalidatePurchases(queryClient);
+      void queryClient.invalidateQueries({
+        queryKey: purchasingKeys.purchaseDetail(purchaseId),
+      });
     },
   });
 }

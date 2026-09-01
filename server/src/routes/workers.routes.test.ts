@@ -4,8 +4,10 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApp } from '../app.js';
+import { ApiError } from '../utils/api-error.js';
 
-const { prismaMock, workerServiceMock } = vi.hoisted(() => ({
+const { prismaMock, workerServiceMock, profileModulesServiceMock, sellerCommissionServiceMock } =
+  vi.hoisted(() => ({
   prismaMock: {
     user: { findFirst: vi.fn(), update: vi.fn() },
   },
@@ -23,6 +25,14 @@ const { prismaMock, workerServiceMock } = vi.hoisted(() => ({
     listMySales: vi.fn(),
     listMyActivity: vi.fn(),
   },
+  profileModulesServiceMock: {
+    getWorkerProfileModules: vi.fn(),
+    getMyProfileModules: vi.fn(),
+    getStoreFeeReconciliation: vi.fn(),
+  },
+  sellerCommissionServiceMock: {
+    getSellerReport: vi.fn(),
+  },
 }));
 
 vi.mock('../lib/prisma.js', () => ({
@@ -32,6 +42,8 @@ vi.mock('../lib/prisma.js', () => ({
 }));
 
 vi.mock('../services/worker.service.js', () => workerServiceMock);
+vi.mock('../services/worker-profile-modules.service.js', () => profileModulesServiceMock);
+vi.mock('../services/seller-commission.service.js', () => sellerCommissionServiceMock);
 
 const app = createApp();
 const PASSWORD = 'Admin123!';
@@ -159,5 +171,75 @@ describe('workers routes', () => {
       'user_ali',
       expect.any(Object),
     );
+  });
+
+  it('returns profile-modules with success envelope (res passed to sendSuccess)', async () => {
+    profileModulesServiceMock.getMyProfileModules.mockResolvedValue({
+      tabs: ['GENERAL', 'SELLER'],
+      worker: { id: 'user_ali', responsibilities: ['SELLER'] },
+      general: { finance: { earned: 0, paid: 0, outstanding: 0 }, breakdown: [] },
+      seller: { salesToday: 0 },
+      assembler: null,
+      delivery: null,
+      installer: null,
+      smm: null,
+      other: null,
+      ledgerSummary: {},
+    });
+
+    const agent = await signedInAs(EMPLOYEE_RECORD);
+    const res = await agent.get('/api/me/profile-modules').expect(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.modules.tabs).toEqual(['GENERAL', 'SELLER']);
+  });
+
+  it('returns worker profile-modules for admin', async () => {
+    profileModulesServiceMock.getWorkerProfileModules.mockResolvedValue({
+      tabs: ['GENERAL', 'ASSEMBLER'],
+      worker: { id: 'user_ali', responsibilities: ['ASSEMBLER'] },
+      general: { finance: { earned: 0, paid: 0, outstanding: 0 }, breakdown: [] },
+      seller: null,
+      assembler: { pending: 0 },
+      delivery: null,
+      installer: null,
+      smm: null,
+      other: null,
+      ledgerSummary: {},
+    });
+
+    const agent = await signedInAs(ADMIN_RECORD);
+    const res = await agent.get('/api/workers/cmt0000000000000000000001/profile-modules').expect(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.modules.tabs).toContain('ASSEMBLER');
+  });
+
+  it('forbids a seller from reading another worker seller-report', async () => {
+    sellerCommissionServiceMock.getSellerReport.mockRejectedValue(
+      ApiError.forbidden('Only store administrators can view another worker seller report'),
+    );
+    const agent = await signedInAs(EMPLOYEE_RECORD);
+    await agent.get('/api/workers/cmt0000000000000000000001/seller-report').expect(403);
+  });
+
+  it('returns seller-report for store admin', async () => {
+    sellerCommissionServiceMock.getSellerReport.mockResolvedValue({
+      worker: { id: 'cmt0000000000000000000001', fullName: 'Seller' },
+      period: { from: '2026-08-01', to: '2026-08-31', preset: 'THIS_MONTH' },
+      summary: {
+        salesCount: 2,
+        salesAmount: 18_000_000,
+        netProfit: 4_000_000,
+        estimatedCommission: 600_000,
+        earned: 600_000,
+        bonus: 0,
+        paid: 0,
+        outstanding: 600_000,
+      },
+      sales: [],
+      payments: [],
+    });
+    const agent = await signedInAs(ADMIN_RECORD);
+    const res = await agent.get('/api/workers/cmt0000000000000000000001/seller-report').expect(200);
+    expect(res.body.data.report.summary.earned).toBe(600_000);
   });
 });

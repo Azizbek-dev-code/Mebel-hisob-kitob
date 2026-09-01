@@ -1,5 +1,7 @@
 import {
+  STORE_RESET_CONFIRMATION,
   STORE_TIMEZONE_OPTIONS,
+  type ResetStoreRequest,
   type UpdateStoreProfileRequest,
 } from '@furniture-erp/shared';
 import { z } from 'zod';
@@ -21,3 +23,13 @@ export const updateStoreProfileBodySchema = z
   ) satisfies z.ZodType<UpdateStoreProfileRequest>;
 
 export type UpdateStoreProfileBody = z.infer<typeof updateStoreProfileBodySchema>;
+
+export const resetStoreBodySchema = z.object({
+  confirmation: z
+    .string()
+    .refine((value) => value === STORE_RESET_CONFIRMATION, {
+      message: `Type ${STORE_RESET_CONFIRMATION} exactly to confirm`,
+    }),
+}) satisfies z.ZodType<ResetStoreRequest>;
+
+export type ResetStoreBody = z.infer<typeof resetStoreBodySchema>;

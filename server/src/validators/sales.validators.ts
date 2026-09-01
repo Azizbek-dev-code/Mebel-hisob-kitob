@@ -72,6 +72,7 @@ export const createSaleBodySchema = z
     installmentFirstDueDate: flexibleDateSchema.optional(),
     sellerBonus: optionalMoneySchema,
     installationCost: optionalMoneySchema,
+    installerFee: optionalMoneySchema,
     deliveryCost: optionalMoneySchema,
     /** Alias → installationCost (Usta haqqi). */
     assemblerFee: optionalMoneySchema,
@@ -79,6 +80,8 @@ export const createSaleBodySchema = z
     driverFee: optionalMoneySchema,
     otherCosts: optionalMoneySchema,
     assemblerId: cuidSchema.optional(),
+    /** Installation worker → Sale.installerId (may differ from assembler). */
+    installationWorkerId: cuidSchema.optional(),
     assemblyDeadline: flexibleDateSchema.optional(),
     assemblyNotes: z.string().trim().max(1000).optional(),
     installationRequired: z.boolean().optional(),
@@ -86,6 +89,7 @@ export const createSaleBodySchema = z
     installationNotes: z.string().trim().max(1000).optional(),
     deliveryRequired: z.boolean().optional(),
     deliveryPersonId: cuidSchema.optional(),
+    deliveryDueDate: flexibleDateSchema.optional(),
     deliveryDate: flexibleDateSchema.optional(),
     deliveryAddress: z.string().trim().max(300).optional(),
     deliveryNotes: z.string().trim().max(1000).optional(),
@@ -121,9 +125,12 @@ export const createSaleBodySchema = z
 export const updateSaleBodySchema = z.object({
   saleDate: flexibleDateSchema.optional(),
   sellerId: cuidSchema.nullable().optional(),
+  customerId: cuidSchema.optional(),
+  items: z.array(saleLineSchema).min(1).optional(),
   discountAmount: optionalMoneySchema,
   sellerBonus: optionalMoneySchema,
   installationCost: optionalMoneySchema,
+  installerFee: optionalMoneySchema,
   deliveryCost: optionalMoneySchema,
   /** Alias → installationCost (Usta haqqi). Admin-only on update. */
   assemblerFee: optionalMoneySchema,
@@ -131,6 +138,7 @@ export const updateSaleBodySchema = z.object({
   driverFee: optionalMoneySchema,
   otherCosts: optionalMoneySchema,
   assemblerId: cuidSchema.nullable().optional(),
+  installationWorkerId: cuidSchema.nullable().optional(),
   assemblyDeadline: flexibleDateSchema.nullable().optional(),
   assemblyNotes: z.string().trim().max(1000).nullable().optional(),
   installationRequired: z.boolean().optional(),
@@ -140,6 +148,7 @@ export const updateSaleBodySchema = z.object({
   deliveryRequired: z.boolean().optional(),
   deliveryStatus: z.nativeEnum(FulfilmentStatus).optional(),
   deliveryPersonId: cuidSchema.nullable().optional(),
+  deliveryDueDate: flexibleDateSchema.nullable().optional(),
   deliveryDate: flexibleDateSchema.nullable().optional(),
   deliveryAddress: z.string().trim().max(300).nullable().optional(),
   deliveryNotes: z.string().trim().max(1000).nullable().optional(),
@@ -164,6 +173,10 @@ export const assignAssemblyBodySchema = z.object({
 export const updateAssemblyTaskBodySchema = z.object({
   status: z.nativeEnum(AssemblyTaskStatus),
   notes: z.string().trim().max(1000).optional(),
+});
+
+export const updateSaleDeliveryStatusBodySchema = z.object({
+  status: z.enum([FulfilmentStatus.IN_TRANSIT, FulfilmentStatus.COMPLETED]),
 });
 
 export const saleListQuerySchema = paginationQuerySchema.extend({
@@ -197,6 +210,7 @@ export type UpdateSaleBody = z.infer<typeof updateSaleBodySchema>;
 export type AddPaymentBody = z.infer<typeof addPaymentBodySchema>;
 export type AssignAssemblyBody = z.infer<typeof assignAssemblyBodySchema>;
 export type UpdateAssemblyTaskBody = z.infer<typeof updateAssemblyTaskBodySchema>;
+export type UpdateSaleDeliveryStatusBody = z.infer<typeof updateSaleDeliveryStatusBodySchema>;
 export type CancelSaleBody = z.infer<typeof cancelSaleBodySchema>;
 export type SaleListQuery = z.infer<typeof saleListQuerySchema>;
 export type LookupQuery = z.infer<typeof lookupQuerySchema>;

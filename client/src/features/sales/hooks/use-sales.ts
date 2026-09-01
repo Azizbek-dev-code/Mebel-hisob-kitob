@@ -5,6 +5,7 @@ import type {
   CreateSaleRequest,
   SaleListQuery,
   UpdateAssemblyTaskRequest,
+  UpdateSaleDeliveryStatusRequest,
   UpdateSaleRequest,
   WorkerResponsibility,
 } from '@furniture-erp/shared';
@@ -28,6 +29,7 @@ export const salesKeys = {
   list: (params: SaleListQuery) => [...salesKeys.all, 'list', params] as const,
   detail: (id: string) => [...salesKeys.all, 'detail', id] as const,
   assemblyMine: (status?: string) => ['assembly-tasks', 'mine', status ?? 'all'] as const,
+  deliveriesMine: ['deliveries', 'mine'] as const,
   customers: (q: string) => ['lookups', 'customers', q] as const,
   products: (q: string) => ['lookups', 'products', q] as const,
   workers: (q: string, responsibility?: WorkerResponsibility) =>
@@ -51,6 +53,8 @@ export async function invalidateAfterSaleMutation(
     queryClient.invalidateQueries({ queryKey: financialSummaryQueryKeys.all }),
     queryClient.invalidateQueries({ queryKey: ['reports'] }),
     queryClient.invalidateQueries({ queryKey: ['worker-compensation'] }),
+    // Shopir / usta fees land on the worker ledger + attributed-fees panels.
+    queryClient.invalidateQueries({ queryKey: ['workers'] }),
   ];
 
   if (options.saleId) {
@@ -120,12 +124,29 @@ export function useCancelSale(saleId: string) {
   });
 }
 
+export function useDeleteCancelledSale() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (saleId: string) => salesService.deletePermanent(saleId),
+    onSuccess: async (_data, saleId) => {
+      await invalidateAfterSaleMutation(queryClient, {
+        saleId,
+        stockChanged: false,
+      });
+      queryClient.removeQueries({ queryKey: salesKeys.detail(saleId) });
+    },
+  });
+}
+
 export function useUpdateSale(saleId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: UpdateSaleRequest) => salesService.update(saleId, body),
-    onSuccess: async () => {
-      await invalidateAfterSaleMutation(queryClient, { saleId });
+    onSuccess: async (_data, body) => {
+      await invalidateAfterSaleMutation(queryClient, {
+        saleId,
+        stockChanged: body.items !== undefined,
+      });
     },
   });
 }
@@ -151,6 +172,37 @@ export function useUpdateAssemblyTask() {
         queryClient.invalidateQueries({ queryKey: ['assembly-tasks'] }),
         queryClient.invalidateQueries({ queryKey: salesKeys.detail(result.sale.id) }),
         queryClient.invalidateQueries({ queryKey: salesKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ['me'] }),
+        queryClient.invalidateQueries({ queryKey: ['worker-compensation'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+      ]);
+    },
+  });
+}
+
+export function useMyDeliveries() {
+  return useQuery({
+    queryKey: salesKeys.deliveriesMine,
+    queryFn: ({ signal }) => salesService.myDeliveries(signal),
+  });
+}
+
+export function useUpdateSaleDeliveryStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      saleId,
+      body,
+    }: {
+      saleId: string;
+      body: UpdateSaleDeliveryStatusRequest;
+    }) => salesService.updateDeliveryStatus(saleId, body),
+    onSuccess: async (result) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['deliveries'] }),
+        queryClient.invalidateQueries({ queryKey: salesKeys.all }),
+        queryClient.invalidateQueries({ queryKey: salesKeys.detail(result.sale.id) }),
+        queryClient.invalidateQueries({ queryKey: ['workers'] }),
         queryClient.invalidateQueries({ queryKey: ['me'] }),
         queryClient.invalidateQueries({ queryKey: ['worker-compensation'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard'] }),

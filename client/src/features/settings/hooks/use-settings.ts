@@ -1,4 +1,4 @@
-import type { AuthUser, UpdateStoreProfileRequest } from '@furniture-erp/shared';
+import type { AuthUser, ResetStoreRequest, UpdateStoreProfileRequest } from '@furniture-erp/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { authQueryKeys } from '@/features/auth/hooks/use-auth';
@@ -29,6 +29,17 @@ export function useUpdateStoreSettings() {
         if (!prev || prev.storeId !== store.id || prev.storeName === store.name) return prev;
         return { ...prev, storeName: store.name };
       });
+    },
+  });
+}
+
+export function useResetStore() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (body: ResetStoreRequest) => settingsService.resetStore(body),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries();
     },
   });
 }

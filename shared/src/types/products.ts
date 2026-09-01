@@ -91,8 +91,10 @@ export interface ProductListResponse {
 
 export interface CreateProductRequest {
   name: string;
-  costPrice: Money;
+  /** Optional — omit or 0 when unknown; can be filled in later via edit. */
+  costPrice?: Money;
   defaultSalePrice: Money;
+  /** Optional — server assigns a unique store SKU when omitted. */
   sku?: string | null;
   categoryId?: string | null;
   description?: string | null;

@@ -9,13 +9,21 @@ import type {
   UpdateWorkerResponse,
   WorkerActivityItem,
   WorkerActivityResponse,
+  WorkerAttributedFeesResponse,
+  WorkerAttributedFeesSummary,
   WorkerDetail,
   WorkerDetailResponse,
+  WorkerFeeReconciliation,
+  WorkerFeeReconciliationResponse,
   WorkerListItem,
   WorkerListQuery,
   WorkerListResponse,
+  WorkerProfileModules,
+  WorkerProfileModulesResponse,
   WorkerSaleItem,
   WorkerSalesResponse,
+  SellerReport,
+  SellerReportResponse,
   WorkerStats,
   WorkerStatsResponse,
   WorkerTaskItem,
@@ -94,6 +102,17 @@ export const workersService = {
     return items;
   },
 
+  async attributedFees(
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<WorkerAttributedFeesSummary> {
+    const { fees } = await apiClient.get<WorkerAttributedFeesResponse>(
+      `/workers/${id}/attributed-fees`,
+      { signal },
+    );
+    return fees;
+  },
+
   async myProfile(signal?: AbortSignal): Promise<WorkerDetail> {
     const { worker } = await apiClient.get<MyProfileResponse>('/me/profile', { signal });
     return worker;
@@ -105,15 +124,63 @@ export const workersService = {
   },
 
   async mySales(
-    params: { page?: number; pageSize?: number; search?: string; from?: string; to?: string } = {},
+    params: {
+      page?: number;
+      pageSize?: number;
+      search?: string;
+      from?: string;
+      to?: string;
+      status?: string;
+    } = {},
     signal?: AbortSignal,
   ): Promise<{ items: WorkerSaleItem[]; meta: WorkerSalesResponse['meta'] }> {
     return apiClient.get<WorkerSalesResponse>('/me/sales', { searchParams: params, signal });
   },
 
+  async mySellerReport(
+    params: { preset?: string; from?: string; to?: string } = {},
+    signal?: AbortSignal,
+  ): Promise<SellerReport> {
+    const { report } = await apiClient.get<SellerReportResponse>('/me/seller-report', {
+      searchParams: params,
+      signal,
+    });
+    return report;
+  },
+
   async myActivity(signal?: AbortSignal): Promise<WorkerActivityItem[]> {
     const { items } = await apiClient.get<WorkerActivityResponse>('/me/activity', { signal });
     return items;
+  },
+
+  async myAttributedFees(signal?: AbortSignal): Promise<WorkerAttributedFeesSummary> {
+    const { fees } = await apiClient.get<WorkerAttributedFeesResponse>('/me/attributed-fees', {
+      signal,
+    });
+    return fees;
+  },
+
+  async profileModules(id: string, signal?: AbortSignal): Promise<WorkerProfileModules> {
+    const { modules } = await apiClient.get<WorkerProfileModulesResponse>(
+      `/workers/${id}/profile-modules`,
+      { signal },
+    );
+    return modules;
+  },
+
+  async myProfileModules(signal?: AbortSignal): Promise<WorkerProfileModules> {
+    const { modules } = await apiClient.get<WorkerProfileModulesResponse>('/me/profile-modules', {
+      signal,
+    });
+    return modules;
+  },
+
+  async feeReconciliation(signal?: AbortSignal): Promise<WorkerFeeReconciliation> {
+    const { reconciliation } = await apiClient.get<WorkerFeeReconciliationResponse>(
+      '/workers/fee-reconciliation',
+      { signal },
+    );
+    return reconciliation;
   },
 };
 

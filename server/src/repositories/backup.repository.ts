@@ -317,6 +317,86 @@ export async function restoreStoreData(
   );
 }
 
+export interface ResetStoreDataInput {
+  storeId: string;
+  actorId: string;
+}
+
+export interface ResetStoreDataResult {
+  deletedCounts: Record<string, number>;
+  totalDeletedRows: number;
+  retainedUserId: string;
+}
+
+/**
+ * Factory-reset one store: wipe all business rows while keeping the acting
+ * administrator so the session stays valid. Billing (subscription / invoices),
+ * audit trail, and backup job records are intentionally left untouched.
+ */
+export async function resetStoreData(
+  input: ResetStoreDataInput,
+): Promise<ResetStoreDataResult> {
+  const { storeId, actorId } = input;
+
+  const actor = await prisma.user.findFirst({
+    where: { id: actorId, storeId },
+    select: { id: true },
+  });
+  if (!actor) {
+    throw ApiError.internal('Could not identify the administrator performing the reset');
+  }
+
+  return prisma.$transaction(
+    async (tx) => {
+      const deletedCounts: Record<string, number> = {};
+      let totalDeletedRows = 0;
+
+      for (const model of BACKUP_DELETE_ORDER) {
+        if (model.delegate === 'user' || model.delegate === 'userResponsibility') {
+          continue;
+        }
+        const result = await delegateFor(tx, model).deleteMany({ where: { storeId } });
+        deletedCounts[model.key] = result.count;
+        totalDeletedRows += result.count;
+      }
+
+      const otherUsers = await tx.user.findMany({
+        where: { storeId, id: { not: actorId } },
+        select: { id: true },
+      });
+      const otherIds = otherUsers.map((u) => u.id);
+
+      if (otherIds.length > 0) {
+        const resp = await tx.userResponsibility.deleteMany({
+          where: { storeId, userId: { in: otherIds } },
+        });
+        deletedCounts.userResponsibilities =
+          (deletedCounts.userResponsibilities ?? 0) + resp.count;
+        totalDeletedRows += resp.count;
+
+        const users = await tx.user.deleteMany({
+          where: { storeId, id: { in: otherIds } },
+        });
+        deletedCounts.users = users.count;
+        totalDeletedRows += users.count;
+      } else {
+        deletedCounts.userResponsibilities = deletedCounts.userResponsibilities ?? 0;
+        deletedCounts.users = 0;
+      }
+
+      return {
+        deletedCounts,
+        totalDeletedRows,
+        retainedUserId: actorId,
+      };
+    },
+    {
+      timeout: RESTORE_TRANSACTION_TIMEOUT_MS,
+      maxWait: RESTORE_TRANSACTION_MAX_WAIT_MS,
+    },
+  );
+}
+
 /**
  * Puts the acting administrator back if the backup did not contain them.
  *

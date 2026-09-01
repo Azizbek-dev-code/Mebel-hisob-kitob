@@ -1,6 +1,7 @@
 import type {
   AssemblyTaskStatus,
   SalePaymentStatus,
+  SaleStatus,
   UserRole,
   WorkerActivityType,
   WorkerResponsibility,
@@ -43,6 +44,13 @@ export interface WorkerListItem {
   salesCount: number;
   assemblyTaskCount: number;
   activeTaskCount: number;
+  /** Completed assembly tasks (workforce table). */
+  assemblyCompleted?: number;
+  deliveryCompleted?: number;
+  installationCompleted?: number;
+  earned?: Money;
+  paid?: Money;
+  outstanding?: Money;
 }
 
 export interface WorkerStats {
@@ -81,6 +89,8 @@ export interface WorkerActivityItem {
   createdAt: IsoDateString;
 }
 
+import type { SellerCommissionStatus } from './seller-ops.js';
+
 export interface WorkerSaleItem {
   id: string;
   saleNumber: number;
@@ -88,9 +98,18 @@ export interface WorkerSaleItem {
   customerName: string;
   productSummary: string;
   totalSalePrice: Money;
+  totalCostPrice: Money;
+  grossProfit: Money;
+  netProfit: Money;
   paidAmount: Money;
   remainingAmount: Money;
   paymentStatus: SalePaymentStatus;
+  status: SaleStatus;
+  ruleType: string | null;
+  rateLabel: string | null;
+  estimatedCommission: Money;
+  earnedCommission: Money;
+  commissionStatus: SellerCommissionStatus;
 }
 
 export interface WorkerTaskItem {
@@ -176,4 +195,47 @@ export interface MyProfileResponse {
 
 export interface MyStatsResponse {
   stats: WorkerStats;
+}
+
+/**
+ * Fee amounts posted to the worker ledger from operational documents
+ * and compensation settle. Open COMMISSION rows only (reversals excluded).
+ */
+export type WorkerAttributedFeeKind =
+  | 'SELLER_COMMISSION'
+  | 'SELLER_BONUS'
+  | 'ASSEMBLER_FEE'
+  | 'INSTALLER_FEE'
+  | 'DELIVERY_FEE'
+  | 'PURCHASE_DRIVER_FEE';
+
+export type WorkerAttributedFeeSource = 'SALE' | 'PURCHASE';
+
+export interface WorkerAttributedFeeItem {
+  id: string;
+  kind: WorkerAttributedFeeKind;
+  source: WorkerAttributedFeeSource;
+  amount: Money;
+  /** Event date (saleDate / deliveredAt / purchaseDate). */
+  occurredAt: IsoDateString;
+  /** Sale or purchase id. */
+  referenceId: string;
+  /** Human-readable reference, e.g. sale #42 or purchase #7. */
+  referenceLabel: string;
+  /** Optional context (customer / supplier / product summary). */
+  description: string | null;
+}
+
+export interface WorkerAttributedFeesSummary {
+  sellerBonusTotal: Money;
+  assemblerFeeTotal: Money;
+  installerFeeTotal: Money;
+  deliveryFeeTotal: Money;
+  purchaseDriverFeeTotal: Money;
+  grandTotal: Money;
+  items: WorkerAttributedFeeItem[];
+}
+
+export interface WorkerAttributedFeesResponse {
+  fees: WorkerAttributedFeesSummary;
 }

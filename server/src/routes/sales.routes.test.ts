@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApp } from '../app.js';
 
-const { prismaMock, saleServiceMock } = vi.hoisted(() => ({
+const { prismaMock, saleServiceMock, deliveryOpsMock } = vi.hoisted(() => ({
   prismaMock: {
     user: { findFirst: vi.fn(), update: vi.fn() },
   },
@@ -16,6 +16,11 @@ const { prismaMock, saleServiceMock } = vi.hoisted(() => ({
     addPayment: vi.fn(),
     listMyAssemblyTasks: vi.fn(),
     cancelSale: vi.fn(),
+    deleteCancelledSale: vi.fn(),
+  },
+  deliveryOpsMock: {
+    listMyDeliveries: vi.fn(),
+    updateMySaleDeliveryStatus: vi.fn(),
   },
 }));
 
@@ -26,6 +31,7 @@ vi.mock('../lib/prisma.js', () => ({
 }));
 
 vi.mock('../services/sale.service.js', () => saleServiceMock);
+vi.mock('../services/delivery-ops.service.js', () => deliveryOpsMock);
 
 const app = createApp();
 const PASSWORD = 'Admin123!';
@@ -135,5 +141,65 @@ describe('sales routes auth', () => {
       .send({ reason: '' })
       .expect(422);
     expect(saleServiceMock.cancelSale).not.toHaveBeenCalled();
+  });
+
+  it('permanently deletes a cancelled sale', async () => {
+    saleServiceMock.deleteCancelledSale.mockResolvedValue(undefined);
+    const agent = await signedInAgent();
+    await agent.delete('/api/sales/cjld2sale0000qzrmn831i7rn').expect(204);
+    expect(saleServiceMock.deleteCancelledSale).toHaveBeenCalledWith(
+      'store_1',
+      expect.objectContaining({ id: 'user_admin', role: UserRole.ADMIN }),
+      'cjld2sale0000qzrmn831i7rn',
+    );
+  });
+
+  it('lists my deliveries for the signed-in worker', async () => {
+    deliveryOpsMock.listMyDeliveries.mockResolvedValue({
+      kpis: {
+        todayTotal: 0,
+        todayPending: 0,
+        todayInProgress: 0,
+        todayCompleted: 0,
+        todayEarned: 0,
+        monthTotal: 0,
+        monthEarned: 0,
+        monthPaid: 0,
+        monthOutstanding: 0,
+      },
+      saleDeliveries: [],
+      purchaseDeliveries: [],
+    });
+    const agent = await signedInAgent();
+    await agent.get('/api/sales/deliveries/mine').expect(200);
+    expect(deliveryOpsMock.listMyDeliveries).toHaveBeenCalledWith('store_1', 'user_admin');
+  });
+
+  it('patches sale delivery status through delivery-ops', async () => {
+    deliveryOpsMock.updateMySaleDeliveryStatus.mockResolvedValue({
+      sale: { id: 'cjld2sale0000qzrmn831i7rn', deliveryStatus: 'IN_TRANSIT' },
+      ledgerPosted: false,
+      message: 'Yetkazib berish boshlandi.',
+    });
+    const agent = await signedInAgent();
+    await agent
+      .patch('/api/sales/cjld2sale0000qzrmn831i7rn/delivery')
+      .send({ status: 'IN_TRANSIT' })
+      .expect(200);
+    expect(deliveryOpsMock.updateMySaleDeliveryStatus).toHaveBeenCalledWith(
+      'store_1',
+      expect.objectContaining({ id: 'user_admin', role: UserRole.ADMIN }),
+      'cjld2sale0000qzrmn831i7rn',
+      { status: 'IN_TRANSIT' },
+    );
+  });
+
+  it('rejects invalid delivery status payloads', async () => {
+    const agent = await signedInAgent();
+    await agent
+      .patch('/api/sales/cjld2sale0000qzrmn831i7rn/delivery')
+      .send({ status: 'PENDING' })
+      .expect(422);
+    expect(deliveryOpsMock.updateMySaleDeliveryStatus).not.toHaveBeenCalled();
   });
 });

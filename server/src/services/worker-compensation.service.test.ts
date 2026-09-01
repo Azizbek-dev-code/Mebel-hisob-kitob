@@ -462,6 +462,116 @@ describe('buildCompensationPreview / getCompensationPreview', () => {
     expect(preview.breakdown[0]?.compensationAmount).toBe(500_000);
   });
 
+  it('PERCENT_OF_GROSS_PROFIT uses yalpi foyda, not net after usta/shopir fees', () => {
+    const preview = buildCompensationPreview({
+      worker: { id: WORKER_ID, fullName: 'Vali Sotuvchi', isActive: true },
+      period: { from: '2026-08-01', to: '2026-08-31' },
+      rules: [
+        saleRule({
+          type: WorkerCompensationType.PERCENT_OF_GROSS_PROFIT,
+          value: 1500,
+          effectiveTo: null,
+        }),
+      ],
+      sales: [
+        {
+          id: 'sale_9m',
+          saleNumber: 13,
+          saleDate,
+          totalSalePrice: 9_000_000n,
+          grossProfit: 3_000_000n,
+          netProfit: 2_520_000n,
+          productNames: ['Divan'],
+        },
+      ],
+      assemblies: [],
+      deliveries: [],
+      installations: [],
+    });
+
+    expect(preview.breakdown).toHaveLength(1);
+    expect(preview.breakdown[0]?.compensationAmount).toBe(450_000);
+    expect(preview.breakdown[0]?.eventAmount).toBe(3_000_000);
+    expect(preview.summary.totalCompensation).toBe(450_000);
+  });
+
+  it('keeps seller commission separate from assembly and delivery fees', () => {
+    const preview = buildCompensationPreview({
+      worker: { id: WORKER_ID, fullName: 'Ali Multi', isActive: true },
+      period: { from: '2026-08-01', to: '2026-08-31' },
+      rules: [
+        saleRule({
+          id: 'r_seller',
+          type: WorkerCompensationType.PERCENT_OF_GROSS_PROFIT,
+          value: 1500,
+          responsibility: WorkerResponsibility.SELLER,
+          effectiveTo: null,
+        }),
+        saleRule({
+          id: 'r_asm',
+          type: WorkerCompensationType.FIXED_PER_ASSEMBLY,
+          value: 300_000,
+          responsibility: WorkerResponsibility.ASSEMBLER,
+          effectiveTo: null,
+        }),
+        saleRule({
+          id: 'r_del',
+          type: WorkerCompensationType.FIXED_PER_DELIVERY,
+          value: 180_000,
+          responsibility: WorkerResponsibility.DELIVERY,
+          effectiveTo: null,
+        }),
+      ],
+      sales: [
+        {
+          id: 'sale_multi',
+          saleNumber: 13,
+          saleDate,
+          totalSalePrice: 9_000_000n,
+          grossProfit: 3_000_000n,
+          netProfit: 2_070_000n,
+          productNames: ['Divan'],
+        },
+      ],
+      assemblies: [
+        {
+          id: 'asm_1',
+          saleId: 'sale_multi',
+          completedAt: saleDate,
+          saleNumber: 13,
+          productNames: ['Divan'],
+          installationCost: 300_000n,
+        },
+      ],
+      deliveries: [
+        {
+          id: 'sale_multi',
+          saleNumber: 13,
+          deliveryDate: saleDate,
+          productNames: ['Divan'],
+          deliveryCost: 180_000n,
+        },
+      ],
+      installations: [],
+    });
+
+    const sellerLine = preview.breakdown.find(
+      (line) => line.ruleType === WorkerCompensationType.PERCENT_OF_GROSS_PROFIT,
+    );
+    expect(sellerLine?.compensationAmount).toBe(450_000);
+    expect(
+      preview.breakdown.some(
+        (line) => line.ruleType === WorkerCompensationType.FIXED_PER_ASSEMBLY,
+      ),
+    ).toBe(false);
+    expect(
+      preview.breakdown.some(
+        (line) => line.ruleType === WorkerCompensationType.FIXED_PER_DELIVERY,
+      ),
+    ).toBe(false);
+    expect(preview.summary.totalCompensation).toBe(450_000);
+  });
+
   it('applies historical rules by effective date window', () => {
     const oldRule = saleRule({
       id: 'rule_old',

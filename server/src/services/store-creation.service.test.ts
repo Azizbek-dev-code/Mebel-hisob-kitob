@@ -273,7 +273,8 @@ describe('approveStoreRequest', () => {
       role: UserRole.ADMIN,
       storeId: 'store_new',
     });
-    const createMany = vi.fn().mockResolvedValue({ count: 1 });
+    const expenseCreateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const productCreateMany = vi.fn().mockResolvedValue({ count: 1 });
     const updateRequest = vi.fn().mockResolvedValue({
       ...PENDING_ROW,
       status: StoreCreationRequestStatus.APPROVED,
@@ -293,7 +294,8 @@ describe('approveStoreRequest', () => {
       fn({
         store: { create: storeCreate },
         user: { create: userCreate },
-        expenseCategory: { createMany },
+        expenseCategory: { createMany: expenseCreateMany },
+        productCategory: { createMany: productCreateMany },
         storeCreationRequest: { update: updateRequest },
       }),
     );
@@ -351,6 +353,7 @@ describe('approveStoreRequest', () => {
         store: { create: storeCreate },
         user: { create: userCreate },
         expenseCategory: { createMany: vi.fn() },
+        productCategory: { createMany: vi.fn() },
         storeCreationRequest: { update: vi.fn() },
       }),
     );

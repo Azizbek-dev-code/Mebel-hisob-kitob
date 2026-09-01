@@ -196,6 +196,7 @@ export function toSaleListItem(sale: SaleListRecord): SaleListItem {
     paymentType: sale.paymentType,
     assemblyStatus: sale.assemblyStatus,
     deliveryStatus: sale.deliveryStatus,
+    deliveryDueDate: sale.deliveryDueDate?.toISOString() ?? null,
     installationStatus: sale.installationStatus,
     cancelledAt: sale.cancelledAt?.toISOString() ?? null,
   };
@@ -239,6 +240,7 @@ export function toSaleDetail(
     .reduce((sum, row) => sum + row.amount, 0);
   const grossProfit = fromDbMoney(sale.grossProfit);
   const installationCost = fromDbMoney(sale.installationCost);
+  const installerFee = fromDbMoney(sale.installerFee);
   const deliveryCost = fromDbMoney(sale.deliveryCost);
 
   return {
@@ -249,6 +251,7 @@ export function toSaleDetail(
     depositAmount: fromDbMoney(sale.depositAmount),
     sellerBonus: fromDbMoney(sale.sellerBonus),
     installationCost,
+    installerFee,
     deliveryCost,
     assemblerFee: installationCost,
     driverFee: deliveryCost,
@@ -263,7 +266,11 @@ export function toSaleDetail(
       .sort((a, b) => b.paidAt.getTime() - a.paidAt.getTime())
       .map(toPaymentDto),
     installmentPlan: sale.installmentPlan ? toInstallmentPlanDto(sale.installmentPlan) : null,
-    assembler: toWorker(sale.installer),
+    assembler:
+      activeAssemblyTask?.assignee ??
+      assemblyTasks.find((task) => task.assignee)?.assignee ??
+      toWorker(sale.installer),
+    installationWorker: toWorker(sale.installer),
     deliveryPerson: toWorker(sale.deliveryPerson),
     createdBy: toWorker(sale.createdBy),
     cancelledBy: toWorker(sale.cancelledBy),

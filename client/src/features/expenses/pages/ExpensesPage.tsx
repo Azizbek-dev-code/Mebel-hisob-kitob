@@ -1,6 +1,7 @@
 import { ExpenseStatus, type ExpenseListItem } from '@furniture-erp/shared';
 import { Pencil, Plus, Search, Trash2, Wallet } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { ErrorState } from '@/components/feedback/ErrorState';
@@ -24,14 +25,14 @@ const PAGE_SIZE = 20;
 
 type StatusFilter = typeof ExpenseStatus.ACTIVE | typeof ExpenseStatus.CANCELLED | 'ALL';
 
-function listErrorMessage(error: unknown): string {
+function listErrorMessage(error: unknown, t: (key: string) => string): string {
   if (error instanceof ApiClientError) {
-    if (error.isForbidden) return 'You do not have permission to view expenses.';
-    if (error.isUnauthorized) return 'Please sign in again.';
+    if (error.isForbidden) return t('expenses.forbidden');
+    if (error.isUnauthorized) return t('expenses.signInAgain');
     if (error.status === 0) return error.message;
-    return error.message || 'Try again.';
+    return error.message || t('common.retry');
   }
-  return 'Try again.';
+  return t('common.retry');
 }
 
 function matchesSearch(expense: ExpenseListItem, search: string): boolean {
@@ -56,8 +57,9 @@ function ExpenseActions({
   onEdit: (expense: ExpenseListItem) => void;
   onCancel: (expense: ExpenseListItem) => void;
 }) {
+  const { t } = useTranslation();
   if (expense.status === ExpenseStatus.CANCELLED) {
-    return <Badge tone="danger">Bekor qilingan</Badge>;
+    return <Badge tone="danger">{t('expenses.cancelledBadge')}</Badge>;
   }
 
   return (
@@ -66,25 +68,26 @@ function ExpenseActions({
         type="button"
         onClick={() => onEdit(expense)}
         className="inline-flex items-center gap-1 rounded-input border border-line px-2 py-1 text-xs font-medium text-ink hover:bg-surface-hover"
-        aria-label={`Edit ${expense.category.name}`}
+        aria-label={`${t('common.edit')} ${expense.category.name}`}
       >
         <Pencil className="size-3.5" aria-hidden="true" />
-        Edit
+        {t('common.edit')}
       </button>
       <button
         type="button"
         onClick={() => onCancel(expense)}
         className="inline-flex items-center gap-1 rounded-input border border-danger-100 px-2 py-1 text-xs font-medium text-danger-700 hover:bg-danger-50"
-        aria-label={`Cancel ${expense.category.name}`}
+        aria-label={`${t('common.cancel')} ${expense.category.name}`}
       >
         <Trash2 className="size-3.5" aria-hidden="true" />
-        Cancel
+        {t('common.cancel')}
       </button>
     </div>
   );
 }
 
 export function ExpensesPage() {
+  const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(ExpenseStatus.ACTIVE);
@@ -129,10 +132,8 @@ export function ExpensesPage() {
     <PageContainer className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-ink">Xarajatlar</h2>
-          <p className="mt-1 text-sm text-ink-muted">
-            Do&apos;kon xarajatlarini tez va oson boshqaring.
-          </p>
+          <h2 className="text-2xl font-semibold tracking-tight text-ink">{t('expenses.title')}</h2>
+          <p className="mt-1 text-sm text-ink-muted">{t('expenses.subtitle')}</p>
         </div>
         <WriteGuard
           feature="expenses"
@@ -140,7 +141,7 @@ export function ExpensesPage() {
           className="inline-flex items-center justify-center gap-2 rounded-input bg-brand-600 px-4 py-2.5 text-sm font-medium text-white shadow-card transition-colors hover:bg-brand-700"
         >
           <Plus className="size-4" />
-          Xarajat qo&apos;shish
+          {t('expenses.add')}
         </WriteGuard>
       </div>
 
@@ -153,19 +154,19 @@ export function ExpensesPage() {
         </p>
       ) : null}
 
-      <SectionCard title="Filtrlar">
+      <SectionCard title={t('common.filters')}>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div className="relative sm:col-span-2 lg:col-span-1">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-subtle" />
             <input
               className={`${fieldClass} pl-9`}
-              placeholder="Qidirish: kategoriya, izoh, summa…"
+              placeholder={t('expenses.searchPlaceholder')}
               value={search}
               onChange={(event) => {
                 setSearch(event.target.value);
                 setPage(1);
               }}
-              aria-label="Search expenses"
+              aria-label={t('common.search')}
             />
           </div>
           <select
@@ -175,9 +176,9 @@ export function ExpensesPage() {
               setCategoryId(event.target.value);
               setPage(1);
             }}
-            aria-label="Filter by category"
+            aria-label={t('expenses.category')}
           >
-            <option value="">Barcha kategoriyalar</option>
+            <option value="">{t('common.allCategories')}</option>
             {(categories.data ?? []).map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
@@ -191,14 +192,14 @@ export function ExpensesPage() {
               setStatusFilter(event.target.value as StatusFilter);
               setPage(1);
             }}
-            aria-label="Filter by status"
+            aria-label={t('common.status')}
           >
-            <option value={ExpenseStatus.ACTIVE}>Faol</option>
-            <option value={ExpenseStatus.CANCELLED}>Bekor qilingan</option>
-            <option value="ALL">Barchasi</option>
+            <option value={ExpenseStatus.ACTIVE}>{t('common.active')}</option>
+            <option value={ExpenseStatus.CANCELLED}>{t('expenses.cancelledBadge')}</option>
+            <option value="ALL">{t('common.all')}</option>
           </select>
           <label className="block text-sm">
-            <span className="mb-1 block text-ink-muted">Dan</span>
+            <span className="mb-1 block text-ink-muted">{t('common.from')}</span>
             <input
               type="date"
               className={fieldClass}
@@ -207,11 +208,11 @@ export function ExpensesPage() {
                 setFromDate(event.target.value);
                 setPage(1);
               }}
-              aria-label="From date"
+              aria-label={t('common.from')}
             />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block text-ink-muted">Gacha</span>
+            <span className="mb-1 block text-ink-muted">{t('common.to')}</span>
             <input
               type="date"
               className={fieldClass}
@@ -220,7 +221,7 @@ export function ExpensesPage() {
                 setToDate(event.target.value);
                 setPage(1);
               }}
-              aria-label="To date"
+              aria-label={t('common.to')}
             />
           </label>
         </div>
@@ -228,8 +229,8 @@ export function ExpensesPage() {
 
       {list.isError ? (
         <ErrorState
-          title="Xarajatlarni yuklab bo'lmadi"
-          message={listErrorMessage(list.error)}
+          title={t('expenses.loadFailed')}
+          message={listErrorMessage(list.error, t)}
           onRetry={() => void list.refetch()}
         />
       ) : null}
@@ -245,11 +246,11 @@ export function ExpensesPage() {
       {!list.isLoading && !list.isError && filtered.length === 0 ? (
         <EmptyState
           icon={Wallet}
-          title="Xarajatlar yo'q"
+          title={t('expenses.emptyTitle')}
           description={
             search || categoryId || fromDate || toDate || statusFilter !== ExpenseStatus.ACTIVE
-              ? 'Filtrlarga mos xarajat topilmadi.'
-              : "Birinchi xarajatni qo'shing — elektr, ijara, transport va boshqalar."
+              ? t('expenses.emptyFiltered')
+              : t('expenses.emptyHint')
           }
           action={
             !search &&
@@ -263,7 +264,7 @@ export function ExpensesPage() {
                 className="inline-flex items-center gap-2 rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
               >
                 <Plus className="size-4" />
-                Xarajat qo&apos;shish
+                {t('expenses.add')}
               </WriteGuard>
             ) : undefined
           }
@@ -311,12 +312,12 @@ export function ExpensesPage() {
             <table className="min-w-[780px] w-full text-left text-sm">
               <thead className="border-b border-line bg-canvas/60 text-xs tracking-wide text-ink-muted uppercase">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Sana</th>
-                  <th className="px-4 py-3 font-medium">Kategoriya</th>
-                  <th className="px-4 py-3 font-medium">Izoh</th>
-                  <th className="px-4 py-3 font-medium text-right">Summa</th>
-                  <th className="px-4 py-3 font-medium">Kiritgan</th>
-                  <th className="px-4 py-3 font-medium text-right">Actions</th>
+                  <th className="px-4 py-3 font-medium">{t('common.date')}</th>
+                  <th className="px-4 py-3 font-medium">{t('expenses.category')}</th>
+                  <th className="px-4 py-3 font-medium">{t('common.notes')}</th>
+                  <th className="px-4 py-3 font-medium text-right">{t('common.amount')}</th>
+                  <th className="px-4 py-3 font-medium">{t('expenses.enteredBy')}</th>
+                  <th className="px-4 py-3 font-medium text-right">{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -359,7 +360,7 @@ export function ExpensesPage() {
           {totalPages > 1 ? (
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm text-ink-muted">
-                Sahifa {safePage} / {totalPages}
+                {t('common.pageOf', { page: safePage, total: totalPages })}
               </p>
               <div className="flex gap-2">
                 <button
@@ -368,7 +369,7 @@ export function ExpensesPage() {
                   disabled={safePage <= 1}
                   onClick={() => setPage((current) => Math.max(1, current - 1))}
                 >
-                  Oldingi
+                  {t('common.previous')}
                 </button>
                 <button
                   type="button"
@@ -376,7 +377,7 @@ export function ExpensesPage() {
                   disabled={safePage >= totalPages}
                   onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
                 >
-                  Keyingi
+                  {t('common.next')}
                 </button>
               </div>
             </div>
@@ -387,21 +388,21 @@ export function ExpensesPage() {
       <AddExpenseDialog
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        onCreated={() => setSuccessMessage("Xarajat saqlandi.")}
+        onCreated={() => setSuccessMessage(t('expenses.saved'))}
       />
 
       <AddExpenseDialog
         open={Boolean(editingExpense)}
         expense={editingExpense}
         onClose={() => setEditingExpense(null)}
-        onUpdated={() => setSuccessMessage('Xarajat yangilandi.')}
+        onUpdated={() => setSuccessMessage(t('expenses.updated'))}
       />
 
       <DeleteExpenseDialog
         open={Boolean(deletingExpense)}
         expense={deletingExpense}
         onClose={() => setDeletingExpense(null)}
-        onDeleted={() => setSuccessMessage('Xarajat bekor qilindi.')}
+        onDeleted={() => setSuccessMessage(t('expenses.cancelled'))}
       />
     </PageContainer>
   );

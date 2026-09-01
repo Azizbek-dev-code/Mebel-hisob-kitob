@@ -1,12 +1,15 @@
 import {
   AuditEntityType,
   AuditEventType,
+  FeatureKey,
+  LimitResourceKey,
   PurchasePaymentStatus,
   PurchaseStatus,
   StockMovementType,
   StockReferenceType,
   SupplierStatus,
   UserRole,
+  WorkerResponsibility,
   isNormalizedUzMobile,
   normalizeUzPhone,
   type CancelPurchaseRequest,
@@ -21,6 +24,7 @@ import {
   type SupplierListItem,
   type SupplierListQuery,
   type SupplierListResponse,
+  type UpdatePurchaseDeliveryRequest,
   type UpdateSupplierRequest,
 } from '@furniture-erp/shared';
 
@@ -29,10 +33,11 @@ import { fromDbMoney } from '../lib/money-mapper.js';
 import { prisma } from '../lib/prisma.js';
 import * as inventoryRepository from '../repositories/inventory.repository.js';
 import * as purchasingRepository from '../repositories/purchasing.repository.js';
+import * as workerRepository from '../repositories/worker.repository.js';
 import { ApiError } from '../utils/api-error.js';
 import { recordAudit } from './audit.service.js';
 import { assertCanCreateResource, assertCanUseFeature } from './entitlement.service.js';
-import { FeatureKey, LimitResourceKey } from '@furniture-erp/shared';
+import * as workerOperationalFees from './worker-operational-fees.service.js';
 
 const PURCHASING_MANAGERS: ReadonlySet<string> = new Set([
   UserRole.ADMIN,
@@ -56,6 +61,45 @@ export function paymentStatusFromAmounts(
   if (paid <= 0) return PurchasePaymentStatus.UNPAID;
   if (total - paid <= 0) return PurchasePaymentStatus.PAID;
   return PurchasePaymentStatus.PARTIALLY_PAID;
+}
+
+async function assertDeliveryDriver(
+  storeId: string,
+  driverId: string | null | undefined,
+): Promise<string | null> {
+  if (driverId === undefined || driverId === null) return null;
+  const worker = await workerRepository.findActiveWorkerWithResponsibility(
+    storeId,
+    driverId,
+    WorkerResponsibility.DELIVERY,
+  );
+  if (!worker) {
+    throw ApiError.badRequest(
+      'Shopir must be an active worker in this store with the DELIVERY responsibility',
+      [{ field: 'driverId', message: 'Invalid delivery worker' }],
+    );
+  }
+  return driverId;
+}
+
+function resolveDeliveryDays(value: number | undefined): number {
+  if (value === undefined) return 0;
+  if (!Number.isInteger(value) || value < 0) {
+    throw ApiError.validation('Delivery days must be a non-negative integer', [
+      { field: 'deliveryDays', message: 'Must be an integer >= 0' },
+    ]);
+  }
+  return value;
+}
+
+function resolveDriverFee(value: number | undefined): number {
+  if (value === undefined) return 0;
+  if (!Number.isInteger(value) || value < 0) {
+    throw ApiError.validation('Shopir fee must be a non-negative whole so\'m amount', [
+      { field: 'driverFee', message: 'Must be an integer >= 0' },
+    ]);
+  }
+  return value;
 }
 
 function mapStockError(error: unknown): never {
@@ -368,6 +412,11 @@ export async function createPurchase(
   const remainingAmount = totalCost - paidAmount;
   const paymentStatus = paymentStatusFromAmounts(paidAmount, totalCost);
   const purchaseDate = parseFlexibleDate(input.purchaseDate) ?? new Date();
+  const deliveredAt =
+    parseFlexibleDate(input.deliveredAt) ?? purchaseDate;
+  const deliveryDays = resolveDeliveryDays(input.deliveryDays);
+  const driverFee = resolveDriverFee(input.driverFee);
+  const driverId = await assertDeliveryDriver(storeId, input.driverId ?? null);
   const notes = input.notes?.trim() ? input.notes.trim() : null;
 
   let purchaseId: string;
@@ -379,6 +428,10 @@ export async function createPurchase(
         supplierId: supplier.id,
         purchaseNumber,
         purchaseDate,
+        deliveredAt,
+        deliveryDays,
+        driverId,
+        driverFee,
         totalCost,
         paidAmount,
         remainingAmount,
@@ -434,6 +487,18 @@ export async function createPurchase(
         });
       }
 
+      await workerOperationalFees.postPurchaseDriverFee({
+        storeId,
+        purchaseId: created.id,
+        purchaseNumber,
+        workerId: driverId,
+        driverFee,
+        supplierName: supplier.name,
+        actorId: actor.id,
+        occurredAt: deliveredAt,
+        client: tx,
+      });
+
       return created.id;
     });
   } catch (error) {
@@ -454,9 +519,94 @@ export async function createPurchase(
       supplierId: detail.supplierId,
       totalCost: detail.totalCost,
       paidAmount: detail.paidAmount,
+      driverFee: detail.driverFee,
+      deliveryDays: detail.deliveryDays,
     },
   });
 
+  return detail;
+}
+
+/**
+ * Update delivery metadata on an ACTIVE purchase.
+ * Does not change line costs, stock, supplier debt, or payments.
+ */
+export async function updatePurchaseDelivery(
+  storeId: string,
+  actor: { id: string; role: string },
+  purchaseId: string,
+  input: UpdatePurchaseDeliveryRequest,
+): Promise<PurchaseDetail> {
+  assertCanManagePurchasing(actor.role);
+
+  const existing = await purchasingRepository.getPurchaseDetail(storeId, purchaseId);
+  if (!existing) {
+    throw ApiError.notFound('Purchase not found');
+  }
+  if (existing.status === PurchaseStatus.CANCELLED) {
+    throw ApiError.conflict('Cannot edit delivery details on a cancelled purchase');
+  }
+
+  const data: {
+    deliveredAt?: Date | null;
+    deliveryDays?: number;
+    driverId?: string | null;
+    driverFee?: number;
+  } = {};
+
+  if (input.deliveredAt !== undefined) {
+    if (input.deliveredAt === null) {
+      data.deliveredAt = null;
+    } else {
+      const parsed = parseFlexibleDate(input.deliveredAt);
+      if (!parsed) {
+        throw ApiError.validation('Invalid delivery date', [
+          { field: 'deliveredAt', message: 'Use YYYY-MM-DD or ISO datetime' },
+        ]);
+      }
+      data.deliveredAt = parsed;
+    }
+  }
+  if (input.deliveryDays !== undefined) {
+    data.deliveryDays = resolveDeliveryDays(input.deliveryDays);
+  }
+  if (input.driverFee !== undefined) {
+    data.driverFee = resolveDriverFee(input.driverFee);
+  }
+  if (input.driverId !== undefined) {
+    data.driverId = await assertDeliveryDriver(storeId, input.driverId);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await purchasingRepository.updatePurchaseDeliveryInTx(tx, purchaseId, data);
+
+    const nextDriverId =
+      data.driverId !== undefined ? data.driverId : existing.driverId;
+    const nextFee =
+      data.driverFee !== undefined ? data.driverFee : existing.driverFee;
+    const nextDeliveredAt =
+      data.deliveredAt !== undefined
+        ? data.deliveredAt ?? undefined
+        : existing.deliveredAt
+          ? new Date(existing.deliveredAt)
+          : undefined;
+
+    // Post once when fee+driver are present; idempotent if already posted.
+    await workerOperationalFees.postPurchaseDriverFee({
+      storeId,
+      purchaseId,
+      purchaseNumber: existing.purchaseNumber,
+      workerId: nextDriverId,
+      driverFee: nextFee,
+      supplierName: existing.supplierName,
+      actorId: actor.id,
+      occurredAt: nextDeliveredAt,
+      client: tx,
+    });
+  });
+
+  const detail = await purchasingRepository.getPurchaseDetail(storeId, purchaseId);
+  if (!detail) throw ApiError.internal('Purchase updated but could not be loaded');
   return detail;
 }
 
@@ -584,6 +734,14 @@ export async function cancelPurchase(
         cancelledById: actor.id,
         cancellationReason: reason,
         cancelledAt: new Date(),
+      });
+
+      await workerOperationalFees.reversePurchaseDriverFee({
+        storeId,
+        purchaseId: purchase.id,
+        purchaseNumber: purchase.purchaseNumber,
+        actorId: actor.id,
+        client: tx,
       });
     });
   } catch (error) {

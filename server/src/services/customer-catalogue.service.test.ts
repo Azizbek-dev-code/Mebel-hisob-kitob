@@ -192,4 +192,12 @@ describe('customer-catalogue.service detail', () => {
     catalogueRepoMock.getCustomerDetail.mockResolvedValue(null);
     await expect(getCustomer(STORE, ADMIN, 'missing')).rejects.toMatchObject({ statusCode: 404 });
   });
+
+  it('scopes detail lookup to the session storeId (cross-store isolation)', async () => {
+    catalogueRepoMock.getCustomerDetail.mockResolvedValue(null);
+    await expect(getCustomer('other_store', EMPLOYEE, 'cust_1')).rejects.toMatchObject({
+      statusCode: 404,
+    });
+    expect(catalogueRepoMock.getCustomerDetail).toHaveBeenCalledWith('other_store', 'cust_1');
+  });
 });

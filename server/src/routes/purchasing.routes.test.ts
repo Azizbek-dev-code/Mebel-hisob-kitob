@@ -26,6 +26,7 @@ const { prismaMock, purchasingServiceMock } = vi.hoisted(() => ({
     listPurchases: vi.fn(),
     getPurchase: vi.fn(),
     createPurchase: vi.fn(),
+    updatePurchaseDelivery: vi.fn(),
     addPayment: vi.fn(),
     cancelPurchase: vi.fn(),
   },
@@ -101,6 +102,11 @@ const PURCHASE = {
   status: PurchaseStatus.ACTIVE,
   itemCount: 1,
   createdAt: '2026-08-20T00:00:00.000Z',
+  deliveredAt: '2026-08-20T00:00:00.000Z',
+  deliveryDays: 0,
+  driverId: null,
+  driverName: null,
+  driverFee: 0,
   notes: null,
   items: [
     {
@@ -213,6 +219,61 @@ describe('purchasing routes', () => {
     expect(res.status).toBe(201);
     expect(res.body.data.purchase.id).toBe(PURCHASE_ID);
     expect(purchasingServiceMock.createPurchase).toHaveBeenCalled();
+  });
+
+  it('creates a purchase with delivery details', async () => {
+    purchasingServiceMock.createPurchase.mockResolvedValue({
+      ...PURCHASE,
+      deliveredAt: '2026-08-24T00:00:00.000Z',
+      deliveryDays: 3,
+      driverFee: 150_000,
+    });
+    const agent = await signedInAs(ADMIN_RECORD);
+    const res = await agent.post('/api/purchases').send({
+      supplierId: SUPPLIER_ID,
+      items: [{ productId: PRODUCT_ID, quantity: 2, unitCost: 5_200_000 }],
+      deliveredAt: '2026-08-24',
+      deliveryDays: 3,
+      driverFee: 150_000,
+      paidAmount: 2_000_000,
+      paymentMethod: PaymentMethod.CASH,
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.data.purchase.deliveryDays).toBe(3);
+    expect(res.body.data.purchase.driverFee).toBe(150_000);
+  });
+
+  it('rejects negative deliveryDays and driverFee', async () => {
+    const agent = await signedInAs(ADMIN_RECORD);
+    const daysRes = await agent.post('/api/purchases').send({
+      supplierId: SUPPLIER_ID,
+      items: [{ productId: PRODUCT_ID, quantity: 1, unitCost: 100 }],
+      deliveryDays: -1,
+    });
+    expect(daysRes.status).toBe(422);
+
+    const feeRes = await agent.post('/api/purchases').send({
+      supplierId: SUPPLIER_ID,
+      items: [{ productId: PRODUCT_ID, quantity: 1, unitCost: 100 }],
+      driverFee: -5,
+    });
+    expect(feeRes.status).toBe(422);
+  });
+
+  it('patches purchase delivery for admin', async () => {
+    purchasingServiceMock.updatePurchaseDelivery.mockResolvedValue({
+      ...PURCHASE,
+      deliveryDays: 5,
+      driverFee: 75_000,
+    });
+    const agent = await signedInAs(ADMIN_RECORD);
+    const res = await agent.patch(`/api/purchases/${PURCHASE_ID}`).send({
+      deliveryDays: 5,
+      driverFee: 75_000,
+    });
+    expect(res.status).toBe(200);
+    expect(purchasingServiceMock.updatePurchaseDelivery).toHaveBeenCalled();
+    expect(res.body.data.purchase.deliveryDays).toBe(5);
   });
 
   it('rejects purchase without paymentMethod when paidAmount > 0', async () => {

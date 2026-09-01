@@ -49,7 +49,6 @@ import { prisma } from '../lib/prisma.js';
 import * as customerRepository from '../repositories/customer.repository.js';
 import { toAssemblyTaskDto, toSaleDetail, toSaleListItem } from '../repositories/mappers/sale.mapper.js';
 import * as productRepository from '../repositories/product.repository.js';
-import * as inventoryService from './inventory.service.js';
 import * as saleRepository from '../repositories/sale.repository.js';
 import * as workerCompensationRepository from '../repositories/worker-compensation.repository.js';
 import * as workerFinancialRepository from '../repositories/worker-financial.repository.js';
@@ -57,6 +56,9 @@ import * as workerRepository from '../repositories/worker.repository.js';
 import { ApiError } from '../utils/api-error.js';
 import { recordAudit } from './audit.service.js';
 import { assertCanCreateResource, assertCanUseFeature } from './entitlement.service.js';
+import * as inventoryService from './inventory.service.js';
+import * as sellerCommissionService from './seller-commission.service.js';
+import * as workerOperationalFees from './worker-operational-fees.service.js';
 
 /**
  * Sales, payments and assembly assignments.
@@ -68,6 +70,7 @@ import { assertCanCreateResource, assertCanUseFeature } from './entitlement.serv
 
 export interface ListSalesOptions {
   storeId: string;
+  actor?: { id: string; role: string };
   page?: number;
   pageSize?: number;
   search?: string;
@@ -115,6 +118,7 @@ function updateTouchesSaleCostFees(input: UpdateSaleRequest): boolean {
   return (
     input.sellerBonus !== undefined ||
     input.installationCost !== undefined ||
+    input.installerFee !== undefined ||
     input.deliveryCost !== undefined ||
     input.assemblerFee !== undefined ||
     input.driverFee !== undefined ||
@@ -277,13 +281,19 @@ function buildFulfilmentOnCreate(input: CreateSaleRequest): {
   installationDate: Date | undefined;
   installationNotes: string | undefined;
   deliveryStatus: FulfilmentStatus;
+  deliveryDueDate: Date | undefined;
   deliveryDate: Date | undefined;
   deliveryAddress: string | undefined;
   deliveryNotes: string | undefined;
   deliveryPersonId: string | undefined;
 } {
-  const installationRequired = input.installationRequired ?? Boolean(input.assemblerId);
-  const deliveryRequired = input.deliveryRequired ?? false;
+  const installationRequired =
+    input.installationRequired ??
+    (Boolean(input.installationWorkerId) ||
+      Boolean(input.installerFee && input.installerFee > 0) ||
+      Boolean(input.assemblerId));
+  const deliveryRequired =
+    input.deliveryRequired ?? Boolean(input.deliveryPersonId);
 
   return {
     installationStatus: installationRequired ? FulfilmentStatus.PENDING : FulfilmentStatus.NOT_REQUIRED,
@@ -294,6 +304,7 @@ function buildFulfilmentOnCreate(input: CreateSaleRequest): {
         ? FulfilmentStatus.SCHEDULED
         : FulfilmentStatus.PENDING
       : FulfilmentStatus.NOT_REQUIRED,
+    deliveryDueDate: deliveryRequired ? parseFlexibleDate(input.deliveryDueDate) : undefined,
     deliveryDate: parseFlexibleDate(input.deliveryDate),
     deliveryAddress: input.deliveryAddress,
     deliveryNotes: input.deliveryNotes,
@@ -314,11 +325,15 @@ export async function listSales(options: ListSalesOptions): Promise<{
     throw ApiError.badRequest('The start date must not be after the end date');
   }
 
+  const participantUserId =
+    options.actor?.role === UserRole.EMPLOYEE ? options.actor.id : undefined;
+
   const { items, totalItems } = await saleRepository.listSales({
     storeId: options.storeId,
     search: options.search,
     paymentStatus: options.paymentStatus,
     sellerId: options.sellerId,
+    participantUserId,
     assemblyStatus: options.assemblyStatus,
     deliveryStatus: options.deliveryStatus,
     status: options.status,
@@ -334,8 +349,23 @@ export async function listSales(options: ListSalesOptions): Promise<{
   };
 }
 
-export async function getSale(storeId: string, saleId: string): Promise<SaleDetail> {
-  return buildSaleDetailResponse(storeId, saleId);
+export async function getSale(
+  storeId: string,
+  saleId: string,
+  actor?: { id: string; role: string },
+): Promise<SaleDetail> {
+  const sale = await buildSaleDetailResponse(storeId, saleId);
+  if (actor?.role === UserRole.EMPLOYEE) {
+    const involved =
+      sale.seller?.id === actor.id ||
+      sale.deliveryPerson?.id === actor.id ||
+      sale.installationWorker?.id === actor.id ||
+      sale.assembler?.id === actor.id;
+    if (!involved) {
+      throw ApiError.notFound('Sale not found');
+    }
+  }
+  return sale;
 }
 
 export async function createSale(
@@ -368,6 +398,14 @@ export async function createSale(
       input.assemblerId,
       WorkerResponsibility.ASSEMBLER,
       'Assembly worker',
+    );
+  }
+  if (input.installationWorkerId) {
+    await assertWorkerWithResponsibility(
+      storeId,
+      input.installationWorkerId,
+      WorkerResponsibility.INSTALLER,
+      'Installer',
     );
   }
   if (input.deliveryPersonId) {
@@ -407,6 +445,7 @@ export async function createSale(
     costs: {
       sellerBonus: input.sellerBonus,
       installationCost: feeCosts.installationCost,
+      installerFee: feeCosts.installerFee ?? input.installerFee,
       deliveryCost: feeCosts.deliveryCost,
       otherCosts: input.otherCosts,
     },
@@ -441,7 +480,7 @@ export async function createSale(
         saleNumber,
         customerId,
         sellerId,
-        installerId: input.assemblerId,
+        installerId: input.installationWorkerId ?? input.assemblerId,
         deliveryPersonId: fulfilment.deliveryPersonId,
         createdById: actorId,
         saleDate,
@@ -457,6 +496,7 @@ export async function createSale(
         remainingAmount: toDbMoney(totals.remainingAmount),
         sellerBonus: toDbMoney(totals.sellerBonus),
         installationCost: toDbMoney(totals.installationCost),
+        installerFee: toDbMoney(totals.installerFee),
         deliveryCost: toDbMoney(totals.deliveryCost),
         otherCosts: toDbMoney(totals.otherCosts),
         grossProfit: toDbMoney(totals.grossProfit),
@@ -466,6 +506,7 @@ export async function createSale(
         installationDate: fulfilment.installationDate,
         installationNotes: fulfilment.installationNotes,
         deliveryStatus: fulfilment.deliveryStatus,
+        deliveryDueDate: fulfilment.deliveryDueDate,
         deliveryDate: fulfilment.deliveryDate,
         deliveryAddress: fulfilment.deliveryAddress,
         deliveryNotes: fulfilment.deliveryNotes,
@@ -622,6 +663,13 @@ export async function createSale(
       });
     }
 
+    await sellerCommissionService.syncSellerCommissionForSale({
+      storeId,
+      saleId: sale.id,
+      actorId,
+      client: tx,
+    });
+
     return sale.id;
   });
 
@@ -688,8 +736,28 @@ export async function updateSale(
     assertCanEditSaleCostFees(actor.role);
   }
 
+  // Shopir may only change deliveryStatus on sales assigned to them.
+  // Prefer PATCH /sales/:id/delivery for the operational panel; this guards the generic path.
+  if (input.deliveryStatus !== undefined) {
+    const isAdmin = actor.role === UserRole.ADMIN || actor.role === UserRole.PLATFORM_ADMIN;
+    if (!isAdmin) {
+      if (existing.deliveryPerson?.id !== actor.id) {
+        throw ApiError.forbidden('You can only update deliveries assigned to you');
+      }
+      const hasDelivery = await workerRepository.workerHasResponsibility(
+        storeId,
+        actor.id,
+        WorkerResponsibility.DELIVERY,
+      );
+      if (!hasDelivery) {
+        throw ApiError.forbidden('Delivery responsibility required');
+      }
+    }
+  }
+
   const feePatch = resolveSaleFeeAliases(input);
   const resolvedInstallationCost = feePatch.installationCost;
+  const resolvedInstallerFee = feePatch.installerFee ?? input.installerFee;
   const resolvedDeliveryCost = feePatch.deliveryCost;
 
   if (input.sellerId) {
@@ -706,6 +774,14 @@ export async function updateSale(
       input.assemblerId,
       WorkerResponsibility.ASSEMBLER,
       'Assembly worker',
+    );
+  }
+  if (input.installationWorkerId) {
+    await assertWorkerWithResponsibility(
+      storeId,
+      input.installationWorkerId,
+      WorkerResponsibility.INSTALLER,
+      'Installer',
     );
   }
   if (input.deliveryPersonId) {
@@ -730,14 +806,103 @@ export async function updateSale(
     }
   }
 
+  type PreparedLine = {
+    product: {
+      id: string;
+      name: string;
+      sku: string | null;
+      costPrice: bigint;
+      defaultSalePrice: bigint;
+      trackStock: boolean;
+    };
+    quantity: number;
+    unitCostPrice: number;
+    unitSalePrice: number;
+  };
+
+  let preparedLines: PreparedLine[] | null = null;
+  if (input.items !== undefined) {
+    if (input.items.length === 0) {
+      throw ApiError.badRequest('Add at least one product');
+    }
+    const productIds = [...new Set(input.items.map((item) => item.productId))];
+    const products = await productRepository.findActiveProductsByIds(storeId, productIds);
+    if (products.length !== productIds.length) {
+      throw ApiError.badRequest('One or more products were not found in this store');
+    }
+    const productById = new Map(products.map((product) => [product.id, product]));
+    preparedLines = input.items.map((item) => {
+      const product = productById.get(item.productId)!;
+      return {
+        product,
+        quantity: item.quantity,
+        unitCostPrice: toMoney(item.unitCostPrice ?? fromDbMoney(product.costPrice)),
+        unitSalePrice: toMoney(item.unitSalePrice ?? fromDbMoney(product.defaultSalePrice)),
+      };
+    });
+  }
+
+  if (input.customerId) {
+    const customer = await prisma.customer.findFirst({
+      where: { id: input.customerId, storeId, status: 'ACTIVE' },
+      select: { id: true },
+    });
+    if (!customer) {
+      throw ApiError.badRequest('Customer not found in this store');
+    }
+  }
+
   await prisma.$transaction(async (tx) => {
     const current = await saleRepository.findSaleForUpdate(tx, storeId, saleId);
     if (!current) {
       throw ApiError.notFound('Sale not found');
     }
 
-    // Recalculate profit when cost-side fields change. Line items are not edited in Phase 5.
+    if (preparedLines) {
+      const oldItems = await tx.saleItem.findMany({ where: { saleId, storeId } });
+      await inventoryService.restoreStockForCancelledSale(tx, {
+        storeId,
+        saleId,
+        saleNumber: current.saleNumber,
+        actorId,
+        items: oldItems.map((item) => ({
+          productId: item.productId,
+          productName: item.productName,
+          quantity: item.quantity,
+        })),
+        reason: `Sale #${current.saleNumber} edited`,
+      });
+      await tx.saleItem.deleteMany({ where: { saleId, storeId } });
+      await tx.saleItem.createMany({
+        data: preparedLines.map((line) => ({
+          storeId,
+          saleId,
+          productId: line.product.id,
+          productName: line.product.name,
+          productSku: line.product.sku,
+          quantity: line.quantity,
+          unitCostPrice: toDbMoney(line.unitCostPrice),
+          unitSalePrice: toDbMoney(line.unitSalePrice),
+          lineCostTotal: toDbMoney(line.unitCostPrice * line.quantity),
+          lineSaleTotal: toDbMoney(line.unitSalePrice * line.quantity),
+        })),
+      });
+      await inventoryService.deductStockForSale(tx, {
+        storeId,
+        saleId,
+        saleNumber: current.saleNumber,
+        actorId,
+        lines: preparedLines.map((line) => ({
+          productId: line.product.id,
+          productName: line.product.name,
+          quantity: line.quantity,
+          trackStock: line.product.trackStock,
+        })),
+      });
+    }
+
     const costsChanged =
+      preparedLines !== null ||
       input.sellerBonus !== undefined ||
       resolvedInstallationCost !== undefined ||
       resolvedDeliveryCost !== undefined ||
@@ -747,13 +912,22 @@ export async function updateSale(
     let moneyPatch: Prisma.SaleUncheckedUpdateInput = {};
 
     if (costsChanged) {
-      const items = await tx.saleItem.findMany({ where: { saleId, storeId } });
+      const lineRows = preparedLines
+        ? preparedLines.map((line) => ({
+            quantity: line.quantity,
+            unitCostPrice: line.unitCostPrice,
+            unitSalePrice: line.unitSalePrice,
+          }))
+        : (
+            await tx.saleItem.findMany({ where: { saleId, storeId } })
+          ).map((item) => ({
+            quantity: item.quantity,
+            unitCostPrice: fromDbMoney(item.unitCostPrice),
+            unitSalePrice: fromDbMoney(item.unitSalePrice),
+          }));
+
       const totals = calculateSaleTotals({
-        items: items.map((item) => ({
-          quantity: item.quantity,
-          unitCostPrice: fromDbMoney(item.unitCostPrice),
-          unitSalePrice: fromDbMoney(item.unitSalePrice),
-        })),
+        items: lineRows,
         discountAmount:
           input.discountAmount !== undefined
             ? input.discountAmount
@@ -770,6 +944,10 @@ export async function updateSale(
             resolvedInstallationCost !== undefined
               ? resolvedInstallationCost
               : fromDbMoney(current.installationCost),
+          installerFee:
+            resolvedInstallerFee !== undefined
+              ? resolvedInstallerFee
+              : fromDbMoney(current.installerFee),
           deliveryCost:
             resolvedDeliveryCost !== undefined
               ? resolvedDeliveryCost
@@ -791,6 +969,7 @@ export async function updateSale(
         totalCostPrice: toDbMoney(totals.totalCostPrice),
         sellerBonus: toDbMoney(totals.sellerBonus),
         installationCost: toDbMoney(totals.installationCost),
+        installerFee: toDbMoney(totals.installerFee),
         deliveryCost: toDbMoney(totals.deliveryCost),
         otherCosts: toDbMoney(totals.otherCosts),
         grossProfit: toDbMoney(totals.grossProfit),
@@ -833,21 +1012,29 @@ export async function updateSale(
       deliveryDatePatch = new Date();
     }
 
-    if (input.assemblerId !== undefined) {
-      await reassignAssemblyInTx(tx, {
-        storeId,
-        saleId,
-        actorId,
-        assemblerId: input.assemblerId,
-        deadline: parseFlexibleDateOrNull(input.assemblyDeadline) ?? undefined,
-        notes: input.assemblyNotes ?? undefined,
-      });
-    }
+    const currentAssemblerId =
+      existing.assemblyTasks.find(
+        (task) =>
+          task.status === AssemblyTaskStatus.PENDING ||
+          task.status === AssemblyTaskStatus.IN_PROGRESS,
+      )?.assigneeId ?? null;
 
-    const activeAssembler =
-      input.assemblerId !== undefined
-        ? input.assemblerId
-        : current.installerId;
+    if (input.assemblerId !== undefined) {
+      const nextAssemblerId = input.assemblerId;
+      const assemblerChanged = nextAssemblerId !== currentAssemblerId;
+
+      // Editing notes/prices/items must not spawn a second terlash assignment.
+      if (assemblerChanged) {
+        await reassignAssemblyInTx(tx, {
+          storeId,
+          saleId,
+          actorId,
+          assemblerId: nextAssemblerId,
+          deadline: parseFlexibleDateOrNull(input.assemblyDeadline) ?? undefined,
+          notes: input.assemblyNotes ?? undefined,
+        });
+      }
+    }
 
     const data: Prisma.SaleUncheckedUpdateInput = {
       ...moneyPatch,
@@ -855,16 +1042,26 @@ export async function updateSale(
       deliveryStatus,
     };
 
+    if (input.customerId !== undefined) data.customerId = input.customerId;
     if (input.saleDate !== undefined) data.saleDate = parseFlexibleDate(input.saleDate);
     if (input.sellerId !== undefined) data.sellerId = input.sellerId;
-    if (input.assemblerId !== undefined) {
+
+    // Sale.installerId = installation worker (may differ from assembly assignee).
+    if (input.installationWorkerId !== undefined) {
+      data.installerId = input.installationWorkerId;
+    } else if (input.assemblerId !== undefined) {
+      const assemblerChanged = input.assemblerId !== currentAssemblerId;
+
       data.installerId = input.assemblerId;
-      data.assemblyStatus = input.assemblerId ? AssemblyTaskStatus.PENDING : null;
+      // Only reset sale-level assemblyStatus when the usta actually changes.
+      // Otherwise an IN_PROGRESS task would wrongly flip back to PENDING on every edit.
+      if (input.assemblerId === null) {
+        data.assemblyStatus = null;
+      } else if (assemblerChanged) {
+        data.assemblyStatus = AssemblyTaskStatus.PENDING;
+      }
     }
-    if (activeAssembler === null) {
-      data.installerId = null;
-      data.assemblyStatus = null;
-    }
+
     if (input.deliveryPersonId !== undefined) {
       data.deliveryPersonId = input.deliveryPersonId;
     } else if (deliveryStatus === FulfilmentStatus.NOT_REQUIRED) {
@@ -876,6 +1073,9 @@ export async function updateSale(
     if (input.installationNotes !== undefined) data.installationNotes = input.installationNotes;
     if (deliveryDatePatch !== undefined) {
       data.deliveryDate = deliveryDatePatch;
+    }
+    if (input.deliveryDueDate !== undefined) {
+      data.deliveryDueDate = parseFlexibleDateOrNull(input.deliveryDueDate);
     }
     if (input.deliveryAddress !== undefined) data.deliveryAddress = input.deliveryAddress;
     if (input.deliveryNotes !== undefined) data.deliveryNotes = input.deliveryNotes;
@@ -890,6 +1090,69 @@ export async function updateSale(
         rows: input.workerCompensation,
       });
     }
+
+    // Credit shopir fee whenever delivery is COMPLETED after this update.
+    // Not only on the first transition — also covers "fee/shopir saved after complete".
+    // postDeliveryFeeOnComplete is idempotent via `${saleId}:DELIVERY_FEE`.
+    if (deliveryStatus === FulfilmentStatus.COMPLETED) {
+      const saleForFee = await tx.sale.findFirst({
+        where: { id: saleId, storeId },
+        select: {
+          id: true,
+          saleNumber: true,
+          deliveryCost: true,
+          deliveryPersonId: true,
+          items: { select: { productName: true }, take: 3 },
+        },
+      });
+      if (saleForFee?.deliveryPersonId) {
+        await workerOperationalFees.postDeliveryFeeOnComplete({
+          storeId,
+          saleId: saleForFee.id,
+          saleNumber: saleForFee.saleNumber,
+          workerId: saleForFee.deliveryPersonId,
+          deliveryCost: saleForFee.deliveryCost,
+          productSummary: saleForFee.items.map((i) => i.productName).join(', '),
+          actorId,
+          occurredAt: deliveryDatePatch instanceof Date ? deliveryDatePatch : new Date(),
+          client: tx,
+        });
+      }
+    }
+
+    // Installation COMPLETED → credit installerFee (idempotent; also covers fee saved after complete).
+    if (installationStatus === FulfilmentStatus.COMPLETED) {
+      const saleForFee = await tx.sale.findFirst({
+        where: { id: saleId, storeId },
+        select: {
+          id: true,
+          saleNumber: true,
+          installerFee: true,
+          installerId: true,
+          items: { select: { productName: true }, take: 3 },
+        },
+      });
+      if (saleForFee?.installerId) {
+        await workerOperationalFees.postInstallerFeeOnComplete({
+          storeId,
+          saleId: saleForFee.id,
+          saleNumber: saleForFee.saleNumber,
+          workerId: saleForFee.installerId,
+          installerFee: saleForFee.installerFee,
+          productSummary: saleForFee.items.map((i) => i.productName).join(', '),
+          actorId,
+          occurredAt: new Date(),
+          client: tx,
+        });
+      }
+    }
+
+    await sellerCommissionService.syncSellerCommissionForSale({
+      storeId,
+      saleId,
+      actorId,
+      client: tx,
+    });
   });
 
   const sale = await getSale(storeId, saleId);
@@ -1099,9 +1362,17 @@ async function reassignAssemblyInTx(
     return;
   }
 
-  const sameAssignee = active.find((task) => task.assigneeId === options.assemblerId);
+  // Prefer the newest active row for this usta; cancel every other active row
+  // (including duplicate PENDING rows for the same worker).
+  const sameAssignee = active
+    .filter((task) => task.assigneeId === options.assemblerId)
+    .sort((a, b) => {
+      const aTime = a.assignedAt?.getTime?.() ?? 0;
+      const bTime = b.assignedAt?.getTime?.() ?? 0;
+      return bTime - aTime;
+    })[0];
+
   if (sameAssignee) {
-    // Keep the existing active row; cancel any other stray actives.
     const others = active.filter((task) => task.id !== sameAssignee.id);
     if (others.length > 0) {
       await tx.assemblyTask.updateMany({
@@ -1265,12 +1536,21 @@ export async function updateAssemblyTask(
     };
 
     if (input.status === AssemblyTaskStatus.COMPLETED) {
-      salePatch.installationStatus = FulfilmentStatus.COMPLETED;
-      salePatch.installationDate = now;
+      // Keep legacy coupling only when there is no separate installer fee —
+      // otherwise installation must be completed explicitly for installer pay.
+      const saleFees = await tx.sale.findFirst({
+        where: { id: existing.saleId, storeId },
+        select: { installerFee: true },
+      });
+      if (!saleFees || (saleFees.installerFee ?? 0n) <= 0n) {
+        salePatch.installationStatus = FulfilmentStatus.COMPLETED;
+        salePatch.installationDate = now;
+      }
     }
 
     if (input.status === AssemblyTaskStatus.CANCELLED) {
-      salePatch.installerId = null;
+      // Do not clear Sale.installerId — that is the installation worker.
+      salePatch.assemblyStatus = null;
     }
 
     await tx.sale.update({ where: { id: existing.saleId }, data: salePatch });
@@ -1303,6 +1583,31 @@ export async function updateAssemblyTask(
         },
         tx,
       );
+
+      const saleForFee = await tx.sale.findFirst({
+        where: { id: existing.saleId, storeId },
+        select: {
+          id: true,
+          saleNumber: true,
+          installationCost: true,
+          installerFee: true,
+          installerId: true,
+          items: { select: { productName: true }, take: 3 },
+        },
+      });
+      if (saleForFee) {
+        await workerOperationalFees.postAssemblyFeeOnComplete({
+          storeId,
+          saleId: saleForFee.id,
+          saleNumber: saleForFee.saleNumber,
+          workerId: existing.assigneeId,
+          assemblyFee: saleForFee.installationCost,
+          productSummary: saleForFee.items.map((i) => i.productName).join(', '),
+          actorId,
+          occurredAt: now,
+          client: tx,
+        });
+      }
     }
   });
 
@@ -1435,6 +1740,14 @@ export async function cancelSale(
       items: existing.items,
     });
 
+    await workerOperationalFees.reverseSaleOperationalFees({
+      storeId,
+      saleId: existing.id,
+      saleNumber: existing.saleNumber,
+      actorId: actor.id,
+      client: tx,
+    });
+
     const activityWorkerId = existing.sellerId ?? actor.id;
     await workerRepository.recordActivity(
       {
@@ -1460,6 +1773,51 @@ export async function cancelSale(
     metadata: { reason },
   });
   return sale;
+}
+
+/**
+ * Permanently remove a cancelled sale and its cascaded children (items, payments,
+ * installment plan, assembly tasks, worker compensation). Stock movement ledger
+ * rows stay (referenceId only) so inventory history is intact.
+ */
+export async function deleteCancelledSale(
+  storeId: string,
+  actor: { id: string; role: string },
+  saleId: string,
+): Promise<void> {
+  assertCanCancelSale(actor.role);
+
+  const existing = await prisma.sale.findFirst({
+    where: { id: saleId, storeId },
+    select: { id: true, saleNumber: true, status: true },
+  });
+
+  if (!existing) {
+    throw ApiError.notFound('Sale not found');
+  }
+  if (existing.status !== SaleStatus.CANCELLED) {
+    throw ApiError.conflict(
+      'Faqat bekor qilingan sotuvni butunlay o‘chirish mumkin. Avval bekor qiling.',
+    );
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.workerActivity.deleteMany({
+      where: { storeId, relatedSaleId: saleId },
+    });
+    await tx.sale.delete({
+      where: { id: existing.id },
+    });
+  });
+
+  await recordAudit({
+    storeId,
+    actorUserId: actor.id,
+    eventType: AuditEventType.SALE_DELETED,
+    entityType: AuditEntityType.SALE,
+    entityId: existing.id,
+    summary: `Sale #${existing.saleNumber} permanently deleted`,
+  });
 }
 
 // Re-export helper used by tests for rollback scenarios.

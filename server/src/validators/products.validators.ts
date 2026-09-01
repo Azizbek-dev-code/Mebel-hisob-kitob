@@ -22,7 +22,8 @@ import {
 
 export const createProductBodySchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(200),
-  costPrice: moneySchema,
+  /** Omit or 0 when the purchase cost is not known yet. */
+  costPrice: moneySchema.optional(),
   defaultSalePrice: moneySchema,
   sku: z.string().trim().min(1).max(80).nullable().optional(),
   categoryId: cuidSchema.nullable().optional(),

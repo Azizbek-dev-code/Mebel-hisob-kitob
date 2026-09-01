@@ -16,6 +16,8 @@ const { catalogueRepoMock, storageMock } = vi.hoisted(() => ({
     createProductCategory: vi.fn(),
     updateProductCategory: vi.fn(),
     deactivateProductCategory: vi.fn(),
+    countProductPurchaseItems: vi.fn(),
+    deleteProductPermanent: vi.fn(),
   },
   storageMock: {
     getStorageDriver: vi.fn(),
@@ -28,11 +30,15 @@ vi.mock('./entitlement.service.js', () => ({
   assertCanUseFeature: vi.fn(),
   assertCanCreateResource: vi.fn(),
 }));
+vi.mock('./audit.service.js', () => ({
+  recordAudit: vi.fn(),
+}));
 
 const {
   archiveProduct,
   assertCanManageCatalogue,
   createProduct,
+  deleteProduct,
   listProducts,
   updateProduct,
   uploadProductImage,
@@ -96,6 +102,19 @@ describe('product-catalogue.service create/update', () => {
     );
   });
 
+  it('allows create without cost price (filled in later)', async () => {
+    catalogueRepoMock.createProduct.mockResolvedValue({ ...PRODUCT, costPrice: 0, sku: 'MB-0001' });
+    const created = await createProduct(STORE, ADMIN, {
+      name: 'Divan',
+      defaultSalePrice: 7_300_000,
+    });
+    expect(created.costPrice).toBe(0);
+    expect(catalogueRepoMock.createProduct).toHaveBeenCalledWith(
+      STORE,
+      expect.objectContaining({ name: 'Divan', defaultSalePrice: 7_300_000 }),
+    );
+  });
+
   it('maps duplicate SKU to validation error', async () => {
     catalogueRepoMock.createProduct.mockRejectedValue({ code: 'P2002' });
     await expect(
@@ -133,6 +152,40 @@ describe('product-catalogue.service create/update', () => {
     });
     const archived = await archiveProduct(STORE, ADMIN, 'prod_1');
     expect(archived.status).toBe(ProductStatus.ARCHIVED);
+  });
+
+  it('permanently deletes an archived product', async () => {
+    catalogueRepoMock.findProductInStore.mockResolvedValue({
+      ...PRODUCT,
+      status: ProductStatus.ARCHIVED,
+      imageKey: null,
+    });
+    catalogueRepoMock.countProductPurchaseItems.mockResolvedValue(0);
+    catalogueRepoMock.deleteProductPermanent.mockResolvedValue({
+      id: 'prod_1',
+      name: 'Divan',
+      imageKey: null,
+    });
+
+    await expect(deleteProduct(STORE, ADMIN, 'prod_1')).resolves.toBeUndefined();
+    expect(catalogueRepoMock.deleteProductPermanent).toHaveBeenCalledWith(STORE, 'prod_1');
+  });
+
+  it('refuses to delete an active product', async () => {
+    catalogueRepoMock.findProductInStore.mockResolvedValue({
+      ...PRODUCT,
+      status: ProductStatus.ACTIVE,
+    });
+    await expect(deleteProduct(STORE, ADMIN, 'prod_1')).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it('refuses to delete a product used in purchases', async () => {
+    catalogueRepoMock.findProductInStore.mockResolvedValue({
+      ...PRODUCT,
+      status: ProductStatus.ARCHIVED,
+    });
+    catalogueRepoMock.countProductPurchaseItems.mockResolvedValue(2);
+    await expect(deleteProduct(STORE, ADMIN, 'prod_1')).rejects.toMatchObject({ statusCode: 409 });
   });
 
   it('rejects inactive category on create', async () => {

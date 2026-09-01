@@ -43,12 +43,25 @@ export const WORKER_FINANCE_TYPE_FILTER_OPTIONS: ReadonlyArray<{
 }> = [
   { value: '', label: 'Barchasi' },
   { value: WorkerFinancialTransactionType.BONUS, label: 'Bonus' },
-  { value: WorkerFinancialTransactionType.COMMISSION, label: 'Komissiya' },
+  { value: WorkerFinancialTransactionType.COMMISSION, label: 'Komissiya / haqlar' },
   { value: WorkerFinancialTransactionType.ADVANCE, label: 'Avans' },
   { value: WorkerFinancialTransactionType.DEBT, label: 'Qarz' },
   { value: WorkerFinancialTransactionType.PAYMENT, label: "To'lov" },
   { value: WorkerFinancialTransactionType.ADJUSTMENT, label: 'Tuzatish' },
   { value: WorkerFinancialTransactionType.REVERSAL, label: 'Qaytarilgan' },
+];
+
+/** Quick description filters for operational fee sources on the ledger. */
+export const WORKER_FINANCE_SOURCE_FILTER_OPTIONS: ReadonlyArray<{
+  value: string;
+  label: string;
+}> = [
+  { value: '', label: 'Barcha manbalar' },
+  { value: 'Komissiya', label: 'Sotuvchi komissiyasi' },
+  { value: 'Usta haqqi', label: 'Usta' },
+  { value: 'Yetkazib berish haqi', label: 'Yetkazib berish' },
+  { value: 'Kirim shopir haqqi', label: 'Kirim shopir' },
+  { value: 'Installer haqqi', label: 'Installer' },
 ];
 
 /** Display label for a row — includes original type when reversing. */

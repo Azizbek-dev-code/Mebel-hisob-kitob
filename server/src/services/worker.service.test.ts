@@ -60,6 +60,11 @@ vi.mock('./entitlement.service.js', () => ({
   assertCanCreateResource: vi.fn(),
 }));
 
+vi.mock('./seller-commission.service.js', () => ({
+  decorateSellerSales: vi.fn(async (_storeId: string, _workerId: string, rows: unknown[]) => rows),
+  syncSellerCommissionForSale: vi.fn(async () => ({ posted: 0, reversed: 0 })),
+}));
+
 vi.mock('../repositories/worker.repository.js', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown> & {
     toWorkerDetail: (...args: never[]) => unknown;
@@ -233,7 +238,7 @@ describe('worker.service', () => {
 
   it('isolates my sales to the signed-in worker id', async () => {
     listWorkerSales.mockResolvedValue({
-      items: [],
+      rows: [],
       meta: {
         page: 1,
         pageSize: 20,
@@ -246,6 +251,17 @@ describe('worker.service', () => {
 
     await workerService.listMySales('store_1', 'user_ali', { page: 1 });
     expect(listWorkerSales).toHaveBeenCalledWith('store_1', 'user_ali', { page: 1 });
+  });
+
+  it('prevents a seller from listing another worker sales', async () => {
+    await expect(
+      workerService.listWorkerSales(
+        'store_1',
+        { id: 'user_seller_a', role: UserRole.EMPLOYEE },
+        'user_seller_b',
+        { page: 1 },
+      ),
+    ).rejects.toMatchObject({ statusCode: 403 });
   });
 
   it('isolates worker tasks to the requested worker after authz', async () => {

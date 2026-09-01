@@ -7,6 +7,7 @@ import {
   TrendingUp,
   Users,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { formatMoney, formatMoneyCompact } from '@/utils/format';
 
@@ -19,36 +20,37 @@ export interface KpiGridProps {
 
 /** The six headline figures across the top of the dashboard. */
 export function KpiGrid({ summary, isLoading }: KpiGridProps) {
+  const { t } = useTranslation();
   const kpis = summary?.kpis;
   const financials = summary?.financials;
-  const periodLabel = summary?.range.label ?? 'Selected period';
+  const periodLabel = summary?.range.label ?? t('dashboard.selectedPeriod');
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
       <KpiCard
-        title="Today's sales"
-        context="Today"
+        title={t('dashboard.todaySales')}
+        context={t('dashboard.today')}
         value={moneyValue(kpis?.todayRevenue, isLoading)}
         icon={ShoppingBag}
         tone="brand"
         isLoading={isLoading}
         isEmpty={!isLoading && (kpis?.todayRevenue ?? 0) === 0}
-        footnote={saleCountFootnote(kpis?.todaySalesCount, isLoading)}
+        footnote={saleCountFootnote(kpis?.todaySalesCount, isLoading, t)}
       />
 
       <KpiCard
-        title="Monthly sales"
-        context="This month"
+        title={t('dashboard.monthSales')}
+        context={t('dashboard.thisMonth')}
         value={moneyValue(kpis?.monthRevenue, isLoading)}
         icon={CalendarDays}
         tone="info"
         isLoading={isLoading}
         isEmpty={!isLoading && (kpis?.monthRevenue ?? 0) === 0}
-        footnote={saleCountFootnote(kpis?.monthSalesCount, isLoading)}
+        footnote={saleCountFootnote(kpis?.monthSalesCount, isLoading, t)}
       />
 
       <KpiCard
-        title="Gross profit"
+        title={t('dashboard.grossProfit')}
         context={periodLabel}
         value={moneyValue(financials?.grossProfit, isLoading)}
         icon={TrendingUp}
@@ -58,24 +60,26 @@ export function KpiGrid({ summary, isLoading }: KpiGridProps) {
         footnote={
           isLoading
             ? undefined
-            : `Revenue ${formatMoneyCompact(financials?.revenue ?? 0)} − cost of goods`
+            : t('dashboard.grossProfitFootnote', {
+                revenue: formatMoneyCompact(financials?.revenue ?? 0),
+              })
         }
       />
 
       <KpiCard
-        title="Expenses"
+        title={t('dashboard.expenses')}
         context={periodLabel}
         value={moneyValue(financials?.expenses, isLoading)}
         icon={Receipt}
         tone="warning"
         isLoading={isLoading}
         isEmpty={!isLoading && (financials?.expenses ?? 0) === 0}
-        footnote={isLoading ? undefined : 'Business running costs in this period'}
+        footnote={isLoading ? undefined : t('dashboard.expensesFootnote')}
       />
 
       <KpiCard
-        title="Customer debt"
-        context="Outstanding now"
+        title={t('dashboard.customerDebt')}
+        context={t('dashboard.outstandingNow')}
         value={moneyValue(kpis?.outstandingDebt, isLoading)}
         icon={CircleDollarSign}
         tone={(kpis?.outstandingDebt ?? 0) > 0 ? 'danger' : 'success'}
@@ -84,12 +88,12 @@ export function KpiGrid({ summary, isLoading }: KpiGridProps) {
         footnote={
           isLoading
             ? undefined
-            : `${kpis?.customersInDebt ?? 0} customer${(kpis?.customersInDebt ?? 0) === 1 ? '' : 's'} with a balance`
+            : t('dashboard.customersWithBalance', { count: kpis?.customersInDebt ?? 0 })
         }
       />
 
       <KpiCard
-        title="Number of sales"
+        title={t('dashboard.salesCount')}
         context={periodLabel}
         value={isLoading ? '—' : String(kpis?.periodSalesCount ?? 0)}
         icon={Users}
@@ -99,7 +103,9 @@ export function KpiGrid({ summary, isLoading }: KpiGridProps) {
         footnote={
           isLoading
             ? undefined
-            : `Period revenue ${formatMoneyCompact(kpis?.periodRevenue ?? 0)}`
+            : t('dashboard.periodRevenue', {
+                revenue: formatMoneyCompact(kpis?.periodRevenue ?? 0),
+              })
         }
       />
     </div>
@@ -111,8 +117,11 @@ function moneyValue(amount: number | undefined, isLoading: boolean): string {
   return formatMoney(amount ?? 0);
 }
 
-function saleCountFootnote(count: number | undefined, isLoading: boolean) {
+function saleCountFootnote(
+  count: number | undefined,
+  isLoading: boolean,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   if (isLoading) return undefined;
-  const sales = count ?? 0;
-  return `${sales} sale${sales === 1 ? '' : 's'}`;
+  return t('dashboard.saleCount', { count: count ?? 0 });
 }

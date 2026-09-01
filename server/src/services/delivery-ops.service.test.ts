@@ -1,0 +1,236 @@
+import {
+  FulfilmentStatus,
+  SaleStatus,
+  UserRole,
+  WorkerResponsibility,
+} from '@furniture-erp/shared';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const {
+  prismaMock,
+  financialRepoMock,
+  workerRepoMock,
+  saleServiceMock,
+  feesMock,
+} = vi.hoisted(() => ({
+  prismaMock: {
+    sale: { findMany: vi.fn(), findFirst: vi.fn() },
+    purchase: { findMany: vi.fn() },
+    workerFinancialTransaction: { findFirst: vi.fn() },
+  },
+  financialRepoMock: {
+    findOpenCommissionByRef: vi.fn(),
+    aggregateWorkerTotals: vi.fn(),
+  },
+  workerRepoMock: {
+    findActiveWorkerWithResponsibility: vi.fn(),
+    workerHasResponsibility: vi.fn(),
+    findActiveWorkerInStore: vi.fn(),
+  },
+  saleServiceMock: {
+    getSale: vi.fn(),
+    updateSale: vi.fn(),
+  },
+  feesMock: {
+    DELIVERY_FEE_REF: (id: string) => `${id}:DELIVERY_FEE`,
+    PURCHASE_DRIVER_FEE_REF: (id: string) => `${id}:DRIVER_FEE`,
+  },
+}));
+
+vi.mock('../lib/prisma.js', () => ({ prisma: prismaMock }));
+vi.mock('../repositories/worker-financial.repository.js', () => financialRepoMock);
+vi.mock('../repositories/worker.repository.js', () => workerRepoMock);
+vi.mock('./sale.service.js', () => saleServiceMock);
+vi.mock('./worker-operational-fees.service.js', () => feesMock);
+
+const { listMyDeliveries, updateMySaleDeliveryStatus } = await import('./delivery-ops.service.js');
+
+const STORE = 'store_1';
+const SHOPIR = 'shopir_1';
+const OTHER = 'other_1';
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  workerRepoMock.findActiveWorkerWithResponsibility.mockResolvedValue({ id: SHOPIR });
+  workerRepoMock.workerHasResponsibility.mockResolvedValue(true);
+  workerRepoMock.findActiveWorkerInStore.mockResolvedValue({ id: SHOPIR, isActive: true });
+  financialRepoMock.aggregateWorkerTotals.mockResolvedValue({
+    totalBonuses: 0,
+    totalCommissions: 150_000,
+    totalAdvances: 0,
+    totalDebt: 0,
+    totalPayments: 0,
+    totalAdjustments: 0,
+    totalReversals: 0,
+    netFinancialPosition: 150_000,
+    reversalsByOriginalType: {},
+  });
+  financialRepoMock.findOpenCommissionByRef.mockResolvedValue(null);
+  prismaMock.workerFinancialTransaction.findFirst.mockResolvedValue(null);
+  prismaMock.purchase.findMany.mockResolvedValue([]);
+});
+
+describe('delivery-ops.service', () => {
+  it('lists only assigned sale deliveries for the shopir', async () => {
+    prismaMock.sale.findMany.mockResolvedValue([
+      {
+        id: 'sale_1',
+        saleNumber: 11,
+        saleDate: new Date(),
+        deliveryStatus: FulfilmentStatus.SCHEDULED,
+        deliveryCost: 150_000n,
+        deliveryDate: null,
+        deliveryDueDate: new Date(),
+        deliveryAddress: 'Test',
+        customer: { firstName: 'A', lastName: 'B', phone: '+99890' },
+      },
+    ]);
+
+    const result = await listMyDeliveries(STORE, SHOPIR);
+    expect(result.saleDeliveries).toHaveLength(1);
+    expect(result.saleDeliveries[0]?.canStart).toBe(true);
+    expect(result.saleDeliveries[0]?.canComplete).toBe(false);
+    expect(result.kpis.todayPending).toBeGreaterThanOrEqual(1);
+  });
+
+  it('forbids listing without DELIVERY responsibility', async () => {
+    workerRepoMock.findActiveWorkerWithResponsibility.mockResolvedValue(null);
+    await expect(listMyDeliveries(STORE, SHOPIR)).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it('starts delivery → IN_TRANSIT', async () => {
+    prismaMock.sale.findFirst.mockResolvedValue({
+      id: 'sale_1',
+      saleNumber: 1,
+      status: SaleStatus.ACTIVE,
+      deliveryStatus: FulfilmentStatus.SCHEDULED,
+      deliveryPersonId: SHOPIR,
+      deliveryCost: 150_000n,
+    });
+    saleServiceMock.updateSale.mockResolvedValue({ id: 'sale_1', deliveryStatus: 'IN_TRANSIT' });
+
+    const result = await updateMySaleDeliveryStatus(
+      STORE,
+      { id: SHOPIR, role: UserRole.EMPLOYEE },
+      'sale_1',
+      { status: FulfilmentStatus.IN_TRANSIT },
+    );
+    expect(saleServiceMock.updateSale).toHaveBeenCalledWith(
+      STORE,
+      { id: SHOPIR, role: UserRole.EMPLOYEE },
+      'sale_1',
+      { deliveryStatus: FulfilmentStatus.IN_TRANSIT },
+    );
+    expect(result.ledgerPosted).toBe(false);
+    expect(result.message).toContain('boshlandi');
+  });
+
+  it('completes delivery and reports ledgerPosted', async () => {
+    prismaMock.sale.findFirst.mockResolvedValue({
+      id: 'sale_1',
+      saleNumber: 1,
+      status: SaleStatus.ACTIVE,
+      deliveryStatus: FulfilmentStatus.IN_TRANSIT,
+      deliveryPersonId: SHOPIR,
+      deliveryCost: 150_000n,
+    });
+    saleServiceMock.updateSale.mockResolvedValue({ id: 'sale_1', deliveryStatus: 'COMPLETED' });
+    financialRepoMock.findOpenCommissionByRef.mockResolvedValue({ id: 'tx_1' });
+
+    const result = await updateMySaleDeliveryStatus(
+      STORE,
+      { id: SHOPIR, role: UserRole.EMPLOYEE },
+      'sale_1',
+      { status: FulfilmentStatus.COMPLETED },
+    );
+    expect(result.ledgerPosted).toBe(true);
+    expect(result.message).toMatch(/hisobga/);
+  });
+
+  it('blocks shopir from completing before start', async () => {
+    prismaMock.sale.findFirst.mockResolvedValue({
+      id: 'sale_1',
+      saleNumber: 1,
+      status: SaleStatus.ACTIVE,
+      deliveryStatus: FulfilmentStatus.SCHEDULED,
+      deliveryPersonId: SHOPIR,
+      deliveryCost: 150_000n,
+    });
+
+    await expect(
+      updateMySaleDeliveryStatus(
+        STORE,
+        { id: SHOPIR, role: UserRole.EMPLOYEE },
+        'sale_1',
+        { status: FulfilmentStatus.COMPLETED },
+      ),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    expect(saleServiceMock.updateSale).not.toHaveBeenCalled();
+  });
+
+  it('blocks another shopir from completing', async () => {
+    prismaMock.sale.findFirst.mockResolvedValue({
+      id: 'sale_1',
+      saleNumber: 1,
+      status: SaleStatus.ACTIVE,
+      deliveryStatus: FulfilmentStatus.SCHEDULED,
+      deliveryPersonId: SHOPIR,
+      deliveryCost: 150_000n,
+    });
+
+    await expect(
+      updateMySaleDeliveryStatus(
+        STORE,
+        { id: OTHER, role: UserRole.EMPLOYEE },
+        'sale_1',
+        { status: FulfilmentStatus.COMPLETED },
+      ),
+    ).rejects.toMatchObject({ statusCode: 403 });
+    expect(saleServiceMock.updateSale).not.toHaveBeenCalled();
+  });
+
+  it('idempotent complete when already COMPLETED', async () => {
+    prismaMock.sale.findFirst.mockResolvedValue({
+      id: 'sale_1',
+      saleNumber: 1,
+      status: SaleStatus.ACTIVE,
+      deliveryStatus: FulfilmentStatus.COMPLETED,
+      deliveryPersonId: SHOPIR,
+      deliveryCost: 150_000n,
+    });
+    saleServiceMock.getSale.mockResolvedValue({ id: 'sale_1' });
+    financialRepoMock.findOpenCommissionByRef.mockResolvedValue({ id: 'tx_1' });
+
+    const result = await updateMySaleDeliveryStatus(
+      STORE,
+      { id: SHOPIR, role: UserRole.EMPLOYEE },
+      'sale_1',
+      { status: FulfilmentStatus.COMPLETED },
+    );
+    expect(saleServiceMock.updateSale).not.toHaveBeenCalled();
+    expect(result.ledgerPosted).toBe(true);
+  });
+
+  it('allows admin to complete any assigned delivery', async () => {
+    prismaMock.sale.findFirst.mockResolvedValue({
+      id: 'sale_1',
+      saleNumber: 1,
+      status: SaleStatus.ACTIVE,
+      deliveryStatus: FulfilmentStatus.SCHEDULED,
+      deliveryPersonId: SHOPIR,
+      deliveryCost: 100_000n,
+    });
+    saleServiceMock.updateSale.mockResolvedValue({ id: 'sale_1' });
+    financialRepoMock.findOpenCommissionByRef.mockResolvedValue({ id: 'tx' });
+
+    await updateMySaleDeliveryStatus(
+      STORE,
+      { id: 'admin_1', role: UserRole.ADMIN },
+      'sale_1',
+      { status: FulfilmentStatus.COMPLETED },
+    );
+    expect(saleServiceMock.updateSale).toHaveBeenCalled();
+  });
+});
+
+void WorkerResponsibility;

@@ -23,6 +23,7 @@ import {
 
 export interface SaleFeeAliasInput {
   assemblerFee?: Money;
+  installerFee?: Money;
   driverFee?: Money;
   installationCost?: Money;
   deliveryCost?: Money;
@@ -30,6 +31,7 @@ export interface SaleFeeAliasInput {
 
 export interface ResolvedSaleFeeCosts {
   installationCost?: Money;
+  installerFee?: Money;
   deliveryCost?: Money;
 }
 
@@ -38,6 +40,7 @@ export function resolveSaleFeeAliases(input: SaleFeeAliasInput): ResolvedSaleFee
   return {
     installationCost:
       input.assemblerFee !== undefined ? input.assemblerFee : input.installationCost,
+    installerFee: input.installerFee,
     deliveryCost: input.driverFee !== undefined ? input.driverFee : input.deliveryCost,
   };
 }
@@ -68,20 +71,69 @@ export interface SellerCommissionEstimate {
   ruleType: WorkerCompensationTypeValue | null;
 }
 
+export interface SellerCommissionLine {
+  ruleType: WorkerCompensationTypeValue | 'MANUAL_SELLER';
+  /** Stable COMPENSATION reference suffix after `${saleId}:`. */
+  referenceSuffix: string;
+  amount: Money;
+  rateLabel: string | null;
+  baseLabel: string;
+  baseAmount: Money;
+  ruleValue: number;
+}
+
+const SELLER_TYPE_LABELS: Record<(typeof SELLER_SALE_COMPENSATION_TYPES)[number], string> = {
+  [WorkerCompensationType.PERCENT_OF_SALE]: 'Sotuv summasidan foiz',
+  [WorkerCompensationType.PERCENT_OF_GROSS_PROFIT]: 'Yalpi foydadan foiz',
+  [WorkerCompensationType.FIXED_PER_SALE]: 'Har bir sotuv uchun summa',
+};
+
+export function sellerCompensationTypeLabel(
+  type: WorkerCompensationTypeValue | 'MANUAL_SELLER' | string | null,
+): string {
+  if (type === 'MANUAL_SELLER') return "Qo'lda belgilangan";
+  if (type === WorkerCompensationType.PERCENT_OF_SALE) return SELLER_TYPE_LABELS.PERCENT_OF_SALE;
+  if (type === WorkerCompensationType.PERCENT_OF_GROSS_PROFIT) {
+    return SELLER_TYPE_LABELS.PERCENT_OF_GROSS_PROFIT;
+  }
+  if (type === WorkerCompensationType.FIXED_PER_SALE) return SELLER_TYPE_LABELS.FIXED_PER_SALE;
+  return type ?? '—';
+}
+
 /**
- * Read-only estimate of seller % / fixed-per-sale commission for a sale detail.
- * Does not write sellerBonus or ledger rows. Inactive rules are ignored.
+ * Per-rule seller commission lines for one sale.
+ *
+ * PERCENT_OF_GROSS_PROFIT = max(0, grossProfit) × rate.
+ * grossProfit = sale revenue − cost price.
+ * Usta / shopir / installer fees and stored netProfit MUST NOT reduce the base.
+ * Negative / zero gross profit → 0 (never a negative commission).
+ * Manual Ish haqlari (SELLER) override rule lines when `manualAmount` > 0.
  */
-export function estimateSellerCommission(input: {
+export function computeSellerCommissionLines(input: {
   rules: readonly SellerCommissionRuleInput[];
   saleDate: Date;
   totalSalePrice: Money;
   grossProfit: Money;
-}): SellerCommissionEstimate {
-  const active = input.rules.filter((rule) => rule.isActive);
-  let amount = 0;
-  let rateLabel: string | null = null;
-  let ruleType: WorkerCompensationTypeValue | null = null;
+  /** SaleWorkerCompensation SELLER override; skips rule engine when > 0. */
+  manualAmount?: Money | null;
+}): SellerCommissionLine[] {
+  if (input.manualAmount != null && input.manualAmount > 0) {
+    return [
+      {
+        ruleType: 'MANUAL_SELLER',
+        referenceSuffix: 'MANUAL:SELLER',
+        amount: input.manualAmount,
+        rateLabel: "qo'lda",
+        baseLabel: "Qo'lda belgilangan",
+        baseAmount: input.manualAmount,
+        ruleValue: input.manualAmount,
+      },
+    ];
+  }
+
+  const active = input.rules;
+  const commissionBase = Math.max(0, input.grossProfit);
+  const lines: SellerCommissionLine[] = [];
 
   for (const type of SELLER_SALE_COMPENSATION_TYPES) {
     const rule = findCompensationRuleForTypeOnDate(active, type, input.saleDate);
@@ -91,25 +143,80 @@ export function estimateSellerCommission(input: {
       type === WorkerCompensationType.PERCENT_OF_SALE
         ? input.totalSalePrice
         : type === WorkerCompensationType.PERCENT_OF_GROSS_PROFIT
-          ? input.grossProfit
+          ? commissionBase
           : undefined;
 
-    const line = calculateWorkerCompensation({
+    const amount = calculateWorkerCompensation({
       type,
       value: rule.value,
       baseAmount,
     });
-    amount += line;
+    if (amount <= 0) continue;
 
-    if (ruleType === null) {
-      ruleType = type;
-      rateLabel = isPercentCompensationType(type)
-        ? formatBasisPointsAsPercentLabel(rule.value)
-        : 'qat\'iy';
-    }
+    const rateLabel = isPercentCompensationType(type)
+      ? formatBasisPointsAsPercentLabel(rule.value)
+      : "qat'iy";
+    const baseLabel =
+      type === WorkerCompensationType.PERCENT_OF_GROSS_PROFIT
+        ? 'Yalpi foyda'
+        : type === WorkerCompensationType.PERCENT_OF_SALE
+          ? 'Sotuv summasi'
+          : "Qat'iy summa";
+    const resolvedBase =
+      type === WorkerCompensationType.FIXED_PER_SALE ? amount : (baseAmount ?? 0);
+
+    lines.push({
+      ruleType: type,
+      referenceSuffix: type,
+      amount,
+      rateLabel,
+      baseLabel,
+      baseAmount: resolvedBase,
+      ruleValue: rule.value,
+    });
   }
 
-  return { amount, rateLabel, ruleType };
+  return lines;
+}
+
+/**
+ * Read-only estimate of seller % / fixed-per-sale commission for a sale detail.
+ * Does not write sellerBonus or ledger rows. Inactive rules are ignored.
+ */
+export function estimateSellerCommission(input: {
+  rules: readonly SellerCommissionRuleInput[];
+  saleDate: Date;
+  totalSalePrice: Money;
+  grossProfit: Money;
+  manualAmount?: Money | null;
+}): SellerCommissionEstimate {
+  const lines = computeSellerCommissionLines(input);
+  const first = lines[0];
+  return {
+    amount: lines.reduce((sum, line) => sum + line.amount, 0),
+    rateLabel: first?.rateLabel ?? null,
+    ruleType:
+      first && first.ruleType !== 'MANUAL_SELLER'
+        ? first.ruleType
+        : first
+          ? WorkerCompensationType.FIXED_PER_SALE
+          : null,
+  };
+}
+
+export function sellerCompensationRef(saleId: string, suffix: string): string {
+  return `${saleId}:${suffix}`;
+}
+
+const SELLER_COMPENSATION_REF_SUFFIX =
+  /:(PERCENT_OF_SALE|PERCENT_OF_GROSS_PROFIT|FIXED_PER_SALE|MANUAL:SELLER)$/;
+
+export function isSellerCompensationRef(
+  saleId: string,
+  referenceId: string | null | undefined,
+): boolean {
+  if (!referenceId || !referenceId.startsWith(`${saleId}:`)) return false;
+  return SELLER_COMPENSATION_REF_SUFFIX.test(referenceId);
 }
 
 /** Display form: 1000 → "10%", 250 → "2.5%". */
@@ -130,12 +237,14 @@ export function estimateRemainingSaleProfit(input: {
   grossProfit: Money;
   sellerCommissionEstimate: Money;
   assemblerFee: Money;
+  installerFee?: Money;
   driverFee: Money;
 }): Money {
   return (
     input.grossProfit -
     input.sellerCommissionEstimate -
     input.assemblerFee -
+    (input.installerFee ?? 0) -
     input.driverFee
   );
 }

@@ -90,4 +90,40 @@ export const workerFinancesService = {
     );
     return transaction;
   },
+
+  /** Read-only self ledger summary (`/me/finances/summary`). */
+  async mySummary(
+    params: WorkerFinancialSummaryQuery = {},
+    signal?: AbortSignal,
+  ): Promise<WorkerFinancialSummary> {
+    const { summary } = await apiClient.get<WorkerFinancialSummaryResponse>(
+      '/me/finances/summary',
+      {
+        searchParams: {
+          from: params.from,
+          to: params.to,
+        },
+        signal,
+      },
+    );
+    return summary;
+  },
+
+  /** Read-only self ledger transactions (`/me/finances/transactions`). */
+  async myTransactions(
+    params: WorkerFinancialTransactionListQuery = {},
+    signal?: AbortSignal,
+  ): Promise<WorkerFinancialTransactionListResponse> {
+    return apiClient.get<WorkerFinancialTransactionListResponse>('/me/finances/transactions', {
+      searchParams: {
+        page: params.page,
+        pageSize: params.pageSize,
+        type: params.type,
+        from: params.from,
+        to: params.to,
+        search: params.search,
+      },
+      signal,
+    });
+  },
 };

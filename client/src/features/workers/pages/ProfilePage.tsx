@@ -1,31 +1,37 @@
+import { Link } from 'react-router-dom';
+
+import { ErrorState } from '@/components/feedback/ErrorState';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Badge } from '@/components/ui/Badge';
 import { SectionCard } from '@/components/ui/SectionCard';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { ErrorState } from '@/components/feedback/ErrorState';
 import { ResponsibilityBadges } from '@/features/workers/components/ResponsibilityBadges';
-import { WorkerStatsGrid } from '@/features/workers/components/WorkerStatsGrid';
-import { useMyActivity, useMyProfile } from '@/features/workers/hooks/use-workers';
-import { WORKER_ACTIVITY_LABELS } from '@furniture-erp/shared';
-import { formatDate, formatDateTime } from '@/utils/format';
+import { WorkerProfileModulesPanel } from '@/features/workers/components/WorkerProfileModulesPanel';
+import { useMyProfileModules } from '@/features/workers/hooks/use-workers';
+import { ROUTES } from '@/routes/paths';
+import { formatDate } from '@/utils/format';
 
 export function ProfilePage() {
-  const profile = useMyProfile();
-  const activity = useMyActivity();
+  const modulesQuery = useMyProfileModules();
 
-  if (profile.isError) {
+  if (modulesQuery.isError && !modulesQuery.data) {
     return (
       <PageContainer>
         <ErrorState
-          title="Could not load profile"
-          message={profile.error instanceof Error ? profile.error.message : 'Try again.'}
-          onRetry={() => void profile.refetch()}
+          title="Profil yuklanmadi"
+          message={
+            modulesQuery.error instanceof Error
+              ? modulesQuery.error.message
+              : "Profil ma'lumotlarini yuklab bo'lmadi."
+          }
+          retryLabel="Qayta urinish"
+          onRetry={() => void modulesQuery.refetch()}
         />
       </PageContainer>
     );
   }
 
-  if (profile.isLoading || !profile.data) {
+  if (modulesQuery.isLoading || !modulesQuery.data) {
     return (
       <PageContainer>
         <Skeleton className="h-48 w-full" />
@@ -33,70 +39,42 @@ export function ProfilePage() {
     );
   }
 
-  const worker = profile.data;
+  const modules = modulesQuery.data;
+  const worker = modules.worker;
 
   return (
     <PageContainer className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold tracking-tight text-ink">{worker.fullName}</h2>
-        <p className="mt-1 text-sm text-ink-muted">Your worker profile and activity summary.</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-2xl font-semibold tracking-tight text-ink">{worker.fullName}</h2>
+          <p className="mt-1 text-sm text-ink-muted">
+            @{worker.username ?? '—'}
+            {worker.phone ? ` · ${worker.phone}` : ''} · {formatDate(worker.createdAt)}
+          </p>
+          <div className="mt-2">
+            <ResponsibilityBadges responsibilities={worker.responsibilities} />
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone={worker.isActive ? 'success' : 'neutral'}>
+            {worker.isActive ? 'Faol' : 'Nofaol'}
+          </Badge>
+          <Link
+            to={ROUTES.profileFinances}
+            className="rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
+          >
+            Moliyaviy hisob
+          </Link>
+        </div>
       </div>
 
-      <SectionCard
-        title="Profile"
-        action={
-          <Badge tone={worker.isActive ? 'success' : 'neutral'}>
-            {worker.isActive ? 'Active' : 'Inactive'}
-          </Badge>
-        }
-      >
-        <dl className="grid gap-3 text-sm sm:grid-cols-2">
-          <div>
-            <dt className="text-ink-muted">Username</dt>
-            <dd className="font-medium text-ink">{worker.username ?? '—'}</dd>
-          </div>
-          <div>
-            <dt className="text-ink-muted">Phone</dt>
-            <dd className="text-ink">{worker.phone ?? '—'}</dd>
-          </div>
-          <div>
-            <dt className="text-ink-muted">Joined</dt>
-            <dd className="text-ink">{formatDate(worker.createdAt)}</dd>
-          </div>
-          <div>
-            <dt className="text-ink-muted">Responsibilities</dt>
-            <dd className="mt-1">
-              <ResponsibilityBadges responsibilities={worker.responsibilities} />
-            </dd>
-          </div>
-        </dl>
-      </SectionCard>
-
-      <SectionCard title="Activity summary">
-        <WorkerStatsGrid
-          stats={worker.stats}
-          keys={[
-            'totalSales',
-            'totalAssemblyTasks',
-            'completedAssemblyTasks',
-            'pendingAssemblyTasks',
-          ]}
+      <SectionCard title="Profil modullari" description="Mas’uliyat bo‘yicha ko‘rsatkichlar">
+        <WorkerProfileModulesPanel
+          modules={modules}
+          isLoading={modulesQuery.isLoading}
+          isError={modulesQuery.isError}
+          onRetry={() => void modulesQuery.refetch()}
         />
-      </SectionCard>
-
-      <SectionCard title="Recent activity">
-        {activity.data && activity.data.length === 0 ? (
-          <p className="text-sm text-ink-muted">No activity yet.</p>
-        ) : null}
-        <ul className="space-y-3">
-          {(activity.data ?? []).slice(0, 20).map((item) => (
-            <li key={item.id} className="border-b border-line pb-3 last:border-0">
-              <p className="text-sm font-medium text-ink">{WORKER_ACTIVITY_LABELS[item.type]}</p>
-              <p className="text-sm text-ink-muted">{item.message ?? '—'}</p>
-              <p className="text-xs text-ink-subtle">{formatDateTime(item.createdAt)}</p>
-            </li>
-          ))}
-        </ul>
       </SectionCard>
     </PageContainer>
   );

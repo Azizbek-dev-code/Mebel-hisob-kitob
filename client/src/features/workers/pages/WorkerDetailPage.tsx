@@ -1,8 +1,4 @@
-import {
-  WORKER_ACTIVITY_LABELS,
-  type WorkerActivityItem,
-} from '@furniture-erp/shared';
-import { HardHat, Loader2, ShoppingCart, Wrench } from 'lucide-react';
+import { HardHat, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
@@ -13,19 +9,21 @@ import { Badge } from '@/components/ui/Badge';
 import { SectionCard } from '@/components/ui/SectionCard';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ResponsibilityBadges } from '@/features/workers/components/ResponsibilityBadges';
-import { WorkerStatsGrid } from '@/features/workers/components/WorkerStatsGrid';
+import { WorkerProfileModulesPanel } from '@/features/workers/components/WorkerProfileModulesPanel';
 import {
   useResetWorkerPassword,
   useUpdateWorker,
   useWorker,
   useWorkerActivity,
-  useWorkerSales,
-  useWorkerTasks,
+  useWorkerProfileModules,
 } from '@/features/workers/hooks/use-workers';
 import { ApiClientError } from '@/lib/api-client';
 import { ROUTES } from '@/routes/paths';
-import { formatDate, formatDateTime, formatMoney } from '@/utils/format';
-import { assemblyStatusLabel, assemblyStatusTone, formatSaleNumber } from '@/utils/sales';
+import { formatDate, formatDateTime } from '@/utils/format';
+import {
+  WORKER_ACTIVITY_LABELS,
+  type WorkerActivityItem,
+} from '@furniture-erp/shared';
 
 const fieldClass =
   'w-full rounded-input border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100';
@@ -33,8 +31,7 @@ const fieldClass =
 export function WorkerDetailPage() {
   const { id = '' } = useParams();
   const worker = useWorker(id);
-  const sales = useWorkerSales(id, { page: 1, pageSize: 10 });
-  const tasks = useWorkerTasks(id);
+  const modulesQuery = useWorkerProfileModules(id);
   const activity = useWorkerActivity(id);
   const updateWorker = useUpdateWorker(id);
   const resetPassword = useResetWorkerPassword(id);
@@ -96,6 +93,9 @@ export function WorkerDetailPage() {
           <p className="mt-1 text-sm text-ink-muted">
             @{detail.username ?? detail.email} · joined {formatDate(detail.createdAt)}
           </p>
+          <div className="mt-2">
+            <ResponsibilityBadges responsibilities={detail.responsibilities} />
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
@@ -173,76 +173,13 @@ export function WorkerDetailPage() {
         </dl>
       </SectionCard>
 
-      <SectionCard title="Responsibilities">
-        <ResponsibilityBadges responsibilities={detail.responsibilities} />
-      </SectionCard>
-
-      <SectionCard title="Activity summary">
-        <WorkerStatsGrid stats={detail.stats} />
-      </SectionCard>
-
-      <SectionCard title="Sales">
-        {sales.data && sales.data.items.length === 0 ? (
-          <EmptyState icon={ShoppingCart} title="No sales" description="This worker has not sold anything yet." />
-        ) : null}
-        {sales.data && sales.data.items.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-[720px] w-full text-left text-sm">
-              <thead className="text-xs uppercase text-ink-muted">
-                <tr>
-                  <th className="py-2 pr-3">Sale</th>
-                  <th className="py-2 pr-3">Date</th>
-                  <th className="py-2 pr-3">Customer</th>
-                  <th className="py-2 pr-3">Product</th>
-                  <th className="py-2 pr-3">Amount</th>
-                  <th className="py-2">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sales.data.items.map((sale) => (
-                  <tr key={sale.id} className="border-t border-line">
-                    <td className="py-2 pr-3">
-                      <Link to={ROUTES.saleDetail(sale.id)} className="text-brand-700 hover:underline">
-                        {formatSaleNumber(sale.saleNumber)}
-                      </Link>
-                    </td>
-                    <td className="py-2 pr-3">{formatDate(sale.saleDate)}</td>
-                    <td className="py-2 pr-3">{sale.customerName}</td>
-                    <td className="py-2 pr-3">{sale.productSummary}</td>
-                    <td className="py-2 pr-3">{formatMoney(sale.totalSalePrice)}</td>
-                    <td className="py-2">{sale.paymentStatus}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
-      </SectionCard>
-
-      <SectionCard title="Assembly tasks">
-        {tasks.data && tasks.data.length === 0 ? (
-          <EmptyState icon={Wrench} title="No assembly tasks" description="No terlash assignments yet." />
-        ) : null}
-        {tasks.data && tasks.data.length > 0 ? (
-          <div className="space-y-3">
-            {tasks.data.map((task) => (
-              <div
-                key={task.id}
-                className="flex flex-col gap-2 rounded-input border border-line px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div>
-                  <p className="font-medium text-ink">
-                    {formatSaleNumber(task.saleNumber)} · {task.productSummary}
-                  </p>
-                  <p className="text-sm text-ink-muted">
-                    {task.customerName} · assigned {formatDate(task.assignedAt)}
-                  </p>
-                </div>
-                <Badge tone={assemblyStatusTone(task.status)}>{assemblyStatusLabel(task.status)}</Badge>
-              </div>
-            ))}
-          </div>
-        ) : null}
+      <SectionCard title="Profil modullari" description="Mas’uliyat bo‘yicha ko‘rsatkichlar">
+        <WorkerProfileModulesPanel
+          modules={modulesQuery.data}
+          isLoading={modulesQuery.isLoading}
+          isError={modulesQuery.isError}
+          onRetry={() => void modulesQuery.refetch()}
+        />
       </SectionCard>
 
       <SectionCard title="Activity history">
@@ -250,7 +187,10 @@ export function WorkerDetailPage() {
       </SectionCard>
 
       <SectionCard title="Reset password">
-        <form onSubmit={(event) => void onResetPassword(event)} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <form
+          onSubmit={(event) => void onResetPassword(event)}
+          className="flex flex-col gap-3 sm:flex-row sm:items-end"
+        >
           <div className="min-w-0 flex-1 space-y-1.5">
             <label className="block text-sm font-medium text-ink">New password</label>
             <input

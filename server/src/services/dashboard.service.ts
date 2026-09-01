@@ -221,6 +221,7 @@ function toRecentSale(row: dashboardRepository.RecentSaleRow): DashboardRecentSa
     id: row.id,
     saleNumber: row.saleNumber,
     saleDate: row.saleDate.toISOString(),
+    deliveryDueDate: row.deliveryDueDate?.toISOString() ?? null,
     customerName: `${row.customerFirstName} ${row.customerLastName}`.trim(),
     productSummary: extraItems > 0 ? `${firstProduct} +${extraItems}` : firstProduct,
     itemCount: row.itemCount,

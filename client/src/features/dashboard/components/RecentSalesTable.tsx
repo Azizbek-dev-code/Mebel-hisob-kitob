@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/Badge';
 import { SectionCard } from '@/components/ui/SectionCard';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ROUTES } from '@/routes/paths';
-import { formatDateTime, formatMoney } from '@/utils/format';
+import { formatDate, formatDateTime, formatMoney } from '@/utils/format';
 import { paymentStatusLabel, paymentStatusTone } from '@/utils/sales';
 
 export interface RecentSalesTableProps {
@@ -19,7 +19,7 @@ export interface RecentSalesTableProps {
 export function RecentSalesTable({ sales, periodLabel, isLoading }: RecentSalesTableProps) {
   return (
     <SectionCard
-      title="Recent sales"
+      title="So‘nggi sotuvlar"
       description={periodLabel}
       padded={false}
       className="min-w-0"
@@ -57,7 +57,8 @@ export function RecentSalesTable({ sales, periodLabel, isLoading }: RecentSalesT
           <table className="w-full min-w-[40rem] text-left text-sm">
             <thead>
               <tr className="border-b border-line text-xs text-ink-muted">
-                <th className="px-4 py-2.5 font-medium sm:px-5">Date</th>
+                <th className="px-4 py-2.5 font-medium sm:px-5">Buyurtma sanasi</th>
+                <th className="px-4 py-2.5 font-medium sm:px-5">Olib borish</th>
                 <th className="px-4 py-2.5 font-medium sm:px-5">Customer</th>
                 <th className="px-4 py-2.5 font-medium sm:px-5">Furniture</th>
                 <th className="px-4 py-2.5 font-medium sm:px-5">Seller</th>
@@ -71,6 +72,9 @@ export function RecentSalesTable({ sales, periodLabel, isLoading }: RecentSalesT
                   <td className="whitespace-nowrap px-4 py-3 text-ink-soft sm:px-5">
                     <div>{formatDateTime(sale.saleDate)}</div>
                     <div className="text-xs text-ink-subtle">#{sale.saleNumber}</div>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-ink-soft sm:px-5">
+                    {sale.deliveryDueDate ? formatDate(sale.deliveryDueDate) : '—'}
                   </td>
                   <td className="px-4 py-3 font-medium text-ink sm:px-5">{sale.customerName}</td>
                   <td className="max-w-[12rem] truncate px-4 py-3 text-ink-soft sm:px-5">

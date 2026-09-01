@@ -242,6 +242,11 @@ export const WorkerFinancialReferenceType = {
    * referenceId = stable compensation breakdown line id (e.g. `${saleId}:PERCENT_OF_SALE`).
    */
   COMPENSATION: 'COMPENSATION',
+  /**
+   * Purchase-sourced operational fees (e.g. shopir / freight on a kirim).
+   * referenceId = `${purchaseId}:DRIVER_FEE`.
+   */
+  PURCHASE: 'PURCHASE',
   /** referenceId = original WorkerFinancialTransaction id. */
   REVERSAL: 'REVERSAL',
 } as const;

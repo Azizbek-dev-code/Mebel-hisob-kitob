@@ -7,6 +7,7 @@ import {
 } from '@furniture-erp/shared';
 import { AlertTriangle, ArrowLeft, Pencil, ShoppingBag, Wallet } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 
 import { ErrorState } from '@/components/feedback/ErrorState';
@@ -28,15 +29,9 @@ import {
   useRestoreCustomer,
 } from '../hooks/use-customers';
 
-function errorMessage(error: unknown): string {
-  if (error instanceof ApiClientError) return error.message || 'Qayta urinib ko‘ring.';
-  return 'Qayta urinib ko‘ring.';
-}
-
-function debtLabel(status: CustomerDetail['debtStatus']): string {
-  if (status === 'OVERDUE') return 'Muddati o‘tgan';
-  if (status === 'IN_DEBT') return 'Qarzdor';
-  return 'Qarzi yo‘q';
+function errorMessage(error: unknown, t: (key: string) => string): string {
+  if (error instanceof ApiClientError) return error.message || t('common.retry');
+  return t('common.retry');
 }
 
 function debtTone(status: CustomerDetail['debtStatus']): 'success' | 'warning' | 'danger' {
@@ -45,18 +40,12 @@ function debtTone(status: CustomerDetail['debtStatus']): 'success' | 'warning' |
   return 'success';
 }
 
-function installmentLabel(status: string): string {
-  if (status === 'PAID') return 'To‘langan';
-  if (status === 'PARTIAL') return 'Qisman to‘langan';
-  if (status === 'OVERDUE') return 'Muddati o‘tgan';
-  return 'To‘lanmagan';
-}
-
 function canArchiveRole(role: string | undefined): boolean {
   return role === UserRole.ADMIN || role === UserRole.PLATFORM_ADMIN;
 }
 
 export function CustomerDetailPage() {
+  const { t } = useTranslation();
   const { id = '' } = useParams();
   const detail = useCustomerDetail(id);
   const { data: currentUser } = useCurrentUser();
@@ -67,15 +56,28 @@ export function CustomerDetailPage() {
   const [message, setMessage] = useState<string | null>(null);
   const customer = detail.data;
 
+  function debtLabel(status: CustomerDetail['debtStatus']): string {
+    if (status === 'OVERDUE') return t('customers.overdue');
+    if (status === 'IN_DEBT') return t('customers.debtor');
+    return t('customers.clear');
+  }
+
+  function installmentLabel(status: string): string {
+    if (status === 'PAID') return t('status.payment.PAID');
+    if (status === 'PARTIAL') return t('customers.partial');
+    if (status === 'OVERDUE') return t('customers.overdue');
+    return t('status.payment.UNPAID');
+  }
+
   async function handleArchive() {
     if (!customer) return;
-    if (!window.confirm(`“${customer.fullName}” ni arxivlashni tasdiqlaysizmi?`)) return;
+    if (!window.confirm(t('customers.archiveConfirm', { name: customer.fullName }))) return;
     try {
       await archiveCustomer.mutateAsync(customer.id);
-      setMessage('Mijoz arxivlandi.');
+      setMessage(t('customers.archivedShort'));
       void detail.refetch();
     } catch (error) {
-      setMessage(errorMessage(error));
+      setMessage(errorMessage(error, t));
     }
   }
 
@@ -83,10 +85,10 @@ export function CustomerDetailPage() {
     if (!customer) return;
     try {
       await restoreCustomer.mutateAsync(customer.id);
-      setMessage('Mijoz tiklandi.');
+      setMessage(t('customers.restoredShort'));
       void detail.refetch();
     } catch (error) {
-      setMessage(errorMessage(error));
+      setMessage(errorMessage(error, t));
     }
   }
 
@@ -100,10 +102,10 @@ export function CustomerDetailPage() {
               className="mb-2 inline-flex items-center gap-1 text-sm text-ink-soft hover:text-ink"
             >
               <ArrowLeft className="size-4" />
-              Mijozlar
+              {t('customers.title')}
             </Link>
             <h2 className="text-2xl font-semibold tracking-tight text-ink">
-              {customer?.fullName ?? 'Mijoz'}
+              {customer?.fullName ?? t('customers.singular')}
             </h2>
             <p className="mt-1 text-sm text-ink-muted">{customer?.phone ?? '—'}</p>
             {customer?.notes ? (
@@ -113,9 +115,9 @@ export function CustomerDetailPage() {
               <div className="mt-2 flex flex-wrap gap-1">
                 <Badge tone={debtTone(customer.debtStatus)}>{debtLabel(customer.debtStatus)}</Badge>
                 {customer.status === CustomerStatus.ARCHIVED ? (
-                  <Badge tone="neutral">Arxiv</Badge>
+                  <Badge tone="neutral">{t('common.archived')}</Badge>
                 ) : (
-                  <Badge tone="success">Faol</Badge>
+                  <Badge tone="success">{t('common.active')}</Badge>
                 )}
               </div>
             ) : null}
@@ -128,7 +130,7 @@ export function CustomerDetailPage() {
                 className="inline-flex items-center gap-1.5 rounded-input border border-line px-3 py-2 text-sm hover:bg-surface-hover"
               >
                 <Pencil className="size-4" />
-                Tahrirlash
+                {t('common.edit')}
               </button>
               {isAdmin ? (
                 customer.status === CustomerStatus.ACTIVE ? (
@@ -137,7 +139,7 @@ export function CustomerDetailPage() {
                     onClick={() => void handleArchive()}
                     className="rounded-input border border-line px-3 py-2 text-sm text-danger-700 hover:bg-danger-50"
                   >
-                    Arxivlash
+                    {t('customers.archiveAction')}
                   </button>
                 ) : (
                   <button
@@ -145,7 +147,7 @@ export function CustomerDetailPage() {
                     onClick={() => void handleRestore()}
                     className="rounded-input border border-line px-3 py-2 text-sm hover:bg-surface-hover"
                   >
-                    Tiklash
+                    {t('common.restore')}
                   </button>
                 )
               ) : null}
@@ -161,8 +163,8 @@ export function CustomerDetailPage() {
 
         {detail.isError ? (
           <ErrorState
-            title="Mijoz topilmadi"
-            message={errorMessage(detail.error)}
+            title={t('customers.notFound')}
+            message={errorMessage(detail.error, t)}
             onRetry={() => void detail.refetch()}
           />
         ) : detail.isLoading || !customer ? (
@@ -171,37 +173,40 @@ export function CustomerDetailPage() {
           <>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <KpiCard
-                title="Jami xarid"
+                title={t('customers.totalPurchases')}
                 value={formatMoney(customer.financial.totalPurchases)}
-                context="Faol sotuvlar"
+                context={t('customers.totalPurchasesHint')}
                 icon={ShoppingBag}
               />
               <KpiCard
-                title="To‘langan"
+                title={t('customers.paid')}
                 value={formatMoney(customer.financial.totalPaid)}
-                context="Yig‘ilgan to‘lovlar"
+                context={t('customers.paidHint')}
                 icon={Wallet}
                 tone="success"
               />
               <KpiCard
-                title="Qolgan qarz"
+                title={t('customers.remainingDebt')}
                 value={formatMoney(customer.financial.outstandingDebt)}
-                context="Ochiq qoldiq"
+                context={t('customers.remainingDebtHint')}
                 icon={Wallet}
                 tone="warning"
               />
               <KpiCard
-                title="Muddati o‘tgan"
+                title={t('customers.overdueAmount')}
                 value={formatMoney(customer.financial.overdueAmount)}
-                context="Muddat o‘tgan"
+                context={t('customers.overdueAmountHint')}
                 icon={AlertTriangle}
                 tone="danger"
               />
             </div>
 
-            <SectionCard title="Sotuvlar tarixi" description="Bekor qilinganlar ham ko‘rinadi">
+            <SectionCard
+              title={t('customers.salesHistory')}
+              description={t('customers.salesHistoryHint')}
+            >
               {customer.sales.length === 0 ? (
-                <p className="text-sm text-ink-muted">Hali sotuv yo‘q.</p>
+                <p className="text-sm text-ink-muted">{t('customers.noSales')}</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-left text-sm">
@@ -247,7 +252,7 @@ export function CustomerDetailPage() {
                           </td>
                           <td className="px-2 py-2">
                             {sale.status === SaleStatus.CANCELLED ? (
-                              <Badge tone="danger">Bekor qilingan</Badge>
+                              <Badge tone="danger">{t('status.sale.CANCELLED')}</Badge>
                             ) : (
                               <Badge tone={saleStatusTone(sale.status)}>
                                 {saleStatusLabel(sale.status)}
@@ -262,9 +267,12 @@ export function CustomerDetailPage() {
               )}
             </SectionCard>
 
-            <SectionCard title="To‘lovlar tarixi" description="Yozilgan to‘lovlar">
+            <SectionCard
+              title={t('customers.paymentsHistory')}
+              description={t('customers.paymentsHistoryHint')}
+            >
               {customer.payments.length === 0 ? (
-                <p className="text-sm text-ink-muted">To‘lov yo‘q.</p>
+                <p className="text-sm text-ink-muted">{t('customers.noPayments')}</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-left text-sm">
@@ -304,9 +312,12 @@ export function CustomerDetailPage() {
               )}
             </SectionCard>
 
-            <SectionCard title="Bo‘lib to‘lash / qarz" description="Muddatli to‘lovlar">
+            <SectionCard
+              title={t('customers.installments')}
+              description={t('customers.installmentsHint')}
+            >
               {customer.installments.length === 0 ? (
-                <p className="text-sm text-ink-muted">Bo‘lib to‘lash rejalari yo‘q.</p>
+                <p className="text-sm text-ink-muted">{t('customers.noInstallments')}</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-left text-sm">
@@ -375,7 +386,7 @@ export function CustomerDetailPage() {
           open={editOpen}
           onClose={() => setEditOpen(false)}
           onSaved={() => {
-            setMessage('Mijoz yangilandi.');
+            setMessage(t('customers.updatedMessage'));
             void detail.refetch();
           }}
         />

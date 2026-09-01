@@ -30,8 +30,8 @@ import {
 import { ROUTES } from './paths';
 
 export interface NavItem {
-  /** Sidebar label, and the section name the header shows for every page below it. */
-  label: string;
+  /** i18n key under `nav.*` — sidebar label and header section title. */
+  labelKey: string;
   to: string;
   icon: LucideIcon;
   /** Stable key used when filtering nav by role / responsibility. */
@@ -44,42 +44,51 @@ export interface NavItem {
 
 /** The modules of the ERP, in the order the sidebar lists them. */
 export const NAV_ITEMS: readonly NavItem[] = [
-  { key: 'dashboard', label: 'Dashboard', to: ROUTES.dashboard, icon: LayoutDashboard },
-  { key: 'sales', label: 'Sotuvlar', to: ROUTES.sales, icon: ShoppingCart },
-  { key: 'my-sales', label: 'Mening sotuvlarim', to: ROUTES.mySales, icon: ShoppingCart },
-  { key: 'assembly', label: 'Terlash', to: ROUTES.assemblyTasks, icon: Wrench },
-  { key: 'products', label: 'Mebellar', to: ROUTES.products, icon: Sofa },
-  { key: 'inventory', label: 'Ombor', to: ROUTES.inventory, icon: Boxes },
-  { key: 'purchases', label: 'Kirimlar', to: ROUTES.purchases, icon: PackagePlus },
-  { key: 'suppliers', label: 'Yetkazuvchilar', to: ROUTES.suppliers, icon: Truck },
-  { key: 'customers', label: 'Mijozlar', to: ROUTES.customers, icon: Users },
-  { key: 'debts', label: 'Qarzlar', to: ROUTES.debts, icon: CircleDollarSign },
-  { key: 'expenses', label: 'Xarajatlar', to: ROUTES.expenses, icon: Wallet },
+  { key: 'dashboard', labelKey: 'nav.dashboard', to: ROUTES.dashboard, icon: LayoutDashboard },
+  { key: 'sales', labelKey: 'nav.sales', to: ROUTES.sales, icon: ShoppingCart },
+  { key: 'my-sales', labelKey: 'nav.mySales', to: ROUTES.mySales, icon: ShoppingCart },
+  { key: 'my-reports', labelKey: 'nav.myReports', to: ROUTES.myReports, icon: BarChart3 },
+  { key: 'assembly', labelKey: 'nav.assembly', to: ROUTES.assemblyTasks, icon: Wrench },
+  { key: 'delivery', labelKey: 'nav.delivery', to: ROUTES.delivery, icon: Truck },
+  { key: 'my-finances', labelKey: 'nav.myFinances', to: ROUTES.profileFinances, icon: Wallet },
+  { key: 'products', labelKey: 'nav.products', to: ROUTES.products, icon: Sofa },
+  { key: 'inventory', labelKey: 'nav.inventory', to: ROUTES.inventory, icon: Boxes },
+  { key: 'purchases', labelKey: 'nav.purchases', to: ROUTES.purchases, icon: PackagePlus },
+  { key: 'suppliers', labelKey: 'nav.suppliers', to: ROUTES.suppliers, icon: Truck },
+  { key: 'customers', labelKey: 'nav.customers', to: ROUTES.customers, icon: Users },
+  { key: 'debts', labelKey: 'nav.debts', to: ROUTES.debts, icon: CircleDollarSign },
+  { key: 'expenses', labelKey: 'nav.expenses', to: ROUTES.expenses, icon: Wallet },
   {
     key: 'workers',
-    label: 'Ishchilar',
+    labelKey: 'nav.workers',
     to: ROUTES.workers,
     icon: HardHat,
-    matchingPaths: [ROUTES.masters],
+    matchingPaths: [ROUTES.masters, ROUTES.workersReconciliation],
   },
-  { key: 'reports', label: 'Hisobotlar', to: ROUTES.reports, icon: BarChart3 },
-  { key: 'audit', label: 'Audit', to: ROUTES.audit, icon: ClipboardList },
-  { key: 'profile', label: 'Profil', to: ROUTES.profile, icon: UserRound },
-  { key: 'settings', label: 'Sozlamalar', to: ROUTES.settings, icon: Settings },
+  { key: 'reports', labelKey: 'nav.reports', to: ROUTES.reports, icon: BarChart3 },
+  { key: 'audit', labelKey: 'nav.audit', to: ROUTES.audit, icon: ClipboardList },
+  {
+    key: 'profile',
+    labelKey: 'nav.profile',
+    to: ROUTES.profile,
+    icon: UserRound,
+    matchingPaths: [ROUTES.profileFinances],
+  },
+  { key: 'settings', labelKey: 'nav.settings', to: ROUTES.settings, icon: Settings },
 ];
 
 /** Platform control-plane modules. Visible only to PLATFORM_ADMIN. */
 export const PLATFORM_NAV_ITEMS: readonly NavItem[] = [
-  { key: 'platform-dashboard', label: 'Dashboard', to: ROUTES.dashboard, icon: LayoutDashboard },
+  { key: 'platform-dashboard', labelKey: 'nav.dashboard', to: ROUTES.dashboard, icon: LayoutDashboard },
   {
     key: 'store-requests',
-    label: "Do'kon so'rovlari",
+    labelKey: 'nav.storeRequests',
     to: ROUTES.platformStoreRequests,
     icon: Inbox,
   },
   {
     key: 'platform-shops',
-    label: "Do'konlar",
+    labelKey: 'nav.shops',
     to: ROUTES.platformShops,
     icon: Store,
     matchingPaths: [
@@ -90,22 +99,22 @@ export const PLATFORM_NAV_ITEMS: readonly NavItem[] = [
   },
   {
     key: 'platform-payments',
-    label: "To'lovlar",
+    labelKey: 'nav.payments',
     to: ROUTES.platformPayments,
     icon: CreditCard,
     matchingPaths: [ROUTES.platformPaymentsPending, ROUTES.platformPaymentsOverdue],
   },
-  { key: 'platform-plans', label: 'Tariflar', to: ROUTES.platformPlans, icon: Tags },
+  { key: 'platform-plans', labelKey: 'nav.plans', to: ROUTES.platformPlans, icon: Tags },
   {
     key: 'platform-expenses',
-    label: 'Platforma xarajatlari',
+    labelKey: 'nav.platformExpenses',
     to: ROUTES.platformExpenses,
     icon: Wallet,
   },
-  { key: 'platform-pnl', label: 'Daromad / P&L', to: ROUTES.platformPnl, icon: LineChart },
+  { key: 'platform-pnl', labelKey: 'nav.pnl', to: ROUTES.platformPnl, icon: LineChart },
   {
     key: 'platform-analytics',
-    label: 'Analytics',
+    labelKey: 'nav.analytics',
     to: ROUTES.platformAnalytics,
     icon: BarChart3,
     matchingPaths: [
@@ -117,7 +126,7 @@ export const PLATFORM_NAV_ITEMS: readonly NavItem[] = [
   },
   {
     key: 'platform-settings',
-    label: 'Platform Settings',
+    labelKey: 'nav.settings',
     to: ROUTES.platformSettings,
     icon: Settings,
   },
@@ -177,7 +186,7 @@ export function navItemsForUser(user: AuthUser | null | undefined): NavItem[] {
   }
 
   if (isStoreManager(user)) {
-    return NAV_ITEMS.filter((item) => item.key !== 'my-sales' && item.key !== 'profile');
+    return NAV_ITEMS.filter((item) => item.key !== 'my-sales' && item.key !== 'my-reports' && item.key !== 'profile');
   }
 
   if (user.role === UserRole.CASHIER) {
@@ -186,6 +195,7 @@ export function navItemsForUser(user: AuthUser | null | undefined): NavItem[] {
         'dashboard',
         'sales',
         'my-sales',
+        'my-reports',
         'assembly',
         'products',
         'customers',
@@ -196,11 +206,12 @@ export function navItemsForUser(user: AuthUser | null | undefined): NavItem[] {
   }
 
   // EMPLOYEE (and any future non-admin roles): responsibility-driven.
-  const keys = new Set<string>(['dashboard', 'profile']);
+  const keys = new Set<string>(['dashboard', 'profile', 'my-finances']);
 
   if (hasResponsibility(user, WorkerResponsibility.SELLER)) {
     keys.add('sales');
     keys.add('my-sales');
+    keys.add('my-reports');
     keys.add('customers');
     keys.add('debts');
   }
@@ -208,7 +219,8 @@ export function navItemsForUser(user: AuthUser | null | undefined): NavItem[] {
     keys.add('assembly');
   }
   if (hasResponsibility(user, WorkerResponsibility.DELIVERY)) {
-    // Delivery-specific module arrives later; sales list remains useful context.
+    keys.add('delivery');
+    // Sales list remains useful context for assigned deliveries.
     keys.add('sales');
   }
   if (hasResponsibility(user, WorkerResponsibility.INSTALLER)) {

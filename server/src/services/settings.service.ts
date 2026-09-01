@@ -1,14 +1,17 @@
 import {
   AuditEntityType,
   AuditEventType,
+  STORE_RESET_CONFIRMATION,
   UserRole,
   isAllowedStoreTimezone,
   isNormalizedUzMobile,
   normalizeUzPhone,
+  type ResetStoreResponse,
   type StoreProfile,
   type UpdateStoreProfileRequest,
 } from '@furniture-erp/shared';
 
+import * as backupRepository from '../repositories/backup.repository.js';
 import * as settingsRepository from '../repositories/settings.repository.js';
 import { ApiError } from '../utils/api-error.js';
 import { recordAudit } from './audit.service.js';
@@ -114,4 +117,49 @@ export async function updateStoreProfile(
   });
 
   return updated;
+}
+
+/**
+ * Wipe all store business data (sales, stock, customers, worker finances, …)
+ * while keeping the acting admin login, store row, subscription, and audit trail.
+ */
+export async function resetStoreProfile(
+  storeId: string,
+  actor: { id: string; role: string },
+  confirmation: string,
+): Promise<ResetStoreResponse> {
+  assertCanManageStoreSettings(actor.role);
+
+  if (confirmation !== STORE_RESET_CONFIRMATION) {
+    throw ApiError.validation('Confirmation phrase is required', [
+      {
+        field: 'confirmation',
+        message: `Type ${STORE_RESET_CONFIRMATION} exactly to confirm`,
+      },
+    ]);
+  }
+
+  const result = await backupRepository.resetStoreData({
+    storeId,
+    actorId: actor.id,
+  });
+
+  await recordAudit({
+    storeId,
+    actorUserId: actor.id,
+    eventType: AuditEventType.STORE_DATA_RESET,
+    entityType: AuditEntityType.STORE,
+    entityId: storeId,
+    summary: 'Store data factory reset — business rows wiped, admin retained',
+    metadata: {
+      totalDeletedRows: result.totalDeletedRows,
+      retainedUserId: result.retainedUserId,
+    },
+  });
+
+  return {
+    deletedCounts: result.deletedCounts,
+    totalDeletedRows: result.totalDeletedRows,
+    retainedUserId: result.retainedUserId,
+  };
 }

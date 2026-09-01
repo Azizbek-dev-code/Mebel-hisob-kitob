@@ -36,6 +36,29 @@ function normaliseSku(sku: string | null | undefined): string | null {
   return trimmed.length === 0 ? null : trimmed;
 }
 
+const AUTO_SKU_PREFIX = 'MB-';
+
+/**
+ * Next unique catalogue code for the store (`MB-0001`, `MB-0002`, …).
+ * Only considers SKUs matching the auto pattern so custom codes stay free.
+ */
+export async function allocateNextProductSku(storeId: string): Promise<string> {
+  const rows = await prisma.product.findMany({
+    where: { storeId, sku: { startsWith: AUTO_SKU_PREFIX } },
+    select: { sku: true },
+  });
+
+  let max = 0;
+  for (const row of rows) {
+    const match = /^MB-(\d+)$/i.exec(row.sku ?? '');
+    if (!match) continue;
+    const value = Number.parseInt(match[1]!, 10);
+    if (Number.isFinite(value) && value > max) max = value;
+  }
+
+  return `${AUTO_SKU_PREFIX}${String(max + 1).padStart(4, '0')}`;
+}
+
 export function toProductListItem(product: ProductWithCategory): ProductListItem {
   return {
     id: product.id,
@@ -305,23 +328,44 @@ export async function createProduct(
   storeId: string,
   input: CreateProductRequest,
 ): Promise<ProductListItem> {
-  const created = await prisma.product.create({
-    data: {
-      storeId,
-      name: input.name.trim(),
-      sku: normaliseSku(input.sku),
-      categoryId: input.categoryId ?? null,
-      description: input.description?.trim() || null,
-      costPrice: toDbMoney(input.costPrice),
-      defaultSalePrice: toDbMoney(input.defaultSalePrice),
-      stockQty: 0,
-      minStockQty: input.minStockQty ?? 0,
-      trackStock: input.trackStock ?? true,
-      status: 'ACTIVE',
-    },
-    include: productInclude,
-  });
-  return toProductListItem(created);
+  const explicitSku = normaliseSku(input.sku);
+
+  const attempt = async (sku: string): Promise<ProductListItem> => {
+    const created = await prisma.product.create({
+      data: {
+        storeId,
+        name: input.name.trim(),
+        sku,
+        categoryId: input.categoryId ?? null,
+        description: input.description?.trim() || null,
+        costPrice: toDbMoney(input.costPrice ?? 0),
+        defaultSalePrice: toDbMoney(input.defaultSalePrice),
+        stockQty: 0,
+        minStockQty: input.minStockQty ?? 0,
+        trackStock: input.trackStock ?? true,
+        status: 'ACTIVE',
+      },
+      include: productInclude,
+    });
+    return toProductListItem(created);
+  };
+
+  const firstSku = explicitSku ?? (await allocateNextProductSku(storeId));
+  try {
+    return await attempt(firstSku);
+  } catch (error) {
+    // Concurrent auto-SKU race — allocate once more and retry.
+    if (
+      !explicitSku &&
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error as { code?: string }).code === 'P2002'
+    ) {
+      return attempt(await allocateNextProductSku(storeId));
+    }
+    throw error;
+  }
 }
 
 export async function updateProduct(
@@ -453,4 +497,34 @@ export async function deactivateProductCategory(
     include: { _count: { select: { products: true } } },
   });
   return toCategoryItem(updated);
+}
+
+/** How many purchase lines still reference this product (blocks hard delete). */
+export async function countProductPurchaseItems(
+  storeId: string,
+  productId: string,
+): Promise<number> {
+  return prisma.purchaseItem.count({ where: { storeId, productId } });
+}
+
+/**
+ * Permanently removes a product after stock movements are cleared.
+ * SaleItem.productId is SetNull — purchase lines must already be absent.
+ */
+export async function deleteProductPermanent(
+  storeId: string,
+  productId: string,
+): Promise<{ id: string; name: string; imageKey: string | null } | null> {
+  const existing = await prisma.product.findFirst({
+    where: { id: productId, storeId },
+    select: { id: true, name: true, imageKey: true },
+  });
+  if (!existing) return null;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.stockMovement.deleteMany({ where: { storeId, productId } });
+    await tx.product.delete({ where: { id: productId } });
+  });
+
+  return existing;
 }

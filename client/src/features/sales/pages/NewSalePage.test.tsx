@@ -1,5 +1,5 @@
 import { calculateSaleTotals } from '@furniture-erp/shared';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -91,6 +91,18 @@ beforeEach(() => {
       minStockQty: 2,
       trackStock: true,
     },
+    {
+      id: 'prod_2',
+      name: 'Divan Comfort',
+      sku: 'DV-COM-01',
+      imageUrl: null,
+      costPrice: 3_000_000,
+      defaultSalePrice: 4_200_000,
+      categoryName: 'Living',
+      stockQty: 5,
+      minStockQty: 1,
+      trackStock: true,
+    },
   ]);
   workersMock.mockResolvedValue([
     {
@@ -98,7 +110,7 @@ beforeEach(() => {
       fullName: 'Store Administrator',
       role: 'ADMIN',
       phone: null,
-      responsibilities: ['SELLER', 'ASSEMBLER', 'DELIVERY'],
+      responsibilities: ['SELLER', 'ASSEMBLER', 'DELIVERY', 'INSTALLER'],
     },
     {
       id: 'user_ali',
@@ -106,6 +118,13 @@ beforeEach(() => {
       role: 'EMPLOYEE',
       phone: null,
       responsibilities: ['ASSEMBLER', 'SELLER'],
+    },
+    {
+      id: 'user_shopir',
+      fullName: 'Azizbek Shopir',
+      role: 'EMPLOYEE',
+      phone: null,
+      responsibilities: ['DELIVERY'],
     },
   ]);
   listCategoriesMock.mockResolvedValue([
@@ -126,12 +145,12 @@ describe('NewSalePage', () => {
     const user = userEvent.setup();
     renderPage();
 
-    expect(screen.getByRole('heading', { name: 'New sale' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Yangi sotuv' })).toBeInTheDocument();
 
-    await user.click(screen.getByPlaceholderText(/Search by name or phone/i));
+    await user.click(screen.getByPlaceholderText(/Ism yoki telefon/i));
     await user.click(await screen.findByText('Ali Valiyev'));
 
-    await user.click(screen.getByPlaceholderText(/Mebel qidirish/i));
+    await user.click(screen.getByPlaceholderText(/Qidirish/i));
     await user.click(await screen.findByText('Bedroom Set "Milano"'));
 
     const expected = calculateSaleTotals({
@@ -149,8 +168,8 @@ describe('NewSalePage', () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(screen.getByRole('button', { name: /Save sale/i }));
-    expect(await screen.findByText(/Select a customer and a product/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Sotuvni saqlash/i }));
+    expect(await screen.findByText(/Mijoz va kamida bitta mebelni tanlang/i)).toBeInTheDocument();
     expect(createMock).not.toHaveBeenCalled();
   });
 
@@ -158,22 +177,22 @@ describe('NewSalePage', () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(screen.getByPlaceholderText(/Search by name or phone/i));
+    await user.click(screen.getByPlaceholderText(/Ism yoki telefon/i));
     await user.click(await screen.findByText('Ali Valiyev'));
 
-    await user.click(screen.getByPlaceholderText(/Mebel qidirish/i));
+    await user.click(screen.getByPlaceholderText(/Qidirish/i));
     await user.click(await screen.findByText('Bedroom Set "Milano"'));
 
-    const depositLabel = screen.getByText('Deposit / zaklat');
+    const depositLabel = screen.getByText('Zaklat', { selector: 'label' });
     const depositInput = depositLabel.parentElement?.querySelector('input');
     expect(depositInput).toBeTruthy();
     await user.clear(depositInput!);
     await user.type(depositInput!, '2000000');
 
-    const assemblySelect = screen.getByDisplayValue('None');
+    const assemblySelect = screen.getByTestId('sale-assembler-select');
     await user.selectOptions(assemblySelect, 'user_ali');
 
-    await user.click(screen.getByRole('button', { name: /Save sale/i }));
+    await user.click(screen.getByRole('button', { name: /Sotuvni saqlash/i }));
 
     await waitFor(() => {
       expect(createMock).toHaveBeenCalledWith(
@@ -196,39 +215,133 @@ describe('NewSalePage', () => {
     expect(createMock.mock.calls[0]?.[0]?.workerCompensation).toBeUndefined();
   });
 
-  it('shows Usta and Shopir fee fields instead of Ish haqlari roles', async () => {
-    renderPage();
-    expect(await screen.findByTestId('sale-service-fees')).toBeInTheDocument();
-    expect(screen.getByText('Usta haqqi')).toBeInTheDocument();
-    expect(screen.getByText('Shopir haqqi')).toBeInTheDocument();
-    expect(screen.queryByTestId('worker-compensation-section')).not.toBeInTheDocument();
-  });
-
-  it('submits usta and shopir fees as assemblerFee / driverFee', async () => {
+  it('submits multiple different products on one sale', async () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(screen.getByPlaceholderText(/Search by name or phone/i));
+    await user.click(screen.getByPlaceholderText(/Ism yoki telefon/i));
     await user.click(await screen.findByText('Ali Valiyev'));
 
-    await user.click(screen.getByPlaceholderText(/Mebel qidirish/i));
-    await user.click(await screen.findByText('Bedroom Set "Milano"'));
+    const productSearch = () => screen.getByPlaceholderText(/Qidirish/i);
 
-    const ustaLabel = screen.getByText('Usta haqqi');
-    const ustaInput = ustaLabel.parentElement?.querySelector('input');
-    await user.type(ustaInput!, '300000');
+    await user.click(productSearch());
+    await user.click(await screen.findByRole('button', { name: /Bedroom Set "Milano"/i }));
+    expect(await screen.findByTestId('sale-line-0')).toBeInTheDocument();
 
-    const shopirLabel = screen.getByText('Shopir haqqi');
-    const shopirInput = shopirLabel.parentElement?.querySelector('input');
-    await user.type(shopirInput!, '150000');
+    await user.click(productSearch());
+    await user.type(productSearch(), 'Divan');
+    await user.click(await screen.findByRole('button', { name: /Divan Comfort/i }));
+    expect(await screen.findByTestId('sale-line-1')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /Save sale/i }));
+    await user.click(screen.getByRole('button', { name: /Sotuvni saqlash/i }));
 
     await waitFor(() => {
       expect(createMock).toHaveBeenCalledWith(
         expect.objectContaining({
+          customerId: 'cust_1',
+          items: [
+            expect.objectContaining({
+              productId: 'prod_1',
+              quantity: 1,
+              unitSalePrice: 9_500_000,
+            }),
+            expect.objectContaining({
+              productId: 'prod_2',
+              quantity: 1,
+              unitSalePrice: 4_200_000,
+            }),
+          ],
+        }),
+      );
+    });
+  });
+
+  it('shows people and services once without a duplicate fees section', async () => {
+    renderPage();
+    expect(await screen.findByTestId('sale-people-services')).toBeInTheDocument();
+    expect(screen.getByText('Odamlar va xizmatlar')).toBeInTheDocument();
+    expect(screen.getByTestId('sale-assembler-select')).toBeInTheDocument();
+    expect(screen.getByTestId('sale-delivery-select')).toBeInTheDocument();
+    expect(screen.getByTestId('sale-installer-select')).toBeInTheDocument();
+    expect(screen.queryByTestId('sale-assembler-fee')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('sale-service-fees')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('worker-compensation-section')).not.toBeInTheDocument();
+  });
+
+  it('submits usta and delivery fees as assemblerFee / driverFee', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByPlaceholderText(/Ism yoki telefon/i));
+    await user.click(await screen.findByText('Ali Valiyev'));
+
+    await user.click(screen.getByPlaceholderText(/Qidirish/i));
+    await user.click(await screen.findByText('Bedroom Set "Milano"'));
+
+    await user.selectOptions(screen.getByTestId('sale-assembler-select'), 'user_ali');
+    const ustaFee = within(await screen.findByTestId('sale-assembler-fee')).getByRole('textbox');
+    await user.clear(ustaFee);
+    await user.type(ustaFee, '300000');
+
+    await user.selectOptions(screen.getByTestId('sale-delivery-select'), 'user_shopir');
+    const due = await screen.findByTestId('sale-delivery-due-date');
+    await user.type(due, '2026-09-01');
+    const shopirFee = within(await screen.findByTestId('sale-delivery-fee')).getByRole('textbox');
+    await user.clear(shopirFee);
+    await user.type(shopirFee, '150000');
+
+    await user.click(screen.getByRole('button', { name: /Sotuvni saqlash/i }));
+
+    await waitFor(() => {
+      expect(createMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          assemblerId: 'user_ali',
           assemblerFee: 300_000,
+          deliveryPersonId: 'user_shopir',
           driverFee: 150_000,
+          deliveryRequired: true,
+        }),
+      );
+    });
+  });
+
+  it('shows delivery fee only after shopir is selected', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    expect(screen.queryByTestId('sale-delivery-fee')).not.toBeInTheDocument();
+
+    const deliverySelect = screen.getByTestId('sale-delivery-select');
+    await waitFor(() => {
+      expect(within(deliverySelect).getByRole('option', { name: /Azizbek Shopir/i })).toBeInTheDocument();
+    });
+    await user.selectOptions(deliverySelect, 'user_shopir');
+
+    expect(await screen.findByTestId('sale-delivery-fee')).toBeInTheDocument();
+    expect(screen.getByText('Shopir haqqi')).toBeInTheDocument();
+  });
+
+  it('zeros fees when worker is cleared', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByPlaceholderText(/Ism yoki telefon/i));
+    await user.click(await screen.findByText('Ali Valiyev'));
+    await user.click(screen.getByPlaceholderText(/Qidirish/i));
+    await user.click(await screen.findByText('Bedroom Set "Milano"'));
+
+    await user.selectOptions(screen.getByTestId('sale-assembler-select'), 'user_ali');
+    const ustaFee = within(await screen.findByTestId('sale-assembler-fee')).getByRole('textbox');
+    await user.type(ustaFee, '300000');
+    await user.selectOptions(screen.getByTestId('sale-assembler-select'), '');
+
+    await user.click(screen.getByRole('button', { name: /Sotuvni saqlash/i }));
+
+    await waitFor(() => {
+      expect(createMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          assemblerFee: 0,
+          driverFee: 0,
         }),
       );
     });
@@ -262,14 +375,14 @@ describe('NewSalePage', () => {
 
     await user.type(screen.getByTestId('sale-quick-product-name'), 'Divan Royal');
     await user.selectOptions(screen.getByTestId('sale-quick-product-category'), 'cat_1');
-    await user.type(screen.getByTestId('sale-quick-product-sku'), 'DV-ROY-01');
 
-    const salePriceLabel = screen.getByText('Sotuv narxi *');
+    const quickForm = screen.getByTestId('sale-quick-product-form');
+    const salePriceLabel = within(quickForm).getByText('Sotuv narxi *');
     const salePriceInput = salePriceLabel.parentElement?.querySelector('input');
     await user.clear(salePriceInput!);
     await user.type(salePriceInput!, '5500000');
 
-    const costLabel = screen.getByText('Tannarx');
+    const costLabel = within(quickForm).getByText('Tannarx');
     const costInput = costLabel.parentElement?.querySelector('input');
     await user.clear(costInput!);
     await user.type(costInput!, '4000000');
@@ -280,7 +393,7 @@ describe('NewSalePage', () => {
       expect(createProductMock).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'Divan Royal',
-          sku: 'DV-ROY-01',
+          sku: null,
           categoryId: 'cat_1',
           costPrice: 4_000_000,
           defaultSalePrice: 5_500_000,
@@ -295,9 +408,9 @@ describe('NewSalePage', () => {
       expect(screen.getByText('Divan Royal')).toBeInTheDocument();
     });
 
-    await user.click(screen.getByPlaceholderText(/Search by name or phone/i));
+    await user.click(screen.getByPlaceholderText(/Ism yoki telefon/i));
     await user.click(await screen.findByText('Ali Valiyev'));
-    await user.click(screen.getByRole('button', { name: /Save sale/i }));
+    await user.click(screen.getByRole('button', { name: /Sotuvni saqlash/i }));
 
     await waitFor(() => {
       expect(createMock).toHaveBeenCalledWith(
@@ -327,11 +440,15 @@ describe('NewSalePage', () => {
 
     await user.click(screen.getByTestId('sale-quick-product-toggle'));
     await user.type(screen.getByTestId('sale-quick-product-name'), 'Dup Sofa');
-    const salePriceLabel = screen.getByText('Sotuv narxi *');
+    const quickForm = await screen.findByTestId('sale-quick-product-form');
+    const salePriceLabel = within(quickForm).getByText('Sotuv narxi *');
     const salePriceInput = salePriceLabel.parentElement?.querySelector('input');
     await user.clear(salePriceInput!);
     await user.type(salePriceInput!, '1000000');
-    await user.type(screen.getByTestId('sale-quick-product-sku'), 'DUP');
+    const costLabel = within(quickForm).getByText('Tannarx');
+    const costInput = costLabel.parentElement?.querySelector('input');
+    await user.clear(costInput!);
+    await user.type(costInput!, '500000');
     await user.click(screen.getByTestId('sale-quick-product-save'));
 
     expect(await screen.findByTestId('sale-quick-product-error')).toHaveTextContent(

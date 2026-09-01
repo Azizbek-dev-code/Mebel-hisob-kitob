@@ -295,7 +295,10 @@ describe('worker-finances routes', () => {
     await agent.get(`/api/worker-finances/workers/${WORKER_ID}/transactions`).expect(200);
 
     expect(workerFinancialServiceMock.listWorkerTransactions).toHaveBeenCalledWith(
-      expect.objectContaining({ storeId: 'store_1', actorRole: UserRole.EMPLOYEE }),
+      expect.objectContaining({
+        storeId: 'store_1',
+        actor: expect.objectContaining({ role: UserRole.EMPLOYEE }),
+      }),
     );
   });
 
@@ -305,7 +308,7 @@ describe('worker-finances routes', () => {
 
     expect(workerFinancialServiceMock.getWorkerSummary).toHaveBeenCalledWith(
       'store_1',
-      UserRole.ADMIN,
+      expect.objectContaining({ id: 'user_admin', role: UserRole.ADMIN }),
       WORKER_ID,
       expect.objectContaining({}),
     );

@@ -16,6 +16,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
 import { EmptyState } from '@/components/feedback/EmptyState';
@@ -44,12 +45,12 @@ const fieldClass =
 
 const PAGE_SIZE = 20;
 
-function listErrorMessage(error: unknown): string {
+function listErrorMessage(error: unknown, t: (key: string) => string): string {
   if (error instanceof ApiClientError) {
-    if (error.isForbidden) return 'Mijozlar ro‘yxatini ko‘rish uchun ruxsat yo‘q.';
-    return error.message || 'Qayta urinib ko‘ring.';
+    if (error.isForbidden) return t('customers.forbidden');
+    return error.message || t('common.retry');
   }
-  return 'Qayta urinib ko‘ring.';
+  return t('common.retry');
 }
 
 function debtTone(status: CustomerListItem['debtStatus']): 'success' | 'warning' | 'danger' | 'neutral' {
@@ -58,17 +59,12 @@ function debtTone(status: CustomerListItem['debtStatus']): 'success' | 'warning'
   return 'success';
 }
 
-function debtLabel(status: CustomerListItem['debtStatus']): string {
-  if (status === 'OVERDUE') return 'Muddati o‘tgan';
-  if (status === 'IN_DEBT') return 'Qarzdor';
-  return 'Qarzi yo‘q';
-}
-
 function canArchiveRole(role: string | undefined): boolean {
   return role === UserRole.ADMIN || role === UserRole.PLATFORM_ADMIN;
 }
 
 export function CustomersPage() {
+  const { t } = useTranslation();
   const { data: currentUser } = useCurrentUser();
   const isAdmin = canArchiveRole(currentUser?.role);
 
@@ -85,9 +81,15 @@ export function CustomersPage() {
   const archiveCustomer = useArchiveCustomer();
   const restoreCustomer = useRestoreCustomer();
 
+  function debtLabel(debtStatus: CustomerListItem['debtStatus']): string {
+    if (debtStatus === 'OVERDUE') return t('customers.overdue');
+    if (debtStatus === 'IN_DEBT') return t('customers.debtor');
+    return t('customers.clear');
+  }
+
   useEffect(() => {
-    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
-    return () => window.clearTimeout(t);
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => window.clearTimeout(timer);
   }, [search]);
 
   useEffect(() => {
@@ -96,8 +98,8 @@ export function CustomersPage() {
 
   useEffect(() => {
     if (!message) return;
-    const t = window.setTimeout(() => setMessage(null), 3500);
-    return () => window.clearTimeout(t);
+    const timer = window.setTimeout(() => setMessage(null), 3500);
+    return () => window.clearTimeout(timer);
   }, [message]);
 
   const query = useMemo(
@@ -118,21 +120,21 @@ export function CustomersPage() {
   const meta = list.data?.meta;
 
   async function handleArchive(customer: CustomerListItem) {
-    if (!window.confirm(`“${customer.fullName}” ni arxivlashni tasdiqlaysizmi?`)) return;
+    if (!window.confirm(t('customers.archiveConfirm', { name: customer.fullName }))) return;
     try {
       await archiveCustomer.mutateAsync(customer.id);
-      setMessage('Mijoz arxivlandi — yangi sotuvlarda chiqmaydi.');
+      setMessage(t('customers.archivedMessage'));
     } catch (error) {
-      setMessage(listErrorMessage(error));
+      setMessage(listErrorMessage(error, t));
     }
   }
 
   async function handleRestore(customer: CustomerListItem) {
     try {
       await restoreCustomer.mutateAsync(customer.id);
-      setMessage('Mijoz yana faol.');
+      setMessage(t('customers.restoredMessage'));
     } catch (error) {
-      setMessage(listErrorMessage(error));
+      setMessage(listErrorMessage(error, t));
     }
   }
 
@@ -141,10 +143,8 @@ export function CustomersPage() {
       <div data-testid="customers-page" className="space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold tracking-tight text-ink">Mijozlar</h2>
-            <p className="mt-1 text-sm text-ink-muted">
-              Aloqa ma’lumotlari, xarid tarixi va qarz — hisob kitobdan.
-            </p>
+            <h2 className="text-2xl font-semibold tracking-tight text-ink">{t('customers.title')}</h2>
+            <p className="mt-1 text-sm text-ink-muted">{t('customers.subtitle')}</p>
           </div>
           <WriteGuard
             feature="customers"
@@ -155,7 +155,7 @@ export function CustomersPage() {
             className="inline-flex items-center justify-center gap-1.5 rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
           >
             <Plus className="size-4" aria-hidden="true" />
-            Yangi mijoz
+            {t('customers.new')}
           </WriteGuard>
         </div>
 
@@ -167,22 +167,22 @@ export function CustomersPage() {
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <KpiCard
-            title="Jami mijozlar"
+            title={t('customers.totalCustomers')}
             value={summary ? String(summary.totalCustomers) : '—'}
-            context="Faol + arxiv"
+            context={t('customers.totalCustomersHint')}
             icon={Users}
             isLoading={list.isLoading}
           />
           <KpiCard
-            title="Qarzdor mijozlar"
+            title={t('customers.inDebt')}
             value={summary ? String(summary.customersInDebt) : '—'}
-            context="Ochiq qarzli"
+            context={t('customers.inDebtHint')}
             icon={Wallet}
             tone="warning"
             isLoading={list.isLoading}
           />
           <KpiCard
-            title="Jami qarz"
+            title={t('customers.totalDebt')}
             value={summary ? formatMoney(summary.totalOutstanding) : '—'}
             context="ACTIVE|COMPLETED"
             icon={Wallet}
@@ -190,34 +190,34 @@ export function CustomersPage() {
             isLoading={list.isLoading}
           />
           <KpiCard
-            title="Muddati o‘tgan qarz"
+            title={t('customers.overdueDebt')}
             value={summary ? formatMoney(summary.overdueAmount) : '—'}
-            context="Muddat o‘tgan to‘lovlar"
+            context={t('customers.overdueHint')}
             icon={AlertTriangle}
             tone="danger"
             isLoading={list.isLoading}
           />
         </div>
 
-        <SectionCard title="Filtrlar" description="Qidiruv, holat va tartib">
+        <SectionCard title={t('common.filters')} description={t('customers.filtersHint')}>
           <div className="space-y-3">
             <div className="relative">
               <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-muted" />
               <input
                 className={cn(fieldClass, 'pl-9')}
-                placeholder="Ism yoki telefon"
+                placeholder={t('customers.searchPlaceholder')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 data-testid="customers-search"
               />
             </div>
 
-            <div className="flex flex-wrap gap-1" role="group" aria-label="Holat">
+            <div className="flex flex-wrap gap-1" role="group" aria-label={t('common.status')}>
               {(
                 [
-                  [CustomerStatus.ACTIVE, 'Faol'],
-                  [CustomerStatus.ARCHIVED, 'Arxiv'],
-                  ['ALL', 'Hammasi'],
+                  [CustomerStatus.ACTIVE, t('common.active')],
+                  [CustomerStatus.ARCHIVED, t('common.archived')],
+                  ['ALL', t('common.all')],
                 ] as const
               ).map(([id, label]) => (
                 <button
@@ -236,13 +236,13 @@ export function CustomersPage() {
               ))}
             </div>
 
-            <div className="flex flex-wrap gap-1" role="group" aria-label="Qarz">
+            <div className="flex flex-wrap gap-1" role="group" aria-label={t('customers.debtFilter')}>
               {(
                 [
-                  ['ALL', 'Qarz: hammasi'],
-                  ['CLEAR', 'Qarzi yo‘q'],
-                  ['IN_DEBT', 'Qarzdor'],
-                  ['OVERDUE', 'Muddati o‘tgan'],
+                  ['ALL', t('customers.debtAll')],
+                  ['CLEAR', t('customers.clear')],
+                  ['IN_DEBT', t('customers.debtor')],
+                  ['OVERDUE', t('customers.overdue')],
                 ] as const
               ).map(([id, label]) => (
                 <button
@@ -265,19 +265,19 @@ export function CustomersPage() {
               className={cn(fieldClass, 'max-w-xs')}
               value={sort}
               onChange={(e) => setSort(e.target.value as typeof sort)}
-              aria-label="Tartib"
+              aria-label={t('customers.sortByName')}
             >
-              <option value="name">Ism bo‘yicha</option>
-              <option value="debt">Qarz bo‘yicha</option>
-              <option value="lastSale">Oxirgi xarid</option>
+              <option value="name">{t('customers.sortByName')}</option>
+              <option value="debt">{t('customers.sortByDebt')}</option>
+              <option value="lastSale">{t('customers.sortByLastSale')}</option>
             </select>
           </div>
         </SectionCard>
 
         {list.isError ? (
           <ErrorState
-            title="Mijozlarni yuklab bo‘lmadi"
-            message={listErrorMessage(list.error)}
+            title={t('customers.loadFailed')}
+            message={listErrorMessage(list.error, t)}
             onRetry={() => void list.refetch()}
           />
         ) : list.isLoading ? (
@@ -288,23 +288,23 @@ export function CustomersPage() {
         ) : items.length === 0 ? (
           <EmptyState
             icon={Users}
-            title="Mijoz topilmadi"
-            description="Yangi mijoz qo‘shing yoki filtrni o‘zgartiring."
+            title={t('customers.emptyTitle')}
+            description={t('customers.emptyDescription')}
           />
         ) : (
           <div className="overflow-x-auto rounded-card border border-line">
             <table className="min-w-full text-left text-sm">
               <thead className="border-b border-line bg-surface-muted text-xs text-ink-muted">
                 <tr>
-                  <th className="px-3 py-2 font-medium">Ism familiya</th>
-                  <th className="px-3 py-2 font-medium">Telefon</th>
-                  <th className="px-3 py-2 font-medium">Jami xarid</th>
-                  <th className="px-3 py-2 font-medium">To‘langan</th>
-                  <th className="px-3 py-2 font-medium">Qarz</th>
-                  <th className="px-3 py-2 font-medium">Overdue</th>
-                  <th className="px-3 py-2 font-medium">Oxirgi xarid</th>
-                  <th className="px-3 py-2 font-medium">Status</th>
-                  <th className="px-3 py-2 font-medium">Amallar</th>
+                  <th className="px-3 py-2 font-medium">{t('customers.fullName')}</th>
+                  <th className="px-3 py-2 font-medium">{t('common.phone')}</th>
+                  <th className="px-3 py-2 font-medium">{t('customers.totalPurchases')}</th>
+                  <th className="px-3 py-2 font-medium">{t('customers.paid')}</th>
+                  <th className="px-3 py-2 font-medium">{t('customers.debt')}</th>
+                  <th className="px-3 py-2 font-medium">{t('customers.overdue')}</th>
+                  <th className="px-3 py-2 font-medium">{t('customers.lastSale')}</th>
+                  <th className="px-3 py-2 font-medium">{t('common.status')}</th>
+                  <th className="px-3 py-2 font-medium">{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -331,7 +331,7 @@ export function CustomersPage() {
                           {debtLabel(customer.debtStatus)}
                         </Badge>
                         {customer.status === CustomerStatus.ARCHIVED ? (
-                          <Badge tone="neutral">Arxiv</Badge>
+                          <Badge tone="neutral">{t('common.archived')}</Badge>
                         ) : null}
                       </div>
                     </td>
@@ -342,7 +342,7 @@ export function CustomersPage() {
                           className="inline-flex items-center gap-1 rounded-input border border-line px-2 py-1 text-xs hover:bg-surface-hover"
                         >
                           <Eye className="size-3.5" />
-                          Ko‘rish
+                          {t('common.view')}
                         </Link>
                         <button
                           type="button"
@@ -353,7 +353,7 @@ export function CustomersPage() {
                           className="inline-flex items-center gap-1 rounded-input border border-line px-2 py-1 text-xs hover:bg-surface-hover"
                         >
                           <Pencil className="size-3.5" />
-                          Edit
+                          {t('common.edit')}
                         </button>
                         {isAdmin ? (
                           customer.status === CustomerStatus.ACTIVE ? (
@@ -363,7 +363,7 @@ export function CustomersPage() {
                               className="inline-flex items-center gap-1 rounded-input border border-line px-2 py-1 text-xs text-danger-700 hover:bg-danger-50"
                             >
                               <Archive className="size-3.5" />
-                              Arxiv
+                              {t('common.archive')}
                             </button>
                           ) : (
                             <button
@@ -371,7 +371,7 @@ export function CustomersPage() {
                               onClick={() => void handleRestore(customer)}
                               className="inline-flex items-center gap-1 rounded-input border border-line px-2 py-1 text-xs hover:bg-surface-hover"
                             >
-                              Tiklash
+                              {t('common.restore')}
                             </button>
                           )
                         ) : null}
@@ -387,7 +387,7 @@ export function CustomersPage() {
         {meta && meta.totalPages > 1 ? (
           <div className="flex items-center justify-between text-sm">
             <span className="text-ink-muted">
-              Sahifa {meta.page} / {meta.totalPages}
+              {t('common.pageOf', { page: meta.page, total: meta.totalPages })}
             </span>
             <div className="flex gap-2">
               <button
@@ -396,7 +396,7 @@ export function CustomersPage() {
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 className="rounded-input border border-line px-2 py-1 disabled:opacity-50"
               >
-                Oldingi
+                {t('common.previous')}
               </button>
               <button
                 type="button"
@@ -404,7 +404,7 @@ export function CustomersPage() {
                 onClick={() => setPage((p) => p + 1)}
                 className="rounded-input border border-line px-2 py-1 disabled:opacity-50"
               >
-                Keyingi
+                {t('common.next')}
               </button>
             </div>
           </div>
@@ -419,7 +419,9 @@ export function CustomersPage() {
           setFormOpen(false);
           setEditing(null);
         }}
-        onSaved={() => setMessage(editing ? 'Mijoz yangilandi.' : 'Yangi mijoz qo‘shildi.')}
+        onSaved={() =>
+          setMessage(editing ? t('customers.updatedMessage') : t('customers.createdMessage'))
+        }
       />
     </PageContainer>
   );

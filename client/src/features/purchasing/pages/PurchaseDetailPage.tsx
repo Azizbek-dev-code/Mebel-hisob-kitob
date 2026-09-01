@@ -2,9 +2,10 @@ import {
   PAYMENT_METHOD_LABELS,
   PurchaseStatus,
   UserRole,
+  WorkerResponsibility,
 } from '@furniture-erp/shared';
 import { ArrowLeft, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { ErrorState } from '@/components/feedback/ErrorState';
@@ -14,6 +15,9 @@ import { ModalPortal } from '@/components/ui/ModalPortal';
 import { SectionCard } from '@/components/ui/SectionCard';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useCurrentUser } from '@/features/auth/hooks/use-auth';
+import { toInputDate, todayInputDate } from '@/features/expenses/utils/date';
+import { MoneyField } from '@/features/sales/components/MoneyField';
+import { useWorkerLookup } from '@/features/sales/hooks/use-sales';
 import { ApiClientError } from '@/lib/api-client';
 import { ROUTES } from '@/routes/paths';
 import { formatDate, formatDateTime, formatMoney } from '@/utils/format';
@@ -23,7 +27,11 @@ import {
 } from '@/utils/purchasing';
 
 import { PaySupplierDialog } from '../components/PaySupplierDialog';
-import { useCancelPurchase, usePurchaseDetail } from '../hooks/use-purchasing';
+import {
+  useCancelPurchase,
+  usePurchaseDetail,
+  useUpdatePurchaseDelivery,
+} from '../hooks/use-purchasing';
 
 const fieldClass =
   'w-full rounded-input border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100';
@@ -43,6 +51,8 @@ export function PurchaseDetailPage() {
   const { data: currentUser } = useCurrentUser();
   const isAdmin = canManage(currentUser?.role);
   const cancelPurchase = useCancelPurchase(id);
+  const updateDelivery = useUpdatePurchaseDelivery(id);
+  const deliveryWorkers = useWorkerLookup('', WorkerResponsibility.DELIVERY);
   const purchase = detail.data;
 
   const [payOpen, setPayOpen] = useState(false);
@@ -51,11 +61,28 @@ export function PurchaseDetailPage() {
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [editingDelivery, setEditingDelivery] = useState(false);
+  const [deliveredAt, setDeliveredAt] = useState(todayInputDate());
+  const [deliveryDays, setDeliveryDays] = useState(0);
+  const [driverId, setDriverId] = useState('');
+  const [driverFee, setDriverFee] = useState(0);
+  const [deliveryError, setDeliveryError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!purchase) return;
+    setDeliveredAt(
+      purchase.deliveredAt ? toInputDate(purchase.deliveredAt) : todayInputDate(),
+    );
+    setDeliveryDays(purchase.deliveryDays ?? 0);
+    setDriverId(purchase.driverId ?? '');
+    setDriverFee(purchase.driverFee ?? 0);
+  }, [purchase]);
 
   const isCancelled = purchase?.status === PurchaseStatus.CANCELLED;
   const canPay =
     isAdmin && purchase && !isCancelled && purchase.remainingAmount > 0;
   const canCancel = isAdmin && purchase && !isCancelled;
+  const canEditDelivery = isAdmin && purchase && !isCancelled;
 
   async function handleCancel(event: React.FormEvent) {
     event.preventDefault();
@@ -77,6 +104,32 @@ export function PurchaseDetailPage() {
       void detail.refetch();
     } catch (error) {
       setCancelError(errorMessage(error));
+    }
+  }
+
+  async function handleSaveDelivery(event: React.FormEvent) {
+    event.preventDefault();
+    setDeliveryError(null);
+    if (!Number.isInteger(deliveryDays) || deliveryDays < 0) {
+      setDeliveryError('Yetkazib berish muddati noto‘g‘ri.');
+      return;
+    }
+    if (!Number.isInteger(driverFee) || driverFee < 0) {
+      setDeliveryError('Shopir haqi noto‘g‘ri.');
+      return;
+    }
+    try {
+      await updateDelivery.mutateAsync({
+        deliveredAt: deliveredAt || null,
+        deliveryDays,
+        driverId: driverId || null,
+        driverFee,
+      });
+      setEditingDelivery(false);
+      setMessage('Yetkazib berish ma’lumotlari saqlandi.');
+      void detail.refetch();
+    } catch (error) {
+      setDeliveryError(errorMessage(error));
     }
   }
 
@@ -160,17 +213,27 @@ export function PurchaseDetailPage() {
         ) : (
           <>
             <div className="grid gap-3 sm:grid-cols-3">
-              <SectionCard title="Jami">
+              <SectionCard title="Mahsulotlar">
                 <p className="text-lg font-semibold">{formatMoney(purchase.totalCost)}</p>
               </SectionCard>
+              <SectionCard title="Shopir haqi">
+                <p className="text-lg font-semibold">{formatMoney(purchase.driverFee)}</p>
+              </SectionCard>
+              <SectionCard title="Qoldiq">
+                <p className="text-lg font-semibold text-danger-700">
+                  {formatMoney(purchase.remainingAmount)}
+                </p>
+              </SectionCard>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
               <SectionCard title="To‘langan">
                 <p className="text-lg font-semibold text-success-700">
                   {formatMoney(purchase.paidAmount)}
                 </p>
               </SectionCard>
-              <SectionCard title="Qoldiq">
-                <p className="text-lg font-semibold text-danger-700">
-                  {formatMoney(purchase.remainingAmount)}
+              <SectionCard title="Boshlang‘ich / jami to‘lov">
+                <p className="text-sm text-ink-muted">
+                  Qarz faqat mahsulotlar summasidan hisoblanadi.
                 </p>
               </SectionCard>
             </div>
@@ -180,6 +243,123 @@ export function PurchaseDetailPage() {
                 <p className="text-sm text-ink-soft">{purchase.notes}</p>
               </SectionCard>
             ) : null}
+
+            <SectionCard
+              title="Yetkazib berish"
+              description="Yetkazuvchi va shopir — alohida tushunchalar"
+              action={
+                canEditDelivery ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingDelivery((v) => !v);
+                      setDeliveryError(null);
+                    }}
+                    className="text-sm text-brand-700 hover:underline"
+                    data-testid="purchase-edit-delivery"
+                  >
+                    {editingDelivery ? 'Bekor' : 'Tahrirlash'}
+                  </button>
+                ) : null
+              }
+            >
+              {editingDelivery ? (
+                <form onSubmit={(e) => void handleSaveDelivery(e)} className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block text-sm">
+                      <span className="mb-1.5 block font-medium text-ink">
+                        Olib kelingan sana
+                      </span>
+                      <input
+                        type="date"
+                        className={fieldClass}
+                        value={deliveredAt}
+                        onChange={(e) => setDeliveredAt(e.target.value)}
+                      />
+                    </label>
+                    <label className="block text-sm">
+                      <span className="mb-1.5 block font-medium text-ink">
+                        Necha kun ichida olib kelindi
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        className={fieldClass}
+                        value={deliveryDays}
+                        onChange={(e) =>
+                          setDeliveryDays(Number.parseInt(e.target.value, 10) || 0)
+                        }
+                      />
+                    </label>
+                    {(deliveryWorkers.data?.length ?? 0) > 0 ? (
+                      <label className="block text-sm">
+                        <span className="mb-1.5 block font-medium text-ink">Shopir</span>
+                        <select
+                          className={fieldClass}
+                          value={driverId}
+                          onChange={(e) => setDriverId(e.target.value)}
+                        >
+                          <option value="">Tanlanmagan</option>
+                          {(deliveryWorkers.data ?? []).map((worker) => (
+                            <option key={worker.id} value={worker.id}>
+                              {worker.fullName}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+                    <MoneyField
+                      label="Shopir haqi"
+                      value={driverFee}
+                      onChange={setDriverFee}
+                    />
+                  </div>
+                  {deliveryError ? (
+                    <p className="text-sm text-danger-700">{deliveryError}</p>
+                  ) : null}
+                  <button
+                    type="submit"
+                    disabled={updateDelivery.isPending}
+                    className="rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+                  >
+                    {updateDelivery.isPending ? 'Saqlanmoqda…' : 'Saqlash'}
+                  </button>
+                </form>
+              ) : (
+                <dl className="space-y-2 text-sm" data-testid="purchase-delivery-section">
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-ink-muted">Yetkazuvchi</dt>
+                    <dd>
+                      <Link
+                        to={ROUTES.supplierDetail(purchase.supplierId)}
+                        className="text-brand-700 hover:underline"
+                      >
+                        {purchase.supplierName}
+                      </Link>
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-ink-muted">Olib kelingan sana</dt>
+                    <dd>
+                      {purchase.deliveredAt ? formatDate(purchase.deliveredAt) : '—'}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-ink-muted">Yetkazib berish muddati</dt>
+                    <dd>{purchase.deliveryDays} kun</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-ink-muted">Shopir</dt>
+                    <dd>{purchase.driverName ?? '—'}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-ink-muted">Shopir haqi</dt>
+                    <dd>{formatMoney(purchase.driverFee)}</dd>
+                  </div>
+                </dl>
+              )}
+            </SectionCard>
 
             {isCancelled ? (
               <SectionCard title="Bekor qilish ma’lumotlari">

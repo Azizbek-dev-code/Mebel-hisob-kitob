@@ -1,3 +1,4 @@
+import { UserRole } from '@furniture-erp/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { listDebtsMock, addPaymentMock } = vi.hoisted(() => ({
@@ -14,6 +15,7 @@ vi.mock('./sale.service.js', () => ({
 }));
 
 import * as debtService from './debt.service.js';
+import { ApiError } from '../utils/api-error.js';
 
 describe('debt.service', () => {
   beforeEach(() => {
@@ -45,21 +47,38 @@ describe('debt.service', () => {
     expect(result.summary.totalOutstanding).toBe(1_000_000);
   });
 
-  it('records debt payments through addPayment', async () => {
+  it('records debt payments through addPayment for cashier/admin', async () => {
     addPaymentMock.mockResolvedValue({
       sale: { id: 'sale_1', remainingAmount: 0 },
       payment: { id: 'pay_1', amount: 500_000 },
     });
 
-    const result = await debtService.recordDebtPayment('store_a', 'user_1', 'sale_1', {
-      amount: 500_000,
-      method: 'CASH',
-    });
+    const result = await debtService.recordDebtPayment(
+      'store_a',
+      { id: 'user_1', role: UserRole.CASHIER },
+      'sale_1',
+      {
+        amount: 500_000,
+        method: 'CASH',
+      },
+    );
 
     expect(addPaymentMock).toHaveBeenCalledWith('store_a', 'user_1', 'sale_1', {
       amount: 500_000,
       method: 'CASH',
     });
     expect(result.payment.amount).toBe(500_000);
+  });
+
+  it('forbids EMPLOYEE from collecting debt payments', async () => {
+    await expect(
+      debtService.recordDebtPayment(
+        'store_a',
+        { id: 'emp_1', role: UserRole.EMPLOYEE },
+        'sale_1',
+        { amount: 100_000, method: 'CASH' },
+      ),
+    ).rejects.toBeInstanceOf(ApiError);
+    expect(addPaymentMock).not.toHaveBeenCalled();
   });
 });

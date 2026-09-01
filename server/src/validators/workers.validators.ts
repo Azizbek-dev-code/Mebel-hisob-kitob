@@ -1,4 +1,4 @@
-import { AssemblyTaskStatus, WorkerResponsibility } from '@furniture-erp/shared';
+import { DateRangePreset, AssemblyTaskStatus, WorkerResponsibility } from '@furniture-erp/shared';
 import { z } from 'zod';
 
 import {
@@ -52,10 +52,17 @@ export const workerSalesQuerySchema = paginationQuerySchema.extend({
   search: z.string().trim().max(120).optional(),
   from: calendarDateSchema.optional(),
   to: calendarDateSchema.optional(),
+  status: z.enum(['OPEN', 'ALL', 'CANCELLED', 'ACTIVE', 'COMPLETED']).optional(),
 });
 
 export const workerTasksQuerySchema = z.object({
   status: z.nativeEnum(AssemblyTaskStatus).optional(),
+});
+
+export const sellerReportQuerySchema = z.object({
+  preset: z.nativeEnum(DateRangePreset).optional(),
+  from: calendarDateSchema.optional(),
+  to: calendarDateSchema.optional(),
 });
 
 export const workerOptionsQuerySchema = z.object({
@@ -74,4 +81,5 @@ export type UpdateWorkerBody = z.infer<typeof updateWorkerBodySchema>;
 export type ResetWorkerPasswordBody = z.infer<typeof resetWorkerPasswordBodySchema>;
 export type WorkerSalesQuery = z.infer<typeof workerSalesQuerySchema>;
 export type WorkerTasksQuery = z.infer<typeof workerTasksQuerySchema>;
+export type SellerReportQuery = z.infer<typeof sellerReportQuerySchema>;
 export type WorkerOptionsQuery = z.infer<typeof workerOptionsQuerySchema>;

@@ -3,6 +3,8 @@ import {
   UserRole,
   WorkerFinancialReferenceType,
   WorkerFinancialTransactionType,
+  computeWorkerEarnedTotal,
+  computeWorkerPaidTotal,
   isReversibleWorkerFinancialType,
   type CreateWorkerFinancialTransactionRequest,
   type PaginatedResult,
@@ -49,8 +51,12 @@ function parseTransactionDateOrThrow(value: string, field = 'transactionDate'): 
   return transactionDate;
 }
 
+function isWorkforceLedgerRole(role: string): boolean {
+  return role === UserRole.EMPLOYEE || role === UserRole.CASHIER;
+}
+
 /**
- * Worker must be an EMPLOYEE in the session store.
+ * Worker must be an EMPLOYEE or CASHIER in the session store.
  * Active check applies only when creating new (non-reversal) transactions.
  */
 async function assertWorkerForCreate(storeId: string, workerId: string): Promise<string> {
@@ -58,9 +64,9 @@ async function assertWorkerForCreate(storeId: string, workerId: string): Promise
   if (!worker) {
     throw ApiError.notFound('Worker not found');
   }
-  if (worker.role !== UserRole.EMPLOYEE) {
-    throw ApiError.validation('Worker must be an employee account', [
-      { field: 'workerId', message: 'Worker must be an employee account' },
+  if (!isWorkforceLedgerRole(worker.role)) {
+    throw ApiError.validation('Worker must be an employee or cashier account', [
+      { field: 'workerId', message: 'Worker must be an employee or cashier account' },
     ]);
   }
   if (!worker.isActive) {
@@ -73,7 +79,7 @@ async function assertWorkerForCreate(storeId: string, workerId: string): Promise
 
 async function assertWorkerReadable(storeId: string, workerId: string): Promise<void> {
   const worker = await workerFinancialRepository.findWorkerUserInStore(storeId, workerId);
-  if (!worker || worker.role !== UserRole.EMPLOYEE) {
+  if (!worker || !isWorkforceLedgerRole(worker.role)) {
     throw ApiError.notFound('Worker not found');
   }
 }
@@ -124,8 +130,66 @@ export async function createTransaction(
     ]);
   }
 
+  if (
+    input.type === WorkerFinancialTransactionType.COMMISSION &&
+    (!input.referenceType || !input.referenceId?.trim())
+  ) {
+    throw ApiError.validation('Manual COMMISSION requires a reference', [
+      {
+        field: 'referenceId',
+        message: 'Provide referenceType + referenceId so commissions cannot silently duplicate operational fees',
+      },
+    ]);
+  }
+
   const workerId = await assertWorkerForCreate(storeId, input.workerId);
   const transactionDate = parseTransactionDateOrThrow(input.transactionDate);
+
+  let responsibility = input.responsibility ?? null;
+  if (!responsibility) {
+    const worker = await workerFinancialRepository.findWorkerUserInStore(storeId, workerId);
+    const resps = worker?.responsibilities?.map((row) => row.responsibility) ?? [];
+    if (resps.length === 1) {
+      responsibility = resps[0] as NonNullable<typeof input.responsibility>;
+    }
+  }
+
+  if (input.type === WorkerFinancialTransactionType.PAYMENT) {
+    const totals = await workerFinancialRepository.aggregateWorkerTotals({
+      storeId,
+      workerId,
+      ...(responsibility ? { responsibility } : {}),
+    });
+    const earned = computeWorkerEarnedTotal({
+      totalBonuses: totals.totalBonuses,
+      totalCommissions: totals.totalCommissions,
+      totalAdvances: totals.totalAdvances,
+      totalDebt: totals.totalDebt,
+      totalPayments: totals.totalPayments,
+      totalAdjustments: totals.totalAdjustments,
+      reversalsByOriginalType: totals.reversalsByOriginalType,
+    });
+    const paid = computeWorkerPaidTotal({
+      totalBonuses: totals.totalBonuses,
+      totalCommissions: totals.totalCommissions,
+      totalAdvances: totals.totalAdvances,
+      totalDebt: totals.totalDebt,
+      totalPayments: totals.totalPayments,
+      totalAdjustments: totals.totalAdjustments,
+      reversalsByOriginalType: totals.reversalsByOriginalType,
+    });
+    if (paid + input.amount > earned) {
+      throw ApiError.validation(
+        `To‘lov hisoblangan summadan oshmasligi kerak (hisoblangan ${earned}, to‘langan ${paid})`,
+        [
+          {
+            field: 'amount',
+            message: `Maximum payable is ${Math.max(0, earned - paid)}`,
+          },
+        ],
+      );
+    }
+  }
 
   return workerFinancialRepository.createTransaction({
     storeId,
@@ -136,6 +200,7 @@ export async function createTransaction(
     description: normaliseDescription(input.description),
     referenceType: input.referenceType ?? null,
     referenceId: input.referenceId ?? null,
+    responsibility,
     reversesType: null,
     createdById: actor.id,
   });
@@ -143,16 +208,19 @@ export async function createTransaction(
 
 export async function listWorkerTransactions(options: {
   storeId: string;
-  actorRole: string;
+  actor: { id: string; role: string };
   workerId: string;
   page?: number;
   pageSize?: number;
   type?: WorkerFinancialTransaction['type'];
+  responsibility?: import('@furniture-erp/shared').WorkerResponsibility;
   from?: string;
   to?: string;
   search?: string;
 }): Promise<PaginatedResult<WorkerFinancialTransaction>> {
-  assertCanManageWorkerFinances(options.actorRole);
+  if (options.actor.id !== options.workerId) {
+    assertCanManageWorkerFinances(options.actor.role);
+  }
   await assertWorkerReadable(options.storeId, options.workerId);
 
   const period = await resolveOptionalPeriod(options.storeId, options.from, options.to);
@@ -163,6 +231,7 @@ export async function listWorkerTransactions(options: {
     page: options.page,
     pageSize: options.pageSize,
     type: options.type,
+    responsibility: options.responsibility,
     dateFrom: period.dateFrom,
     dateTo: period.dateTo,
     search: options.search?.trim() || undefined,
@@ -171,11 +240,13 @@ export async function listWorkerTransactions(options: {
 
 export async function getWorkerSummary(
   storeId: string,
-  actorRole: string,
+  actor: { id: string; role: string },
   workerId: string,
   query?: { from?: string; to?: string },
 ): Promise<WorkerFinancialSummary> {
-  assertCanManageWorkerFinances(actorRole);
+  if (actor.id !== workerId) {
+    assertCanManageWorkerFinances(actor.role);
+  }
   await assertWorkerReadable(storeId, workerId);
 
   const period = await resolveOptionalPeriod(storeId, query?.from, query?.to);
@@ -271,10 +342,15 @@ export async function reverseTransaction(
         referenceType: WorkerFinancialReferenceType.REVERSAL,
         referenceId: originalRecord.id,
         reversesType: originalRecord.type,
+        responsibility: originalRecord.responsibility ?? null,
         createdById: actor.id,
       },
       tx,
     );
+
+    if (originalRecord.type === WorkerFinancialTransactionType.COMMISSION) {
+      await workerFinancialRepository.closeOpenCommission(storeId, originalRecord.id, tx);
+    }
 
     const original =
       (await workerFinancialRepository.findTransactionInStore(storeId, transactionId, tx))!;

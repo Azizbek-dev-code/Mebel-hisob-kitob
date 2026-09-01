@@ -1,4 +1,6 @@
 import type {
+  ResetStoreRequest,
+  ResetStoreResponse,
   StoreProfile,
   StoreProfileMutationResponse,
   StoreProfileResponse,
@@ -18,5 +20,9 @@ export const settingsService = {
       body,
     });
     return store;
+  },
+
+  async resetStore(body: ResetStoreRequest): Promise<ResetStoreResponse> {
+    return apiClient.post<ResetStoreResponse>('/settings/store/reset', { body });
   },
 };

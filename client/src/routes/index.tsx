@@ -39,6 +39,8 @@ import { ProductsPage } from '@/features/products/pages/ProductsPage';
 import { ProductDetailPage } from '@/features/products/pages/ProductDetailPage';
 import { ReportsPage } from '@/features/reports/pages/ReportsPage';
 import { AssemblyTasksPage } from '@/features/sales/pages/AssemblyTasksPage';
+import { DeliveryPage } from '@/features/sales/pages/DeliveryPage';
+import { EditSalePage } from '@/features/sales/pages/EditSalePage';
 import { NewSalePage } from '@/features/sales/pages/NewSalePage';
 import { SaleDetailPage } from '@/features/sales/pages/SaleDetailPage';
 import { SalesPage } from '@/features/sales/pages/SalesPage';
@@ -53,7 +55,10 @@ import { AuditPage } from '@/features/audit/pages/AuditPage';
 import { StoreBillingPage } from '@/features/subscription/pages/StoreBillingPage';
 import { SystemCheckPage } from '@/features/system/pages/SystemCheckPage';
 import { MySalesPage } from '@/features/workers/pages/MySalesPage';
+import { SellerReportPage } from '@/features/workers/pages/SellerReportPage';
 import { NewWorkerPage } from '@/features/workers/pages/NewWorkerPage';
+import { FeeReconciliationPage } from '@/features/workers/pages/FeeReconciliationPage';
+import { ProfileFinancesPage } from '@/features/workers/pages/ProfileFinancesPage';
 import { ProfilePage } from '@/features/workers/pages/ProfilePage';
 import { WorkerCompensationPage } from '@/features/workers/pages/WorkerCompensationPage';
 import { WorkerCompensationPreviewPage } from '@/features/workers/pages/WorkerCompensationPreviewPage';
@@ -230,10 +235,14 @@ export const routes: RouteObject[] = [
           { path: ROUTES.platformSettings, element: platformOnly(<PlatformSettingsPage />) },
           { path: ROUTES.sales, element: <SalesPage /> },
           { path: ROUTES.saleNew, element: <NewSalePage /> },
+          { path: '/sales/:id/edit', element: <EditSalePage /> },
           { path: '/sales/:id', element: <SaleDetailPage /> },
           { path: ROUTES.assemblyTasks, element: <AssemblyTasksPage /> },
+          { path: ROUTES.delivery, element: <DeliveryPage /> },
           { path: ROUTES.mySales, element: <MySalesPage /> },
+          { path: ROUTES.myReports, element: <SellerReportPage /> },
           { path: ROUTES.profile, element: <ProfilePage /> },
+          { path: ROUTES.profileFinances, element: <ProfileFinancesPage /> },
           {
             path: ROUTES.products,
             element: (
@@ -314,6 +323,14 @@ export const routes: RouteObject[] = [
             element: (
               <RequireWorkerManager>
                 <WorkersPage />
+              </RequireWorkerManager>
+            ),
+          },
+          {
+            path: ROUTES.workersReconciliation,
+            element: (
+              <RequireWorkerManager>
+                <FeeReconciliationPage />
               </RequireWorkerManager>
             ),
           },

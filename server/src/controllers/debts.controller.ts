@@ -27,6 +27,11 @@ export const recordDebtPayment = asyncHandler(async (req: Request, res: Response
   const user = requireUser(req);
   const { id } = req.params as IdParams;
   const body = req.body as AddPaymentBody;
-  const result = await debtService.recordDebtPayment(user.storeId, user.id, id, body);
+  const result = await debtService.recordDebtPayment(
+    user.storeId,
+    { id: user.id, role: user.role },
+    id,
+    body,
+  );
   sendCreated<AddPaymentResponse>(res, result);
 });

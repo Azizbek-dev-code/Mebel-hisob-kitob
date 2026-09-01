@@ -9,8 +9,11 @@ import {
   WorkerCompensationType,
   WORKER_COMPENSATION_PREVIEW_DISCLAIMER,
   calculateWorkerCompensation,
+  computeSellerCommissionLines,
   compensationDateRangesOverlap,
   findCompensationRuleForTypeOnDate,
+  formatBasisPointsAsPercentLabel,
+  formatMoneyNumber,
   isFixedCompensationType,
   isPercentCompensationType,
   requiredResponsibilityForCompensationType,
@@ -145,6 +148,10 @@ function assertResponsibilityMatchesType(
   }
 }
 
+function isWorkforceLedgerRole(role: string): boolean {
+  return role === UserRole.EMPLOYEE || role === UserRole.CASHIER;
+}
+
 async function assertWorkerForCreate(
   storeId: string,
   workerId: string,
@@ -154,9 +161,9 @@ async function assertWorkerForCreate(
   if (!worker) {
     throw ApiError.notFound('Worker not found');
   }
-  if (worker.role !== UserRole.EMPLOYEE) {
-    throw ApiError.validation('Worker must be an employee account', [
-      { field: 'workerId', message: 'Worker must be an employee account' },
+  if (!isWorkforceLedgerRole(worker.role)) {
+    throw ApiError.validation('Worker must be an employee or cashier account', [
+      { field: 'workerId', message: 'Worker must be an employee or cashier account' },
     ]);
   }
   if (!worker.isActive) {
@@ -180,7 +187,7 @@ async function assertWorkerForCreate(
 
 async function assertWorkerReadable(storeId: string, workerId: string): Promise<void> {
   const worker = await workerCompensationRepository.findWorkerUserInStore(storeId, workerId);
-  if (!worker || worker.role !== UserRole.EMPLOYEE) {
+  if (!worker || !isWorkforceLedgerRole(worker.role)) {
     throw ApiError.notFound('Worker not found');
   }
 }
@@ -469,34 +476,31 @@ export function buildCompensationPreview(options: {
     const eventDate = sale.saleDate;
     const description = `Sotuv #${sale.saleNumber} · ${productSummary(sale.productNames)}`;
     const totalSalePrice = fromDbMoney(sale.totalSalePrice);
-    const grossProfit = fromDbMoney(sale.grossProfit);
-
-    const saleRuleTypes = [
-      WorkerCompensationType.PERCENT_OF_SALE,
-      WorkerCompensationType.PERCENT_OF_GROSS_PROFIT,
-      WorkerCompensationType.FIXED_PER_SALE,
-    ] as const;
+    // Seller % of profit is always yalpi foyda (sale − cost). Operational fees
+    // and stored netProfit must not shrink the commission base.
+    const commissionLines = computeSellerCommissionLines({
+      rules: options.rules.map((rule) => ({
+        id: rule.id,
+        type: rule.type,
+        value: rule.value,
+        isActive: rule.isActive,
+        effectiveFrom: new Date(rule.effectiveFrom),
+        effectiveTo: rule.effectiveTo ? new Date(rule.effectiveTo) : null,
+      })),
+      saleDate: eventDate,
+      totalSalePrice,
+      grossProfit: fromDbMoney(sale.grossProfit),
+    });
 
     let matchedOnSale = false;
-    for (const type of saleRuleTypes) {
+    for (const line of commissionLines) {
+      if (line.ruleType === 'MANUAL_SELLER') continue;
+      const type = line.ruleType;
       const rule = findCompensationRuleForTypeOnDate(matchRules, type, eventDate);
       if (!rule) continue;
 
       const fullRule = options.rules.find((row) => row.id === rule.id);
       if (!fullRule) continue;
-
-      const baseAmount =
-        type === WorkerCompensationType.PERCENT_OF_SALE
-          ? totalSalePrice
-          : type === WorkerCompensationType.PERCENT_OF_GROSS_PROFIT
-            ? grossProfit
-            : undefined;
-
-      const compensationAmount = calculateWorkerCompensation({
-        type,
-        value: rule.value,
-        baseAmount,
-      });
 
       matchedOnSale = true;
       appliedRuleIds.add(rule.id);
@@ -505,15 +509,12 @@ export function buildCompensationPreview(options: {
         eventDate: eventDate.toISOString(),
         eventKind: 'SALE',
         description,
-        eventAmount:
-          type === WorkerCompensationType.PERCENT_OF_GROSS_PROFIT
-            ? grossProfit
-            : totalSalePrice,
+        eventAmount: line.baseAmount,
         ruleId: rule.id,
         ruleType: type,
         responsibility: fullRule.responsibility,
         ruleValue: rule.value,
-        compensationAmount,
+        compensationAmount: line.amount,
         referenceType: 'SALE',
         referenceId: sale.id,
         source: 'RULE',
@@ -524,6 +525,11 @@ export function buildCompensationPreview(options: {
 
   for (const task of options.assemblies) {
     if (saleHasManualRole(task.saleId, SaleWorkerPayRole.ASSEMBLER)) {
+      continue;
+    }
+    // Operational usta fee on the sale is posted at assembly COMPLETED —
+    // do not also settle FIXED_PER_ASSEMBLY for the same work.
+    if (task.installationCost > 0n) {
       continue;
     }
 
@@ -544,7 +550,7 @@ export function buildCompensationPreview(options: {
     assemblyIds.add(task.id);
     appliedRuleIds.add(rule.id);
     pushLine(breakdown, {
-      id: `${task.id}:FIXED_PER_ASSEMBLY`,
+      id: `${task.saleId}:FIXED_PER_ASSEMBLY:${task.id}`,
       eventDate: eventDate.toISOString(),
       eventKind: 'ASSEMBLY',
       description: `Terlash · Sotuv #${task.saleNumber} · ${productSummary(task.productNames)}`,
@@ -565,6 +571,10 @@ export function buildCompensationPreview(options: {
       saleHasManualRole(delivery.id, SaleWorkerPayRole.DASTAFCHI) ||
       saleHasManualRole(delivery.id, SaleWorkerPayRole.SHOPIR)
     ) {
+      continue;
+    }
+    // Operational shopir fee is posted when delivery completes.
+    if (delivery.deliveryCost > 0n) {
       continue;
     }
 
@@ -602,6 +612,11 @@ export function buildCompensationPreview(options: {
   }
 
   for (const installation of options.installations) {
+    // Operational installer fee is posted when installation completes.
+    if (installation.installerFee > 0n) {
+      continue;
+    }
+
     const eventDate = installation.installationDate;
     const rule = findCompensationRuleForTypeOnDate(
       matchRules,
@@ -639,6 +654,20 @@ export function buildCompensationPreview(options: {
     if (manual.workerId !== options.worker.id) continue;
 
     const role = manual.role as SaleWorkerPayRole;
+    // Collision prevention: operational fee on the sale already posts COMMISSION.
+    if (
+      role === SaleWorkerPayRole.ASSEMBLER &&
+      manual.installationCost > 0n
+    ) {
+      continue;
+    }
+    if (
+      (role === SaleWorkerPayRole.SHOPIR || role === SaleWorkerPayRole.DASTAFCHI) &&
+      manual.deliveryCost > 0n
+    ) {
+      continue;
+    }
+
     const amount = fromDbMoney(manual.amount);
     const eventKind = manualEventKind(role);
     const ruleType = manualRuleType(role);
@@ -754,7 +783,7 @@ export async function getCompensationPreview(
   assertCanManageWorkerCompensation(actorRole);
 
   const worker = await workerCompensationRepository.findWorkerUserInStore(storeId, workerId);
-  if (!worker || worker.role !== UserRole.EMPLOYEE) {
+  if (!worker || !isWorkforceLedgerRole(worker.role)) {
     throw ApiError.notFound('Worker not found');
   }
 
@@ -836,20 +865,48 @@ export async function settleCompensation(
     };
   }
 
-  const lineIds = payable.map((line) => line.id);
+  const lineIds = payable.flatMap((line) => {
+    const ids = [line.id];
+    // Legacy FIXED_PER_ASSEMBLY settle used `${taskId}:FIXED_PER_ASSEMBLY`.
+    if (line.ruleType === WorkerCompensationType.FIXED_PER_ASSEMBLY && line.referenceId) {
+      ids.push(`${line.referenceId}:FIXED_PER_ASSEMBLY`);
+    }
+    return ids;
+  });
   const alreadyPosted = await workerFinancialRepository.findCompensationCommissionRefs(
     storeId,
     workerId,
     lineIds,
   );
 
-  const toCreate = payable.filter((line) => !alreadyPosted.has(line.id));
+  const toCreate = payable.filter((line) => {
+    if (alreadyPosted.has(line.id)) return false;
+    if (
+      line.ruleType === WorkerCompensationType.FIXED_PER_ASSEMBLY &&
+      line.referenceId &&
+      alreadyPosted.has(`${line.referenceId}:FIXED_PER_ASSEMBLY`)
+    ) {
+      return false;
+    }
+    return true;
+  });
   const skippedAlreadySettled = payable.length - toCreate.length;
   const createdTransactionIds: string[] = [];
 
   if (toCreate.length > 0) {
     await prisma.$transaction(async (tx) => {
       for (const line of toCreate) {
+        const ratePct =
+          line.ruleType === WorkerCompensationType.PERCENT_OF_SALE ||
+          line.ruleType === WorkerCompensationType.PERCENT_OF_GROSS_PROFIT
+            ? ` · Stavka ${formatBasisPointsAsPercentLabel(line.ruleValue)}`
+            : '';
+        const baseHint =
+          line.ruleType === WorkerCompensationType.PERCENT_OF_GROSS_PROFIT
+            ? ` · Yalpi foyda ${formatMoneyNumber(line.eventAmount)}`
+            : line.ruleType === WorkerCompensationType.PERCENT_OF_SALE
+              ? ` · Sotuv ${formatMoneyNumber(line.eventAmount)}`
+              : '';
         const created = await workerFinancialRepository.createTransaction(
           {
             storeId,
@@ -857,9 +914,10 @@ export async function settleCompensation(
             type: WorkerFinancialTransactionType.COMMISSION,
             amount: line.compensationAmount,
             transactionDate: new Date(line.eventDate),
-            description: `Komissiya · ${line.description}`,
+            description: `Komissiya · ${line.description}${baseHint}${ratePct}`,
             referenceType: WorkerFinancialReferenceType.COMPENSATION,
             referenceId: line.id,
+            responsibility: line.responsibility,
             createdById: actor.id,
           },
           tx,

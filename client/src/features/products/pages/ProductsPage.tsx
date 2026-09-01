@@ -15,8 +15,10 @@ import {
   Plus,
   Search,
   Sofa,
+  Trash2,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
 import { EmptyState } from '@/components/feedback/EmptyState';
@@ -36,6 +38,7 @@ import { stockStatusLabel } from '@/features/inventory/utils/labels';
 import { ProductFormDialog } from '../components/ProductFormDialog';
 import {
   useArchiveProduct,
+  useDeleteProduct,
   useProductCategories,
   useProductsList,
   useRestoreProduct,
@@ -49,12 +52,12 @@ const PAGE_SIZE = 20;
 type StatusChip = ProductCatalogueStatusFilter;
 type StockChip = ProductCatalogueStockFilter;
 
-function listErrorMessage(error: unknown): string {
+function listErrorMessage(error: unknown, t: (key: string) => string): string {
   if (error instanceof ApiClientError) {
-    if (error.isForbidden) return 'Mebel katalogini ko‘rish uchun ruxsat yo‘q.';
-    return error.message || 'Qayta urinib ko‘ring.';
+    if (error.isForbidden) return t('products.forbidden');
+    return error.message || t('common.retry');
   }
-  return 'Qayta urinib ko‘ring.';
+  return t('common.retry');
 }
 
 function statusTone(status: string): 'success' | 'warning' | 'danger' | 'neutral' {
@@ -71,6 +74,7 @@ function stockTone(status: string): 'success' | 'warning' | 'danger' | 'neutral'
 }
 
 export function ProductsPage() {
+  const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [status, setStatus] = useState<StatusChip>('ACTIVE');
@@ -84,6 +88,7 @@ export function ProductsPage() {
   const categories = useProductCategories(false);
   const archiveProduct = useArchiveProduct();
   const restoreProduct = useRestoreProduct();
+  const deleteProduct = useDeleteProduct();
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
@@ -118,21 +123,31 @@ export function ProductsPage() {
   const meta = list.data?.meta;
 
   async function handleArchive(product: ProductListItem) {
-    if (!window.confirm(`“${product.name}” ni arxivlashni tasdiqlaysizmi?`)) return;
+    if (!window.confirm(t('products.archiveConfirm', { name: product.name }))) return;
     try {
       await archiveProduct.mutateAsync(product.id);
-      setMessage('Mahsulot arxivlandi — yangi sotuvlarda chiqmaydi.');
+      setMessage(t('products.archivedMessage'));
     } catch (error) {
-      setMessage(listErrorMessage(error));
+      setMessage(listErrorMessage(error, t));
     }
   }
 
   async function handleRestore(product: ProductListItem) {
     try {
       await restoreProduct.mutateAsync(product.id);
-      setMessage('Mahsulot yana faol.');
+      setMessage(t('products.restoredMessage'));
     } catch (error) {
-      setMessage(listErrorMessage(error));
+      setMessage(listErrorMessage(error, t));
+    }
+  }
+
+  async function handleDeletePermanent(product: ProductListItem) {
+    if (!window.confirm(t('products.deleteConfirm', { name: product.name }))) return;
+    try {
+      await deleteProduct.mutateAsync(product.id);
+      setMessage(t('products.deletedMessage'));
+    } catch (error) {
+      setMessage(listErrorMessage(error, t));
     }
   }
 
@@ -141,10 +156,8 @@ export function ProductsPage() {
       <div data-testid="products-page" className="space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold tracking-tight text-ink">Mebellar</h2>
-            <p className="mt-1 text-sm text-ink-muted">
-              Katalog — narx, kategoriya va holat. Zaxira Ombor orqali kiritiladi.
-            </p>
+            <h2 className="text-2xl font-semibold tracking-tight text-ink">{t('products.title')}</h2>
+            <p className="mt-1 text-sm text-ink-muted">{t('products.subtitle')}</p>
           </div>
           <WriteGuard
             feature="products"
@@ -155,7 +168,7 @@ export function ProductsPage() {
             className="inline-flex items-center justify-center gap-1.5 rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
           >
             <Plus className="size-4" aria-hidden="true" />
-            Yangi mebel
+            {t('products.new')}
           </WriteGuard>
         </div>
 
@@ -167,56 +180,56 @@ export function ProductsPage() {
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <KpiCard
-            title="Jami mebel"
+            title={t('products.totalProducts')}
             value={summary ? String(summary.totalProducts) : '—'}
-            context="Katalogdagi barcha SKU"
+            context={t('products.totalProductsHint')}
             icon={Sofa}
             isLoading={list.isLoading}
           />
           <KpiCard
-            title="Faol"
+            title={t('common.active')}
             value={summary ? String(summary.activeCount) : '—'}
-            context="Sotuvga ochiq"
+            context={t('products.activeHint')}
             icon={Package}
             tone="success"
             isLoading={list.isLoading}
           />
           <KpiCard
-            title="Kam qolgan"
+            title={t('products.lowStock')}
             value={summary ? String(summary.lowStockCount) : '—'}
-            context="Faol + past zaxira"
+            context={t('products.lowStockHint')}
             icon={PackageMinus}
             tone="warning"
             isLoading={list.isLoading}
           />
           <KpiCard
-            title="Tugagan"
+            title={t('products.outOfStock')}
             value={summary ? String(summary.outOfStockCount) : '—'}
-            context="Faol + 0 dona"
+            context={t('products.outOfStockHint')}
             icon={PackageX}
             tone="danger"
             isLoading={list.isLoading}
           />
         </div>
 
-        <SectionCard title="Filtrlar" description="Qidiruv va holat">
+        <SectionCard title={t('common.filters')} description={t('products.filtersHint')}>
           <div className="space-y-3">
             <div className="relative">
               <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-muted" />
               <input
                 className={cn(fieldClass, 'pl-9')}
-                placeholder="Nomi yoki SKU"
+                placeholder={t('products.searchPlaceholder')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
 
-            <div className="flex flex-wrap gap-1" role="group" aria-label="Holat">
+            <div className="flex flex-wrap gap-1" role="group" aria-label={t('common.status')}>
               {(
                 [
-                  ['ACTIVE', 'Faol'],
-                  ['ARCHIVED', 'Arxiv'],
-                  ['ALL', 'Hammasi'],
+                  ['ACTIVE', t('common.active')],
+                  ['ARCHIVED', t('common.archived')],
+                  ['ALL', t('common.all')],
                 ] as const
               ).map(([id, label]) => (
                 <button
@@ -235,13 +248,13 @@ export function ProductsPage() {
               ))}
             </div>
 
-            <div className="flex flex-wrap gap-1" role="group" aria-label="Zaxira">
+            <div className="flex flex-wrap gap-1" role="group" aria-label={t('products.stock')}>
               {(
                 [
-                  ['ALL', 'Zaxira: hammasi'],
-                  ['IN_STOCK', 'Mavjud'],
-                  ['LOW_STOCK', 'Kam'],
-                  ['OUT_OF_STOCK', 'Tugagan'],
+                  ['ALL', t('products.stockAll')],
+                  ['IN_STOCK', t('products.inStock')],
+                  ['LOW_STOCK', t('products.low')],
+                  ['OUT_OF_STOCK', t('products.outOfStock')],
                 ] as const
               ).map(([id, label]) => (
                 <button
@@ -264,9 +277,9 @@ export function ProductsPage() {
               className={cn(fieldClass, 'max-w-xs')}
               value={categoryId}
               onChange={(e) => setCategoryId(e.target.value)}
-              aria-label="Kategoriya"
+              aria-label={t('products.category')}
             >
-              <option value="">Barcha kategoriyalar</option>
+              <option value="">{t('common.allCategories')}</option>
               {(categories.data ?? []).map((cat) => (
                 <option key={cat.id} value={cat.id}>
                   {cat.name}
@@ -278,8 +291,8 @@ export function ProductsPage() {
 
         {list.isError ? (
           <ErrorState
-            title="Katalogni yuklab bo‘lmadi"
-            message={listErrorMessage(list.error)}
+            title={t('products.loadFailed')}
+            message={listErrorMessage(list.error, t)}
             onRetry={() => void list.refetch()}
           />
         ) : list.isLoading ? (
@@ -290,22 +303,22 @@ export function ProductsPage() {
         ) : items.length === 0 ? (
           <EmptyState
             icon={Sofa}
-            title="Mebel topilmadi"
-            description="Yangi mebel qo‘shing yoki filtrni o‘zgartiring."
+            title={t('products.emptyTitle')}
+            description={t('products.emptyDescription')}
           />
         ) : (
           <div className="overflow-x-auto rounded-card border border-line">
             <table className="min-w-full text-left text-sm">
               <thead className="border-b border-line bg-surface-muted text-xs text-ink-muted">
                 <tr>
-                  <th className="px-3 py-2 font-medium">Mebel</th>
-                  <th className="px-3 py-2 font-medium">SKU</th>
-                  <th className="px-3 py-2 font-medium">Kategoriya</th>
-                  <th className="px-3 py-2 font-medium">Sotuv</th>
-                  <th className="px-3 py-2 font-medium">Tannarx</th>
-                  <th className="px-3 py-2 font-medium">Zaxira</th>
-                  <th className="px-3 py-2 font-medium">Holat</th>
-                  <th className="px-3 py-2 font-medium">Amallar</th>
+                  <th className="px-3 py-2 font-medium">{t('products.singular')}</th>
+                  <th className="px-3 py-2 font-medium">{t('products.sku')}</th>
+                  <th className="px-3 py-2 font-medium">{t('products.category')}</th>
+                  <th className="px-3 py-2 font-medium">{t('sales.totalSale')}</th>
+                  <th className="px-3 py-2 font-medium">{t('sales.costPrice')}</th>
+                  <th className="px-3 py-2 font-medium">{t('products.stock')}</th>
+                  <th className="px-3 py-2 font-medium">{t('common.status')}</th>
+                  <th className="px-3 py-2 font-medium">{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -342,7 +355,9 @@ export function ProductsPage() {
                     </td>
                     <td className="px-3 py-2">
                       <Badge tone={statusTone(product.status)}>
-                        {product.status === ProductStatus.ACTIVE ? 'Faol' : 'Arxiv'}
+                        {product.status === ProductStatus.ACTIVE
+                          ? t('common.active')
+                          : t('common.archived')}
                       </Badge>
                     </td>
                     <td className="px-3 py-2">
@@ -352,7 +367,7 @@ export function ProductsPage() {
                           className="inline-flex items-center gap-1 rounded-input border border-line px-2 py-1 text-xs hover:bg-surface-hover"
                         >
                           <Eye className="size-3.5" />
-                          Ko‘rish
+                          {t('common.view')}
                         </Link>
                         <button
                           type="button"
@@ -363,7 +378,7 @@ export function ProductsPage() {
                           className="inline-flex items-center gap-1 rounded-input border border-line px-2 py-1 text-xs hover:bg-surface-hover"
                         >
                           <Pencil className="size-3.5" />
-                          Edit
+                          {t('common.edit')}
                         </button>
                         {product.status === ProductStatus.ACTIVE ? (
                           <button
@@ -372,16 +387,27 @@ export function ProductsPage() {
                             className="inline-flex items-center gap-1 rounded-input border border-line px-2 py-1 text-xs text-danger-700 hover:bg-danger-50"
                           >
                             <Archive className="size-3.5" />
-                            Arxiv
+                            {t('common.archive')}
                           </button>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => void handleRestore(product)}
-                            className="inline-flex items-center gap-1 rounded-input border border-line px-2 py-1 text-xs hover:bg-surface-hover"
-                          >
-                            Tiklash
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => void handleRestore(product)}
+                              className="inline-flex items-center gap-1 rounded-input border border-line px-2 py-1 text-xs hover:bg-surface-hover"
+                            >
+                              {t('common.restore')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleDeletePermanent(product)}
+                              disabled={deleteProduct.isPending}
+                              className="inline-flex items-center gap-1 rounded-input border border-danger-200 px-2 py-1 text-xs text-danger-700 hover:bg-danger-50 disabled:opacity-60"
+                            >
+                              <Trash2 className="size-3.5" />
+                              {t('common.delete')}
+                            </button>
+                          </>
                         )}
                       </div>
                     </td>
@@ -395,7 +421,7 @@ export function ProductsPage() {
         {meta && meta.totalPages > 1 ? (
           <div className="flex items-center justify-between text-sm">
             <span className="text-ink-muted">
-              Sahifa {meta.page} / {meta.totalPages}
+              {t('common.pageOf', { page: meta.page, total: meta.totalPages })}
             </span>
             <div className="flex gap-2">
               <button
@@ -404,7 +430,7 @@ export function ProductsPage() {
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 className="rounded-input border border-line px-2 py-1 disabled:opacity-50"
               >
-                Oldingi
+                {t('common.previous')}
               </button>
               <button
                 type="button"
@@ -412,7 +438,7 @@ export function ProductsPage() {
                 onClick={() => setPage((p) => p + 1)}
                 className="rounded-input border border-line px-2 py-1 disabled:opacity-50"
               >
-                Keyingi
+                {t('common.next')}
               </button>
             </div>
           </div>
@@ -427,7 +453,9 @@ export function ProductsPage() {
           setFormOpen(false);
           setEditing(null);
         }}
-        onSaved={() => setMessage(editing ? 'Mebel yangilandi.' : 'Yangi mebel qo‘shildi.')}
+        onSaved={() =>
+          setMessage(editing ? t('products.updatedMessage') : t('products.createdMessage'))
+        }
       />
     </PageContainer>
   );

@@ -20,6 +20,7 @@ import type {
   CreateSupplierPaymentBody,
   PurchaseListQueryBody,
   SupplierListQueryBody,
+  UpdatePurchaseDeliveryBody,
   UpdateSupplierBody,
 } from '../validators/purchasing.validators.js';
 
@@ -105,6 +106,18 @@ export const createPurchase = asyncHandler(async (req: Request, res: Response) =
     body,
   );
   sendCreated<PurchaseMutationResponse>(res, { purchase });
+});
+
+export const updatePurchaseDelivery = asyncHandler(async (req: Request, res: Response) => {
+  const user = requireUser(req);
+  const body = req.body as UpdatePurchaseDeliveryBody;
+  const purchase = await purchasingService.updatePurchaseDelivery(
+    user.storeId,
+    { id: user.id, role: user.role },
+    req.params.id!,
+    body,
+  );
+  sendSuccess<PurchaseMutationResponse>(res, { purchase });
 });
 
 export const addPurchasePayment = asyncHandler(async (req: Request, res: Response) => {

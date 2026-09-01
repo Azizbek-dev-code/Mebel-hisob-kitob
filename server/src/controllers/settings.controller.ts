@@ -1,11 +1,18 @@
-import type { StoreProfileMutationResponse, StoreProfileResponse } from '@furniture-erp/shared';
+import type {
+  ResetStoreResponse,
+  StoreProfileMutationResponse,
+  StoreProfileResponse,
+} from '@furniture-erp/shared';
 import type { Request, Response } from 'express';
 
 import * as settingsService from '../services/settings.service.js';
 import { ApiError } from '../utils/api-error.js';
 import { asyncHandler } from '../utils/async-handler.js';
 import { sendSuccess } from '../utils/http-response.js';
-import type { UpdateStoreProfileBody } from '../validators/settings.validators.js';
+import type {
+  ResetStoreBody,
+  UpdateStoreProfileBody,
+} from '../validators/settings.validators.js';
 
 function requireUser(req: Request) {
   if (!req.auth) throw ApiError.unauthorized();
@@ -23,4 +30,15 @@ export const updateStoreProfile = asyncHandler(async (req: Request, res: Respons
   const body = req.body as UpdateStoreProfileBody;
   const store = await settingsService.updateStoreProfile(user.storeId, user.role, body, user.id);
   sendSuccess<StoreProfileMutationResponse>(res, { store });
+});
+
+export const resetStoreProfile = asyncHandler(async (req: Request, res: Response) => {
+  const user = requireUser(req);
+  const body = req.body as ResetStoreBody;
+  const result = await settingsService.resetStoreProfile(
+    user.storeId,
+    { id: user.id, role: user.role },
+    body.confirmation,
+  );
+  sendSuccess<ResetStoreResponse>(res, result);
 });

@@ -290,6 +290,11 @@ export function AddWorkerCompensationRuleDialog({
           {fieldErrors.type ? (
             <p className="mt-1 text-xs text-danger-700">{fieldErrors.type}</p>
           ) : null}
+          {type === 'PERCENT_OF_GROSS_PROFIT' ? (
+            <p className="mt-2 rounded-input bg-canvas/80 px-3 py-2 text-xs text-ink-soft">
+              Yalpi foydadan hisoblanadi (sotuv − tannarx). Usta/shopir haqqi bazani kamaytirmaydi. Manfiy foydada commission 0.
+            </p>
+          ) : null}
         </div>
 
         {type && isPercentCompensationType(type) ? (

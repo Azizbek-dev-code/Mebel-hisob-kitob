@@ -1,6 +1,8 @@
 import { Loader2, Plus } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
   useCreateProduct,
   useProductCategories,
@@ -37,12 +39,12 @@ function fieldError(error: unknown, field: string): string | null {
  * Reuses POST /products (stockQty stays 0; no warehouse inbound movement).
  */
 export function QuickCreateProductPanel({ onCreated, onCancel }: QuickCreateProductPanelProps) {
+  const { t } = useTranslation();
   const createProduct = useCreateProduct();
   const categories = useProductCategories(false, true);
 
   const [name, setName] = useState('');
   const [categoryId, setCategoryId] = useState('');
-  const [sku, setSku] = useState('');
   const [costPrice, setCostPrice] = useState(0);
   const [salePrice, setSalePrice] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -52,31 +54,32 @@ export function QuickCreateProductPanel({ onCreated, onCancel }: QuickCreateProd
   const [notes, setNotes] = useState('');
   const [trackStock, setTrackStock] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmMissingCost, setConfirmMissingCost] = useState(false);
 
-  async function handleSave() {
+  async function persist() {
     setError(null);
 
     if (!name.trim()) {
-      setError('Nomi majburiy');
+      setError(t('products.nameRequiredError'));
       return;
     }
     if (!(salePrice > 0)) {
-      setError('Sotuv narxi 0 dan katta bo‘lishi kerak');
+      setError(t('products.salePriceMustBePositive'));
       return;
     }
     if (costPrice < 0) {
-      setError('Tannarx manfiy bo‘lishi mumkin emas');
+      setError(t('products.costNegative'));
       return;
     }
     if (!(quantity > 0)) {
-      setError('Miqdor 0 dan katta bo‘lishi kerak');
+      setError(t('products.qtyMustBePositive'));
       return;
     }
 
     const descriptionParts = [
-      size.trim() ? `O‘lcham: ${size.trim()}` : null,
-      color.trim() ? `Rang: ${color.trim()}` : null,
-      material.trim() ? `Material: ${material.trim()}` : null,
+      size.trim() ? t('products.descSize', { value: size.trim() }) : null,
+      color.trim() ? t('products.descColor', { value: color.trim() }) : null,
+      material.trim() ? t('products.descMaterial', { value: material.trim() }) : null,
       notes.trim() || null,
     ].filter((part): part is string => Boolean(part));
 
@@ -85,12 +88,10 @@ export function QuickCreateProductPanel({ onCreated, onCancel }: QuickCreateProd
         name: name.trim(),
         costPrice,
         defaultSalePrice: salePrice,
-        sku: sku.trim() || null,
+        sku: null,
         categoryId: categoryId || null,
         description: descriptionParts.length > 0 ? descriptionParts.join('\n') : null,
         minStockQty: 0,
-        // No warehouse inbound. Default off so the line can sell immediately;
-        // enabling tracking keeps existing insufficient-stock checks on submit.
         trackStock,
       });
 
@@ -100,7 +101,7 @@ export function QuickCreateProductPanel({ onCreated, onCancel }: QuickCreateProd
           label: created.name,
           description: `${formatMoney(created.defaultSalePrice)}${
             created.sku ? ` · ${created.sku}` : ''
-          }${created.trackStock ? ` · ${created.stockQty} dona` : ''}`,
+          }${created.trackStock ? ` · ${created.stockQty} ${t('common.pcs')}` : ''}`,
         },
         costPrice: created.costPrice,
         salePrice: created.defaultSalePrice,
@@ -110,121 +111,151 @@ export function QuickCreateProductPanel({ onCreated, onCancel }: QuickCreateProd
       setError(
         fieldError(err, 'sku') ||
           fieldError(err, 'categoryId') ||
-          mutationErrorMessage(err, 'Mebel saqlanmadi.'),
+          mutationErrorMessage(err, t('products.saveFailed')),
       );
     }
   }
 
+  function handleSave() {
+    setError(null);
+    if (!name.trim()) {
+      setError(t('products.nameRequiredError'));
+      return;
+    }
+    if (!(salePrice > 0)) {
+      setError(t('products.salePriceMustBePositive'));
+      return;
+    }
+    if (costPrice <= 0) {
+      setConfirmMissingCost(true);
+      return;
+    }
+    void persist();
+  }
+
   return (
-    <div
-      className="mt-4 grid max-h-[min(70vh,32rem)] gap-3 overflow-y-auto rounded-card border border-line bg-surface-muted p-4 sm:grid-cols-2"
-      data-testid="sale-quick-product-form"
-    >
-      <input
-        className={fieldClass}
-        placeholder="Nomi *"
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-        data-testid="sale-quick-product-name"
-      />
-      <select
-        className={fieldClass}
-        value={categoryId}
-        onChange={(event) => setCategoryId(event.target.value)}
-        data-testid="sale-quick-product-category"
+    <>
+      <div
+        className="mt-4 grid max-h-[min(70vh,32rem)] gap-3 overflow-y-auto rounded-card border border-line bg-surface-muted p-4 sm:grid-cols-2"
+        data-testid="sale-quick-product-form"
       >
-        <option value="">Kategoriya (ixtiyoriy)</option>
-        {(categories.data ?? []).map((category) => (
-          <option key={category.id} value={category.id}>
-            {category.name}
-          </option>
-        ))}
-      </select>
-      <input
-        className={fieldClass}
-        placeholder="Model / SKU"
-        value={sku}
-        onChange={(event) => setSku(event.target.value)}
-        data-testid="sale-quick-product-sku"
-      />
-      <div className="space-y-1.5">
-        <label className="block text-sm font-medium text-ink">Miqdor *</label>
         <input
-          type="number"
-          min={1}
           className={fieldClass}
-          value={quantity}
-          onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))}
-          data-testid="sale-quick-product-qty"
+          placeholder={t('products.nameRequired')}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          data-testid="sale-quick-product-name"
         />
-      </div>
-      <MoneyField label="Tannarx" value={costPrice} onChange={setCostPrice} />
-      <MoneyField label="Sotuv narxi *" value={salePrice} onChange={setSalePrice} />
-      <input
-        className={fieldClass}
-        placeholder="O‘lcham"
-        value={size}
-        onChange={(event) => setSize(event.target.value)}
-      />
-      <input
-        className={fieldClass}
-        placeholder="Rang"
-        value={color}
-        onChange={(event) => setColor(event.target.value)}
-      />
-      <input
-        className={fieldClass}
-        placeholder="Material"
-        value={material}
-        onChange={(event) => setMaterial(event.target.value)}
-      />
-      <input
-        className={fieldClass}
-        placeholder="Izoh"
-        value={notes}
-        onChange={(event) => setNotes(event.target.value)}
-      />
-      <label className="flex items-start gap-2 text-sm text-ink sm:col-span-2">
+        <select
+          className={fieldClass}
+          value={categoryId}
+          onChange={(event) => setCategoryId(event.target.value)}
+          data-testid="sale-quick-product-category"
+        >
+          <option value="">{t('products.categoryOptional')}</option>
+          {(categories.data ?? []).map((category) => (
+            <option key={category.id} value={category.id}>
+              {category.name}
+            </option>
+          ))}
+        </select>
+        <div className="rounded-input border border-dashed border-line bg-surface px-3 py-2.5 text-sm text-ink-muted">
+          {t('products.autoSkuShort')}
+        </div>
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-ink">{t('products.qtyRequired')}</label>
+          <input
+            type="number"
+            min={1}
+            className={fieldClass}
+            value={quantity}
+            onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))}
+            data-testid="sale-quick-product-qty"
+          />
+        </div>
+        <MoneyField label={t('sales.costPrice')} value={costPrice} onChange={setCostPrice} />
+        <MoneyField
+          label={t('products.salePriceRequired')}
+          value={salePrice}
+          onChange={setSalePrice}
+        />
         <input
-          type="checkbox"
-          className="mt-1"
-          checked={trackStock}
-          onChange={(event) => setTrackStock(event.target.checked)}
-          data-testid="sale-quick-product-track-stock"
+          className={fieldClass}
+          placeholder={t('products.size')}
+          value={size}
+          onChange={(event) => setSize(event.target.value)}
         />
-        <span>
-          Ombor zaxirasini kuzatish. Tezkor sotuv uchun o‘chirib qoldiring (omborga kirim
-          bo‘lmaydi). Yoqilganda mavjud zaxira tekshiruvlari sotuvda ishlaydi.
-        </span>
-      </label>
-      {error ? (
-        <p
-          role="alert"
-          className="text-sm text-danger-700 sm:col-span-2"
-          data-testid="sale-quick-product-error"
-        >
-          {error}
-        </p>
-      ) : null}
-      <div className="sticky bottom-0 flex flex-wrap gap-2 bg-surface-muted pt-1 sm:col-span-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-input border border-line px-3 py-2 text-sm hover:bg-surface-hover"
-        >
-          Bekor qilish
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleSave()}
-          disabled={createProduct.isPending}
-          className="inline-flex items-center gap-2 rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
-          data-testid="sale-quick-product-save"
-        >
-          {createProduct.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-          Saqlash va sotuvga qo‘shish
-        </button>
+        <input
+          className={fieldClass}
+          placeholder={t('products.color')}
+          value={color}
+          onChange={(event) => setColor(event.target.value)}
+        />
+        <input
+          className={fieldClass}
+          placeholder={t('products.material')}
+          value={material}
+          onChange={(event) => setMaterial(event.target.value)}
+        />
+        <input
+          className={fieldClass}
+          placeholder={t('common.notes')}
+          value={notes}
+          onChange={(event) => setNotes(event.target.value)}
+        />
+        <label className="flex items-start gap-2 text-sm text-ink sm:col-span-2">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={trackStock}
+            onChange={(event) => setTrackStock(event.target.checked)}
+            data-testid="sale-quick-product-track-stock"
+          />
+          <span>{t('products.trackStockHint')}</span>
+        </label>
+        {error ? (
+          <p
+            role="alert"
+            className="text-sm text-danger-700 sm:col-span-2"
+            data-testid="sale-quick-product-error"
+          >
+            {error}
+          </p>
+        ) : null}
+        <div className="sticky bottom-0 flex flex-wrap gap-2 bg-surface-muted pt-1 sm:col-span-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-input border border-line px-3 py-2 text-sm hover:bg-surface-hover"
+          >
+            {t('products.cancelCreate')}
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={createProduct.isPending}
+            className="inline-flex items-center gap-2 rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+            data-testid="sale-quick-product-save"
+          >
+            {createProduct.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+            {t('products.saveAndAddToSale')}
+          </button>
+        </div>
       </div>
-    </div>
+
+      <ConfirmDialog
+        open={confirmMissingCost}
+        title={t('sales.missingCostTitle')}
+        message={<p>{t('sales.missingCostMessage')}</p>}
+        confirmLabel={t('common.confirmContinue')}
+        cancelLabel={t('common.goBack')}
+        busy={createProduct.isPending}
+        onCancel={() => setConfirmMissingCost(false)}
+        onConfirm={() => {
+          setConfirmMissingCost(false);
+          void persist();
+        }}
+      />
+    </>
   );
 }

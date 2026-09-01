@@ -16,6 +16,7 @@ const { prismaMock, catalogueServiceMock, lookupServiceMock } = vi.hoisted(() =>
     updateProduct: vi.fn(),
     archiveProduct: vi.fn(),
     restoreProduct: vi.fn(),
+    deleteProduct: vi.fn(),
     uploadProductImage: vi.fn(),
     removeProductImage: vi.fn(),
     listCategories: vi.fn(),
@@ -221,5 +222,13 @@ describe('products catalogue routes', () => {
     const res = await agent.post(`/api/products/${PRODUCT.id}/archive`);
     expect(res.status).toBe(200);
     expect(res.body.data.product.status).toBe(ProductStatus.ARCHIVED);
+  });
+
+  it('permanently deletes a product', async () => {
+    catalogueServiceMock.deleteProduct.mockResolvedValue(undefined);
+    const agent = await signedInAs(ADMIN_RECORD);
+    const res = await agent.delete(`/api/products/${PRODUCT.id}`);
+    expect(res.status).toBe(204);
+    expect(catalogueServiceMock.deleteProduct).toHaveBeenCalled();
   });
 });

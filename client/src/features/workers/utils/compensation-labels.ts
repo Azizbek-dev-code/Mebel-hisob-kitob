@@ -22,7 +22,7 @@ export const COMPENSATION_RESPONSIBILITY_LABELS: Record<WorkerResponsibilityValu
 
 /** Human-readable compensation type names (Uzbek). */
 export const COMPENSATION_TYPE_LABELS: Record<WorkerCompensationTypeValue, string> = {
-  [WorkerCompensationType.PERCENT_OF_SALE]: 'Sotish summasidan foiz',
+  [WorkerCompensationType.PERCENT_OF_SALE]: 'Sotuv summasidan foiz',
   [WorkerCompensationType.PERCENT_OF_GROSS_PROFIT]: 'Yalpi foydadan foiz',
   [WorkerCompensationType.FIXED_PER_SALE]: 'Har bir sotuv uchun summa',
   [WorkerCompensationType.FIXED_PER_ASSEMBLY]: 'Har bir terlash uchun summa',

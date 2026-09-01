@@ -4,14 +4,17 @@ import type {
   AssemblyTaskResponse,
   CancelSaleResponse,
   CreateSaleResponse,
+  MyDeliveriesResponse,
   SaleDetailResponse,
+  UpdateSaleDeliveryStatusResponse,
 } from '@furniture-erp/shared';
 import type { Request, Response } from 'express';
 
+import * as deliveryOpsService from '../services/delivery-ops.service.js';
 import * as saleService from '../services/sale.service.js';
 import { ApiError } from '../utils/api-error.js';
 import { asyncHandler } from '../utils/async-handler.js';
-import { sendCreated, sendPaginated, sendSuccess } from '../utils/http-response.js';
+import { sendCreated, sendNoContent, sendPaginated, sendSuccess } from '../utils/http-response.js';
 import type { IdParams } from '../validators/common.validators.js';
 import type {
   AddPaymentBody,
@@ -21,6 +24,7 @@ import type {
   SaleListQuery,
   UpdateAssemblyTaskBody,
   UpdateSaleBody,
+  UpdateSaleDeliveryStatusBody,
 } from '../validators/sales.validators.js';
 
 function requireUser(req: Request) {
@@ -36,6 +40,7 @@ export const listSales = asyncHandler(async (req: Request, res: Response) => {
 
   const result = await saleService.listSales({
     storeId: user.storeId,
+    actor: { id: user.id, role: user.role },
     page: query.page,
     pageSize: query.pageSize,
     search: query.search,
@@ -55,7 +60,10 @@ export const getSale = asyncHandler(async (req: Request, res: Response) => {
   const user = requireUser(req);
   const { id } = req.params as IdParams;
 
-  const sale = await saleService.getSale(user.storeId, id);
+  const sale = await saleService.getSale(user.storeId, id, {
+    id: user.id,
+    role: user.role,
+  });
   sendSuccess<SaleDetailResponse>(res, { sale });
 });
 
@@ -83,6 +91,14 @@ export const cancelSale = asyncHandler(async (req: Request, res: Response) => {
 
   const sale = await saleService.cancelSale(user.storeId, user, id, body);
   sendSuccess<CancelSaleResponse>(res, { sale });
+});
+
+export const deleteCancelledSale = asyncHandler(async (req: Request, res: Response) => {
+  const user = requireUser(req);
+  const { id } = req.params as IdParams;
+
+  await saleService.deleteCancelledSale(user.storeId, user, id);
+  sendNoContent(res);
 });
 
 export const listPayments = asyncHandler(async (req: Request, res: Response) => {
@@ -124,4 +140,23 @@ export const updateAssemblyTask = asyncHandler(async (req: Request, res: Respons
 
   const result = await saleService.updateAssemblyTask(user.storeId, user.id, id, body);
   sendSuccess<AssemblyTaskResponse>(res, result);
+});
+
+export const listMyDeliveries = asyncHandler(async (req: Request, res: Response) => {
+  const user = requireUser(req);
+  const data = await deliveryOpsService.listMyDeliveries(user.storeId, user.id);
+  sendSuccess<MyDeliveriesResponse>(res, data);
+});
+
+export const updateSaleDeliveryStatus = asyncHandler(async (req: Request, res: Response) => {
+  const user = requireUser(req);
+  const { id } = req.params as IdParams;
+  const body = req.body as UpdateSaleDeliveryStatusBody;
+  const result = await deliveryOpsService.updateMySaleDeliveryStatus(
+    user.storeId,
+    { id: user.id, role: user.role },
+    id,
+    body,
+  );
+  sendSuccess<UpdateSaleDeliveryStatusResponse>(res, result);
 });

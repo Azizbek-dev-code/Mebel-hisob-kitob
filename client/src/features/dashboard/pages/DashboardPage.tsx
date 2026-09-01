@@ -1,5 +1,6 @@
 import { Loader2, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { PageContainer } from '@/components/layout/PageContainer';
@@ -22,6 +23,7 @@ import { DEFAULT_PERIOD, type DashboardPeriod } from '../period';
  * KPI cards (4A) + performance chart (4B-1) + expense charts (4B-2).
  */
 export function DashboardPage() {
+  const { t } = useTranslation();
   const { data: user } = useCurrentUser();
   const [period, setPeriod] = useState<DashboardPeriod>(DEFAULT_PERIOD);
   const {
@@ -50,7 +52,7 @@ export function DashboardPage() {
   const isTrendLoading = isTrendPending && !trend;
   const isExpenseLoading = isExpensePending && !expenseAnalytics;
   const metrics = summary?.metrics;
-  const periodLabel = summary?.period.label ?? 'Tanlangan davr';
+  const periodLabel = summary?.period.label ?? t('dashboard.selectedPeriod');
   const isEmptyPeriod =
     !isLoading &&
     Boolean(metrics) &&
@@ -62,11 +64,11 @@ export function DashboardPage() {
       <div className="space-y-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold tracking-tight text-ink">Dashboard</h2>
+            <h2 className="text-lg font-semibold tracking-tight text-ink">{t('dashboard.title')}</h2>
             <p className="mt-1 text-sm text-ink-muted">
               {user
-                ? `${user.storeName} · ${summary?.period.label ?? 'Davr yuklanmoqda…'}`
-                : 'Moliyaviy ko‘rinish'}
+                ? `${user.storeName} · ${summary?.period.label ?? t('dashboard.periodLoading')}`
+                : t('dashboard.title')}
             </p>
           </div>
 

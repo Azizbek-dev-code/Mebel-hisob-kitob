@@ -8,6 +8,12 @@ import type { IsoDateString } from './api.js';
  * editable when it matches the server allowlist.
  */
 
+/**
+ * Exact phrase the administrator must type to authorise a factory reset.
+ * Case-sensitive — same pattern as backup restore confirmation.
+ */
+export const STORE_RESET_CONFIRMATION = 'RESET';
+
 export interface StoreProfile {
   id: string;
   name: string;
@@ -31,4 +37,19 @@ export interface StoreProfileResponse {
 
 export interface StoreProfileMutationResponse {
   store: StoreProfile;
+}
+
+export interface ResetStoreRequest {
+  /** Must equal {@link STORE_RESET_CONFIRMATION} exactly. */
+  confirmation: string;
+}
+
+/** Rows deleted per collection by a completed factory reset. */
+export type ResetStoreDeletedCounts = Record<string, number>;
+
+export interface ResetStoreResponse {
+  deletedCounts: ResetStoreDeletedCounts;
+  totalDeletedRows: number;
+  /** Admin account that was kept so the session stays valid. */
+  retainedUserId: string;
 }

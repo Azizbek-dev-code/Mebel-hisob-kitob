@@ -61,6 +61,8 @@ function toTransaction(record: WorkerFinancialRecord): WorkerFinancialTransactio
     referenceType: record.referenceType,
     referenceId: record.referenceId,
     reversesType: record.reversesType,
+    responsibility: record.responsibility ?? null,
+    isOpen: record.isOpen ?? record.type === WorkerFinancialTransactionType.COMMISSION,
     worker: {
       id: record.worker.id,
       fullName: record.worker.fullName,
@@ -78,6 +80,7 @@ export interface WorkerFinancialListFilters {
   storeId: string;
   workerId: string;
   type?: WorkerFinancialTransactionTypeValue;
+  responsibility?: import('@furniture-erp/shared').WorkerResponsibility;
   /** Inclusive start instant (half-open range with dateTo). */
   dateFrom?: Date;
   /** Exclusive end instant. */
@@ -94,6 +97,7 @@ function buildListWhere(
     storeId: filters.storeId,
     workerId: filters.workerId,
     ...(filters.type ? { type: filters.type } : {}),
+    ...(filters.responsibility ? { responsibility: filters.responsibility } : {}),
     ...(filters.dateFrom || filters.dateTo
       ? {
           transactionDate: {
@@ -112,10 +116,22 @@ export async function findWorkerUserInStore(
   storeId: string,
   workerId: string,
   client?: WorkerFinancialTxClient,
-): Promise<Pick<User, 'id' | 'storeId' | 'role' | 'isActive' | 'fullName'> | null> {
+): Promise<
+  | (Pick<User, 'id' | 'storeId' | 'role' | 'isActive' | 'fullName'> & {
+      responsibilities?: { responsibility: string }[];
+    })
+  | null
+> {
   return db(client).user.findFirst({
     where: { id: workerId, storeId },
-    select: { id: true, storeId: true, role: true, isActive: true, fullName: true },
+    select: {
+      id: true,
+      storeId: true,
+      role: true,
+      isActive: true,
+      fullName: true,
+      responsibilities: { select: { responsibility: true } },
+    },
   });
 }
 
@@ -204,10 +220,12 @@ export async function createTransaction(
     referenceType: WorkerFinancialTransaction['referenceType'];
     referenceId: string | null;
     reversesType?: WorkerFinancialTransaction['reversesType'];
+    responsibility?: WorkerFinancialTransaction['responsibility'];
     createdById: string;
   },
   client?: WorkerFinancialTxClient,
 ): Promise<WorkerFinancialTransaction> {
+  const isCommission = input.type === WorkerFinancialTransactionType.COMMISSION;
   const record = await db(client).workerFinancialTransaction.create({
     data: {
       storeId: input.storeId,
@@ -219,6 +237,8 @@ export async function createTransaction(
       referenceType: input.referenceType,
       referenceId: input.referenceId,
       reversesType: input.reversesType ?? null,
+      responsibility: input.responsibility ?? null,
+      isOpen: isCommission,
       createdById: input.createdById,
     },
     include: transactionInclude,
@@ -227,8 +247,25 @@ export async function createTransaction(
   return toTransaction(record as WorkerFinancialRecord);
 }
 
+/** Close a COMMISSION after REVERSAL so the same business ref may re-post. */
+export async function closeOpenCommission(
+  storeId: string,
+  commissionId: string,
+  client?: WorkerFinancialTxClient,
+): Promise<void> {
+  await db(client).workerFinancialTransaction.updateMany({
+    where: {
+      id: commissionId,
+      storeId,
+      type: WorkerFinancialTransactionType.COMMISSION,
+      isOpen: true,
+    },
+    data: { isOpen: false },
+  });
+}
+
 /**
- * Existing COMMISSION rows posted from compensation settle for the given breakdown line ids.
+ * Existing open COMMISSION rows posted from compensation settle for the given breakdown line ids.
  */
 export async function findCompensationCommissionRefs(
   storeId: string,
@@ -243,6 +280,7 @@ export async function findCompensationCommissionRefs(
       storeId,
       workerId,
       type: WorkerFinancialTransactionType.COMMISSION,
+      isOpen: true,
       referenceType: WorkerFinancialReferenceType.COMPENSATION,
       referenceId: { in: referenceIds },
     },
@@ -253,6 +291,114 @@ export async function findCompensationCommissionRefs(
     rows
       .map((row) => row.referenceId)
       .filter((id): id is string => typeof id === 'string' && id.length > 0),
+  );
+}
+
+/**
+ * Find an open (non-reversed) COMMISSION row for a stable operational fee reference.
+ */
+export async function findOpenCommissionByRef(
+  storeId: string,
+  referenceType: WorkerFinancialTransaction['referenceType'],
+  referenceId: string,
+  client?: WorkerFinancialTxClient,
+): Promise<WorkerFinancialRecord | null> {
+  if (!referenceType || !referenceId) return null;
+
+  const record = await db(client).workerFinancialTransaction.findFirst({
+    where: {
+      storeId,
+      type: WorkerFinancialTransactionType.COMMISSION,
+      isOpen: true,
+      referenceType,
+      referenceId,
+    },
+    include: transactionInclude,
+    orderBy: { createdAt: 'asc' },
+  });
+  if (!record) return null;
+
+  const reversal = await findReversalOf(storeId, record.id, client);
+  if (reversal) return null;
+
+  return record as WorkerFinancialRecord;
+}
+
+/**
+ * All open COMMISSION rows linked to a sale that must reverse on cancel:
+ * - operational fees (ASSEMBLY / INSTALLER / DELIVERY, incl. legacy refs)
+ * - settled compensation lines (`${saleId}:MANUAL:…`, `${saleId}:PERCENT_OF_SALE`, …)
+ * - legacy assembly settle refs (`${taskId}:FIXED_PER_ASSEMBLY`)
+ */
+export async function findOpenSaleOperationalFeeCommissions(
+  storeId: string,
+  saleId: string,
+  client?: WorkerFinancialTxClient,
+): Promise<WorkerFinancialRecord[]> {
+  const feeRefs = [
+    `${saleId}:ASSEMBLY_FEE`,
+    `${saleId}:INSTALLER_FEE`,
+    `${saleId}:DELIVERY_FEE`,
+    `${saleId}:ASSEMBLY:FEE`,
+    `${saleId}:INSTALLATION:FEE`,
+    `${saleId}:DELIVERY:FEE`,
+    `${saleId}:INSTALLATION_COST`,
+    `${saleId}:DELIVERY_COST`,
+  ];
+
+  const assemblyTasks = await db(client).assemblyTask.findMany({
+    where: { storeId, saleId },
+    select: { id: true },
+  });
+  const legacyAssemblySettleRefs = assemblyTasks.map((task) => `${task.id}:FIXED_PER_ASSEMBLY`);
+
+  const rows = await db(client).workerFinancialTransaction.findMany({
+    where: {
+      storeId,
+      type: WorkerFinancialTransactionType.COMMISSION,
+      isOpen: true,
+      OR: [
+        {
+          referenceType: {
+            in: [WorkerFinancialReferenceType.SALE, WorkerFinancialReferenceType.ASSEMBLY],
+          },
+          referenceId: { in: feeRefs },
+        },
+        {
+          referenceType: WorkerFinancialReferenceType.COMPENSATION,
+          referenceId: { startsWith: `${saleId}:` },
+        },
+        ...(legacyAssemblySettleRefs.length > 0
+          ? [
+              {
+                referenceType: WorkerFinancialReferenceType.COMPENSATION,
+                referenceId: { in: legacyAssemblySettleRefs },
+              },
+            ]
+          : []),
+      ],
+    },
+    include: transactionInclude,
+  });
+
+  const open: WorkerFinancialRecord[] = [];
+  for (const row of rows as WorkerFinancialRecord[]) {
+    const reversal = await findReversalOf(storeId, row.id, client);
+    if (!reversal) open.push(row);
+  }
+  return open;
+}
+
+export async function findOpenPurchaseDriverFeeCommission(
+  storeId: string,
+  purchaseId: string,
+  client?: WorkerFinancialTxClient,
+): Promise<WorkerFinancialRecord | null> {
+  return findOpenCommissionByRef(
+    storeId,
+    WorkerFinancialReferenceType.PURCHASE,
+    `${purchaseId}:DRIVER_FEE`,
+    client,
   );
 }
 
@@ -289,6 +435,8 @@ export async function aggregateWorkerTotals(options: {
   dateTo?: Date;
   fromLabel?: string;
   toLabel?: string;
+  /** When set, only rows tagged with this responsibility (e.g. DELIVERY for shopir KPIs). */
+  responsibility?: WorkerFinancialTransaction['responsibility'];
 }): Promise<WorkerFinancialSummary> {
   const worker = await prisma.user.findFirst({
     where: { id: options.workerId, storeId: options.storeId },
@@ -311,6 +459,31 @@ export async function aggregateWorkerTotals(options: {
         }
       : {}),
   };
+
+  if (options.responsibility) {
+    // Include reversals of rows tagged with this responsibility even when the
+    // REVERSAL row itself was created before responsibility was copied.
+    const originals = await prisma.workerFinancialTransaction.findMany({
+      where: {
+        storeId: options.storeId,
+        workerId: options.workerId,
+        responsibility: options.responsibility,
+      },
+      select: { id: true },
+    });
+    const originalIds = originals.map((row) => row.id);
+    where.OR = [
+      { responsibility: options.responsibility },
+      ...(originalIds.length > 0
+        ? [
+            {
+              type: WorkerFinancialTransactionType.REVERSAL,
+              referenceId: { in: originalIds },
+            },
+          ]
+        : []),
+    ];
+  }
 
   const grouped = await prisma.workerFinancialTransaction.groupBy({
     by: ['type', 'reversesType'],
@@ -363,6 +536,7 @@ export async function aggregateWorkerTotals(options: {
     totalPayments,
     totalAdjustments,
     totalReversals,
+    reversalsByOriginalType,
     netFinancialPosition: computeWorkerNetFinancialPosition({
       totalBonuses,
       totalCommissions,
