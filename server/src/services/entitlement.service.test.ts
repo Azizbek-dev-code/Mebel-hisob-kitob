@@ -1,6 +1,7 @@
 import {
   FeatureKey,
   LimitResourceKey,
+  STARTER_FEATURE_KEYS,
   SubscriptionStatus,
 } from '@furniture-erp/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,7 +11,7 @@ import { ApiError } from '../utils/api-error.js';
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
     feature: { upsert: vi.fn(), findMany: vi.fn() },
-    planFeature: { deleteMany: vi.fn(), createMany: vi.fn(), count: vi.fn() },
+    planFeature: { deleteMany: vi.fn(), createMany: vi.fn(), count: vi.fn(), findMany: vi.fn() },
     planLimit: { deleteMany: vi.fn(), createMany: vi.fn() },
     storeSubscription: { findFirst: vi.fn() },
     user: { count: vi.fn() },
@@ -156,5 +157,27 @@ describe('entitlement.service', () => {
       }),
     );
     await expect(hasFeature('store_a', FeatureKey.BACKUP, now)).resolves.toBe(true);
+  });
+
+  it('does not give a 7-day trial the START modules', async () => {
+    prismaMock.storeSubscription.findFirst.mockResolvedValue(
+      sub({
+        status: SubscriptionStatus.TRIAL,
+        plan: plan({
+          isDefaultTrial: true,
+          monthlyPrice: 0n,
+          planFeatures: STARTER_FEATURE_KEYS.map((key) => ({
+            enabled: true,
+            feature: { key },
+          })),
+        }),
+      }),
+    );
+    await expect(hasFeature('store_a', FeatureKey.SALES, now)).resolves.toBe(true);
+    await expect(hasFeature('store_a', FeatureKey.INVENTORY, now)).resolves.toBe(false);
+    await expect(hasFeature('store_a', FeatureKey.WORKERS, now)).resolves.toBe(false);
+    await expect(assertCanUseFeature('store_a', FeatureKey.INVENTORY, now)).rejects.toBeInstanceOf(
+      ApiError,
+    );
   });
 });

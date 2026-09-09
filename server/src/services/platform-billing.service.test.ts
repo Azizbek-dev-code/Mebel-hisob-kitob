@@ -49,8 +49,10 @@ const { prismaMock, recordAuditMock } = vi.hoisted(() => ({
       findMany: vi.fn(),
       findFirst: vi.fn(),
       findUnique: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     platformInvoice: {
       findMany: vi.fn(),
@@ -133,6 +135,9 @@ beforeEach(() => {
   prismaMock.planFeature.count.mockResolvedValue(0);
   prismaMock.planLimit.deleteMany.mockResolvedValue({ count: 0 });
   prismaMock.planLimit.createMany.mockResolvedValue({ count: 0 });
+  prismaMock.subscriptionRequest.findUniqueOrThrow.mockImplementation((args) =>
+    prismaMock.subscriptionRequest.findUnique(args),
+  );
   recordAuditMock.mockResolvedValue(undefined);
 });
 
@@ -492,6 +497,7 @@ describe('subscription requests', () => {
       reviewedBy: { fullName: 'Platform Administrator' },
     });
     prismaMock.store.update.mockResolvedValue({});
+    prismaMock.subscriptionRequest.updateMany.mockResolvedValue({ count: 1 });
 
     const result = await approveSubscriptionRequest(PLATFORM, 'req_1', {
       startDate: '2026-08-22T00:00:00.000Z',
@@ -578,6 +584,7 @@ describe('subscription requests', () => {
       reviewedBy: { fullName: 'Platform' },
     });
     prismaMock.store.update.mockResolvedValue({});
+    prismaMock.subscriptionRequest.updateMany.mockResolvedValue({ count: 1 });
 
     const result = await approveSubscriptionRequest(PLATFORM, 'req_1', {
       startDate: '2026-08-22T00:00:00.000Z',
@@ -586,5 +593,37 @@ describe('subscription requests', () => {
     });
     expect(result.invoice.amount).toBe(200000);
     expect(result.invoice.amount).not.toBe(250000);
+  });
+
+  it('rejects a second Accept and does not mint another payment', async () => {
+    prismaMock.subscriptionRequest.findUnique.mockResolvedValue({
+      id: 'req_1',
+      status: 'APPROVED',
+    });
+    await expect(
+      approveSubscriptionRequest(PLATFORM, 'req_1', {
+        startDate: '2026-08-22T00:00:00.000Z',
+        endDate: '2026-09-21T00:00:00.000Z',
+        paymentMethod: PlatformPaymentMethod.CASH,
+      }),
+    ).rejects.toBeInstanceOf(ApiError);
+    expect(prismaMock.platformInvoice.create).not.toHaveBeenCalled();
+    expect(prismaMock.storeSubscription.create).not.toHaveBeenCalled();
+  });
+
+  it('turns away a concurrent Accept that lost the PENDING claim', async () => {
+    prismaMock.subscriptionRequest.findUnique.mockResolvedValue({
+      id: 'req_1',
+      status: 'PENDING',
+    });
+    prismaMock.subscriptionRequest.updateMany.mockResolvedValue({ count: 0 });
+    await expect(
+      approveSubscriptionRequest(PLATFORM, 'req_1', {
+        startDate: '2026-08-22T00:00:00.000Z',
+        endDate: '2026-09-21T00:00:00.000Z',
+        paymentMethod: PlatformPaymentMethod.CASH,
+      }),
+    ).rejects.toBeInstanceOf(ApiError);
+    expect(prismaMock.platformInvoice.create).not.toHaveBeenCalled();
   });
 });

@@ -1,3 +1,4 @@
+import { FeatureKey } from '@furniture-erp/shared';
 import { Router } from 'express';
 
 import {
@@ -9,6 +10,7 @@ import {
   stockOut,
 } from '../controllers/inventory.controller.js';
 import { requireAuth } from '../middleware/require-auth.js';
+import { requireFeature } from '../middleware/require-feature.js';
 import { validate } from '../middleware/validate.js';
 import { idParamsSchema } from '../validators/common.validators.js';
 import {
@@ -25,7 +27,7 @@ import {
  */
 export const inventoryRouter = Router();
 
-inventoryRouter.use(requireAuth);
+inventoryRouter.use(requireAuth, requireFeature(FeatureKey.INVENTORY));
 
 inventoryRouter.get('/', validate({ query: inventoryListQuerySchema }), listInventory);
 inventoryRouter.get(

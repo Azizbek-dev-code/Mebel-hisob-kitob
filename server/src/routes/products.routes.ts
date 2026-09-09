@@ -1,3 +1,4 @@
+import { FeatureKey } from '@furniture-erp/shared';
 import { Router } from 'express';
 import multer from 'multer';
 
@@ -18,6 +19,7 @@ import {
 } from '../controllers/products.controller.js';
 import { searchProducts } from '../controllers/lookup.controller.js';
 import { requireAuth } from '../middleware/require-auth.js';
+import { requireFeature } from '../middleware/require-feature.js';
 import { validate } from '../middleware/validate.js';
 import { PRODUCT_IMAGE_MAX_BYTES } from '../lib/storage/types.js';
 import { idParamsSchema } from '../validators/common.validators.js';
@@ -46,8 +48,8 @@ const upload = multer({
 export const productsRouter = Router();
 export const productCategoriesRouter = Router();
 
-productsRouter.use(requireAuth);
-productCategoriesRouter.use(requireAuth);
+productsRouter.use(requireAuth, requireFeature(FeatureKey.PRODUCTS));
+productCategoriesRouter.use(requireAuth, requireFeature(FeatureKey.PRODUCTS));
 
 productsRouter.get('/options', validate({ query: lookupQuerySchema }), searchProducts);
 

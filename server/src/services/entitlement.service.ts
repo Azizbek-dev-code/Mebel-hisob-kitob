@@ -2,12 +2,16 @@ import {
   FEATURE_CATALOG,
   LIMIT_CATALOG,
   LimitResourceKey,
+  TRIAL_FEATURE_KEYS,
+  TRIAL_LIMIT_PRESET,
   UserRole,
   canWriteWithSubscription,
   effectiveSubscriptionStatus,
+  isUnsafeFreePlanFeatureSet,
   isWithinLimit,
   limitByKey,
   planAllowsFeature,
+  resolvePlanEntitlements,
   type FeatureDto,
   type PlanLimitDto,
   type ResourceUsageDto,
@@ -54,17 +58,52 @@ export function toFeatureDto(feature: {
   };
 }
 
-export function enabledFeatureKeys(plan: PlanWithEntitlements | null | undefined): string[] {
-  if (!plan) return [];
-  return plan.planFeatures.filter((row) => row.enabled).map((row) => row.feature.key);
+/**
+ * A plan nobody pays for: the seeded trial, or any plan priced at zero.
+ *
+ * Free plans must never inherit the "no rows configured means everything is
+ * open" fallback below — that is what made a 7-day trial equal to a paid plan.
+ */
+function isFreePlan(plan: PlanWithEntitlements): boolean {
+  return plan.isDefaultTrial || plan.monthlyPrice <= 0n;
 }
 
+function resolveFromPlan(plan: PlanWithEntitlements) {
+  return resolvePlanEntitlements({
+    isDefaultTrial: plan.isDefaultTrial,
+    monthlyPrice: plan.monthlyPrice,
+    enabledFeatureKeys: plan.planFeatures.filter((row) => row.enabled).map((row) => row.feature.key),
+    hasPlanFeatureRows: plan.planFeatures.length > 0,
+  });
+}
+
+export function enabledFeatureKeys(plan: PlanWithEntitlements | null | undefined): string[] {
+  if (!plan) return [];
+  return resolveFromPlan(plan).featureKeys;
+}
+
+/**
+ * Whether `enabledFeatureKeys` is the complete allow-list for this plan.
+ *
+ * False only for a legacy *paid* plan an admin has never configured, which stays
+ * fully open so an existing subscriber does not lose access to modules it is
+ * already paying for.
+ */
 export function planFeaturesRestricted(plan: PlanWithEntitlements | null | undefined): boolean {
-  return Boolean(plan && plan.planFeatures.length > 0);
+  if (!plan) return true;
+  return resolveFromPlan(plan).featuresRestricted;
 }
 
 export function toPlanLimitDtos(plan: PlanWithEntitlements | null | undefined): PlanLimitDto[] {
   if (!plan) return [];
+  if (plan.limits.length === 0 && isFreePlan(plan)) {
+    return TRIAL_LIMIT_PRESET.map((row) => ({
+      resourceKey: row.resourceKey,
+      name: limitByKey(row.resourceKey)?.name ?? row.resourceKey,
+      unlimited: row.unlimited,
+      limitValue: row.unlimited ? null : row.limitValue,
+    }));
+  }
   return plan.limits.map((row) => ({
     resourceKey: row.resourceKey,
     name: limitByKey(row.resourceKey)?.name ?? row.resourceKey,
@@ -74,7 +113,9 @@ export function toPlanLimitDtos(plan: PlanWithEntitlements | null | undefined): 
 }
 
 export function toPlanDto(plan: PlanWithEntitlements): SubscriptionPlanDto {
-  const featureKeys = enabledFeatureKeys(plan);
+  const resolved = resolveFromPlan(plan);
+  const allowed = new Set(resolved.featureKeys);
+  const byKey = new Map(plan.planFeatures.map((row) => [row.feature.key, row.feature]));
   return {
     id: plan.id,
     name: plan.name,
@@ -85,11 +126,23 @@ export function toPlanDto(plan: PlanWithEntitlements): SubscriptionPlanDto {
     isActive: plan.isActive,
     isDefaultTrial: plan.isDefaultTrial,
     features: (plan.features ?? {}) as SubscriptionPlanFeatures,
-    featureKeys,
-    featuresRestricted: planFeaturesRestricted(plan),
-    enabledFeatures: plan.planFeatures
-      .filter((row) => row.enabled)
-      .map((row) => toFeatureDto(row.feature))
+    featureKeys: resolved.featureKeys,
+    featuresRestricted: resolved.featuresRestricted,
+    enabledFeatures: FEATURE_CATALOG.filter((entry) => allowed.has(entry.key))
+      .map((entry) => {
+        const row = byKey.get(entry.key);
+        return row
+          ? toFeatureDto(row)
+          : {
+              id: entry.key,
+              key: entry.key,
+              name: entry.name,
+              description: entry.description,
+              category: entry.category,
+              isActive: true,
+              sortOrder: 0,
+            };
+      })
       .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
     limits: toPlanLimitDtos(plan),
     createdAt: plan.createdAt.toISOString(),
@@ -191,6 +244,46 @@ export async function attachDefaultEntitlements(
   await syncPlanEntitlements(planId, { featureKeys: [...featureKeys], limits });
 }
 
+/**
+ * Repair a free/trial plan whose stored entitlements grant too much.
+ *
+ * Two shapes are unsafe and get rewritten to the shared trial preset:
+ * nothing configured at all, and every feature in the catalog enabled — the
+ * latter being what the old seed wrote, which is why the 7-day trial behaved
+ * exactly like the top paid plan.
+ *
+ * A narrower selection is assumed deliberate and left untouched, so an admin
+ * who tunes the trial does not have it overwritten on the next boot.
+ */
+export async function repairFreePlanEntitlements(planId: string): Promise<boolean> {
+  const rows = await prisma.planFeature.findMany({
+    where: { planId },
+    include: { feature: { select: { key: true } } },
+  });
+  const enabled = rows.filter((row) => row.enabled).map((row) => row.feature.key);
+  if (rows.length > 0 && !isUnsafeFreePlanFeatureSet(enabled)) return false;
+
+  await syncPlanEntitlements(planId, {
+    featureKeys: [...TRIAL_FEATURE_KEYS],
+    limits: TRIAL_LIMIT_PRESET.map((row) => ({ ...row })),
+  });
+  return true;
+}
+
+/** Rewrite every free/trial plan that still grants a paid preset. Safe to run on boot. */
+export async function repairAllFreePlanEntitlements(): Promise<number> {
+  await ensureFeatureCatalog();
+  const plans = await prisma.subscriptionPlan.findMany({
+    where: { OR: [{ isDefaultTrial: true }, { monthlyPrice: { lte: 0 } }] },
+    select: { id: true },
+  });
+  let repaired = 0;
+  for (const plan of plans) {
+    if (await repairFreePlanEntitlements(plan.id)) repaired += 1;
+  }
+  return repaired;
+}
+
 const currentSubInclude = {
   plan: { include: planEntitlementInclude },
   pendingPlan: { select: { name: true } },
@@ -230,9 +323,9 @@ export async function getFeatureLimit(
 ): Promise<{ unlimited: boolean; limitValue: number | null } | null> {
   const sub = await getCurrentSubscription(storeId);
   if (!sub) return { unlimited: false, limitValue: 0 };
-  const row = sub.plan.limits.find((item) => item.resourceKey === resourceKey);
+  const row = toPlanLimitDtos(sub.plan).find((item) => item.resourceKey === resourceKey);
   if (!row) return { unlimited: true, limitValue: null };
-  return { unlimited: row.unlimited, limitValue: row.unlimited ? null : (row.limitValue ?? null) };
+  return { unlimited: row.unlimited, limitValue: row.unlimited ? null : row.limitValue };
 }
 
 export async function countResource(storeId: string, resourceKey: string): Promise<number> {

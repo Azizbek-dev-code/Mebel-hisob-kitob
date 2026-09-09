@@ -23,6 +23,7 @@ const {
     aggregateSettledCompensation: vi.fn(),
     countCancelledSales: vi.fn(),
     aggregateCancelledExpenses: vi.fn(),
+    aggregateRetainedFeesOnCancelledDocuments: vi.fn(),
     sumDiscountAmount: vi.fn(),
     groupPaymentsByMethod: vi.fn(),
     sumWorkerPayments: vi.fn(),
@@ -101,6 +102,10 @@ beforeEach(() => {
   reportsRepoMock.aggregateSettledCompensation.mockResolvedValue({ total: 150_000, count: 2 });
   reportsRepoMock.countCancelledSales.mockResolvedValue(1);
   reportsRepoMock.aggregateCancelledExpenses.mockResolvedValue({ count: 1, amount: 50_000 });
+  reportsRepoMock.aggregateRetainedFeesOnCancelledDocuments.mockResolvedValue({
+    total: 430_000,
+    count: 2,
+  });
   debtRepoMock.summarizeDebts.mockResolvedValue({
     totalOutstanding: 2_000_000,
     customersInDebt: 2,
@@ -157,6 +162,19 @@ describe('reports.service accounting rules', () => {
     expect(summary.extras.settledCompensation).toBe(150_000);
     expect(summary.extras.compensationInNetProfit).toBe(false);
     expect(summary.extras.cancelledSalesCount).toBe(1);
+  });
+
+  it('surfaces completed worker fees kept on cancelled documents without touching netProfit', async () => {
+    const summary = await getReportsSummary({
+      storeId: STORE_ID,
+      actorRole: UserRole.ADMIN,
+      preset: DateRangePreset.THIS_MONTH,
+    });
+
+    expect(summary.extras.retainedWorkerFeesOnCancelled).toBe(430_000);
+    expect(summary.extras.retainedWorkerFeesOnCancelledCount).toBe(2);
+    // Ledger COMMISSION rows are never subtracted from P&L net profit again.
+    expect(summary.financial.metrics.netProfit).toBe(3_500_000);
   });
 
   it('cash flow sums payment methods and treats commission as non-cash', async () => {

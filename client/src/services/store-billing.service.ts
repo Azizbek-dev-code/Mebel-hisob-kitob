@@ -1,5 +1,7 @@
 import type {
   RequestStoreSubscriptionBody,
+  StoreBillingPaymentsResponse,
+  StoreBillingRequestsResponse,
   StoreSubscriptionDto,
   SubscriptionPlanDto,
   SubscriptionRequestDto,
@@ -23,5 +25,14 @@ export const storeBillingService = {
     return apiClient.post<{ request: SubscriptionRequestDto }>('/billing/payment-requests', {
       body,
     });
+  },
+  listRequests(signal?: AbortSignal) {
+    return apiClient.get<StoreBillingRequestsResponse>('/billing/requests', { signal });
+  },
+  cancelRequest(id: string) {
+    return apiClient.post<{ request: SubscriptionRequestDto }>(`/billing/requests/${id}/cancel`);
+  },
+  listPayments(signal?: AbortSignal) {
+    return apiClient.get<StoreBillingPaymentsResponse>('/billing/payments', { signal });
   },
 };

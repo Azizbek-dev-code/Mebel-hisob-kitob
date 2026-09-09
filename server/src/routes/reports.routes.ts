@@ -1,3 +1,4 @@
+import { FeatureKey } from '@furniture-erp/shared';
 import { Router } from 'express';
 
 import {
@@ -15,6 +16,7 @@ import {
   getReportsWorkers,
 } from '../controllers/reports.controller.js';
 import { requireAuth } from '../middleware/require-auth.js';
+import { requireFeature } from '../middleware/require-feature.js';
 import { validate } from '../middleware/validate.js';
 import {
   reportsExpensesQuerySchema,
@@ -29,7 +31,7 @@ import {
  */
 export const reportsRouter = Router();
 
-reportsRouter.use(requireAuth);
+reportsRouter.use(requireAuth, requireFeature(FeatureKey.REPORTS));
 
 reportsRouter.get(
   '/summary',

@@ -226,8 +226,31 @@ export function limitByKey(key: string): LimitCatalogEntry | undefined {
   return LIMIT_CATALOG.find((item) => item.key === key);
 }
 
-/** Core ERP set used when a plan has no PlanFeature rows yet (legacy / trial). */
-export const DEFAULT_TRIAL_FEATURE_KEYS: readonly FeatureKey[] = FEATURE_KEYS;
+/**
+ * Plan presets — the single source of truth for what each seeded plan grants.
+ *
+ * Server seed, entitlement fallback and the admin plan editor all read these, so
+ * a plan's capabilities cannot differ between frontend and backend.
+ *
+ * The free trial is deliberately the smallest set. It previously reused
+ * `FEATURE_KEYS`, which is why a 7-day trial behaved exactly like a paid plan.
+ */
+export const TRIAL_FEATURE_KEYS: readonly FeatureKey[] = [
+  FeatureKey.DASHBOARD,
+  FeatureKey.SALES,
+  FeatureKey.PRODUCTS,
+  FeatureKey.CUSTOMERS,
+  FeatureKey.EXPENSES,
+  FeatureKey.REPORTS,
+];
+
+/**
+ * Fallback feature set for a plan that has no PlanFeature rows.
+ *
+ * Kept under the old name because the seed imports it, but it is now the
+ * restricted trial set rather than "everything".
+ */
+export const DEFAULT_TRIAL_FEATURE_KEYS: readonly FeatureKey[] = TRIAL_FEATURE_KEYS;
 
 export const STARTER_FEATURE_KEYS: readonly FeatureKey[] = [
   FeatureKey.DASHBOARD,
@@ -237,6 +260,152 @@ export const STARTER_FEATURE_KEYS: readonly FeatureKey[] = [
   FeatureKey.CUSTOMERS,
   FeatureKey.EXPENSES,
   FeatureKey.WORKERS,
+  // Assembling furniture is the core of a sale here, not an upsell: keeping
+  // masters/assembly on the entry plan is what stores on it already rely on.
+  FeatureKey.MASTERS,
+  FeatureKey.ASSEMBLY,
   FeatureKey.DEBTS,
   FeatureKey.REPORTS,
 ];
+
+export const PRO_FEATURE_KEYS: readonly FeatureKey[] = FEATURE_KEYS.filter(
+  (key) => key !== FeatureKey.BACKUP,
+);
+
+export const BUSINESS_FEATURE_KEYS: readonly FeatureKey[] = FEATURE_KEYS;
+
+export interface PlanLimitPreset {
+  resourceKey: LimitResourceKey;
+  unlimited: boolean;
+  limitValue: number | null;
+}
+
+function unlimitedLimits(): PlanLimitPreset[] {
+  return LIMIT_RESOURCE_KEYS.map((resourceKey) => ({
+    resourceKey,
+    unlimited: true,
+    limitValue: null,
+  }));
+}
+
+/** A trial is a demo, not a free tier: every countable resource is capped. */
+export const TRIAL_LIMIT_PRESET: readonly PlanLimitPreset[] = [
+  { resourceKey: LimitResourceKey.WORKERS, unlimited: false, limitValue: 2 },
+  { resourceKey: LimitResourceKey.CUSTOMERS, unlimited: false, limitValue: 20 },
+  { resourceKey: LimitResourceKey.PRODUCTS, unlimited: false, limitValue: 20 },
+  { resourceKey: LimitResourceKey.SUPPLIERS, unlimited: false, limitValue: 3 },
+  { resourceKey: LimitResourceKey.SALES, unlimited: false, limitValue: 30 },
+];
+
+export const STARTER_LIMIT_PRESET: readonly PlanLimitPreset[] = [
+  { resourceKey: LimitResourceKey.WORKERS, unlimited: false, limitValue: 3 },
+  { resourceKey: LimitResourceKey.CUSTOMERS, unlimited: false, limitValue: 100 },
+  { resourceKey: LimitResourceKey.PRODUCTS, unlimited: false, limitValue: 80 },
+  { resourceKey: LimitResourceKey.SUPPLIERS, unlimited: false, limitValue: 10 },
+  { resourceKey: LimitResourceKey.SALES, unlimited: true, limitValue: null },
+];
+
+export const PRO_LIMIT_PRESET: readonly PlanLimitPreset[] = [
+  { resourceKey: LimitResourceKey.WORKERS, unlimited: false, limitValue: 10 },
+  { resourceKey: LimitResourceKey.CUSTOMERS, unlimited: false, limitValue: 500 },
+  { resourceKey: LimitResourceKey.PRODUCTS, unlimited: false, limitValue: 400 },
+  { resourceKey: LimitResourceKey.SUPPLIERS, unlimited: false, limitValue: 50 },
+  { resourceKey: LimitResourceKey.SALES, unlimited: true, limitValue: null },
+];
+
+export const UNLIMITED_LIMIT_PRESET: readonly PlanLimitPreset[] = unlimitedLimits();
+
+/**
+ * Sidebar / route module key → the plan feature that unlocks it.
+ *
+ * `null` means the module is always available (self-service screens, the
+ * subscription page itself) and must never be hidden by a plan.
+ */
+export const NAV_FEATURE_MAP: Record<string, FeatureKey | null> = {
+  dashboard: null,
+  billing: null,
+  profile: null,
+  settings: null,
+  'my-sales': FeatureKey.SALES,
+  'my-reports': FeatureKey.SALES,
+  'my-finances': null,
+  delivery: null,
+  sales: FeatureKey.SALES,
+  products: FeatureKey.PRODUCTS,
+  inventory: FeatureKey.INVENTORY,
+  purchases: FeatureKey.PURCHASES,
+  suppliers: FeatureKey.SUPPLIERS,
+  customers: FeatureKey.CUSTOMERS,
+  debts: FeatureKey.DEBTS,
+  expenses: FeatureKey.EXPENSES,
+  workers: FeatureKey.WORKERS,
+  masters: FeatureKey.MASTERS,
+  assembly: FeatureKey.ASSEMBLY,
+  reports: FeatureKey.REPORTS,
+  analytics: FeatureKey.ANALYTICS,
+  audit: FeatureKey.AUDIT,
+};
+
+/** The plan feature a nav/module key needs, or null when it is always open. */
+export function featureForNavKey(navKey: string): FeatureKey | null {
+  return NAV_FEATURE_MAP[navKey] ?? null;
+}
+
+export function isFreePlanMeta(plan: {
+  isDefaultTrial?: boolean;
+  monthlyPrice?: number | bigint | null;
+}): boolean {
+  if (plan.isDefaultTrial) return true;
+  if (plan.monthlyPrice == null) return false;
+  return Number(plan.monthlyPrice) <= 0;
+}
+
+export function featureSetEquals(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const left = [...a].sort();
+  const right = [...b].sort();
+  return left.every((key, index) => key === right[index]);
+}
+
+/**
+ * Stored feature rows that would make a free/trial plan behave like a paid one.
+ *
+ * Empty (legacy unconfigured), the whole catalog (the original seed bug), or an
+ * exact copy of START/PRO/BUSINESS all get rewritten to the trial preset.
+ * A narrower custom set is assumed deliberate.
+ */
+export function isUnsafeFreePlanFeatureSet(enabled: readonly string[]): boolean {
+  if (enabled.length === 0) return true;
+  return [FEATURE_KEYS, STARTER_FEATURE_KEYS, PRO_FEATURE_KEYS, BUSINESS_FEATURE_KEYS].some((preset) =>
+    featureSetEquals(enabled, preset),
+  );
+}
+
+export interface ResolvedPlanEntitlements {
+  featureKeys: string[];
+  featuresRestricted: boolean;
+}
+
+/**
+ * Single source of truth for what a plan actually grants.
+ *
+ * Frontend `/auth/me` and backend `requireFeature` must call this so a 7-day
+ * trial can never silently inherit START (or "everything is open").
+ */
+export function resolvePlanEntitlements(input: {
+  isDefaultTrial?: boolean;
+  monthlyPrice?: number | bigint | null;
+  enabledFeatureKeys?: readonly string[] | null;
+  hasPlanFeatureRows: boolean;
+}): ResolvedPlanEntitlements {
+  const enabled = [...(input.enabledFeatureKeys ?? [])];
+  const free = isFreePlanMeta(input);
+
+  if (free && (!input.hasPlanFeatureRows || isUnsafeFreePlanFeatureSet(enabled))) {
+    return { featureKeys: [...TRIAL_FEATURE_KEYS], featuresRestricted: true };
+  }
+  if (input.hasPlanFeatureRows) {
+    return { featureKeys: enabled, featuresRestricted: true };
+  }
+  return { featureKeys: [], featuresRestricted: false };
+}

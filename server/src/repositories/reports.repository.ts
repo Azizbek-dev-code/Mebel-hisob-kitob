@@ -5,7 +5,13 @@ import {
   type Money,
   type PaymentMethod,
 } from '@furniture-erp/shared';
-import { ExpenseStatus, SaleStatus, StockMovementType, type Prisma } from '@prisma/client';
+import {
+  ExpenseStatus,
+  PurchaseStatus,
+  SaleStatus,
+  StockMovementType,
+  type Prisma,
+} from '@prisma/client';
 
 import { fromDbMoney, fromDbMoneySum } from '../lib/money-mapper.js';
 import { prisma } from '../lib/prisma.js';
@@ -124,6 +130,82 @@ export async function aggregateSettledCompensation(
     total: fromDbMoneySum(result._sum.amount),
     count: result._count._all,
   };
+}
+
+/**
+ * Completed worker service fees that stayed on the ledger although the sale /
+ * purchase was cancelled afterwards.
+ *
+ * These are real business costs: the usta / o'rnatuvchi / shopir did the work.
+ * Revenue aggregates drop the cancelled document, so reports surface this
+ * separately instead of letting the cost silently disappear. It is NOT
+ * subtracted from netProfit again (COMMISSION rows are not Expense rows).
+ */
+export async function aggregateRetainedFeesOnCancelledDocuments(
+  storeId: string,
+  from: Date,
+  to: Date,
+): Promise<{ total: Money; count: number }> {
+  const rows = await prisma.workerFinancialTransaction.findMany({
+    where: {
+      storeId,
+      type: WorkerFinancialTransactionType.COMMISSION,
+      isOpen: true,
+      referenceType: {
+        in: [
+          WorkerFinancialReferenceType.SALE,
+          WorkerFinancialReferenceType.ASSEMBLY,
+          WorkerFinancialReferenceType.PURCHASE,
+          WorkerFinancialReferenceType.COMPENSATION,
+        ],
+      },
+      transactionDate: { gte: from, lt: to },
+    },
+    select: { amount: true, referenceType: true, referenceId: true },
+  });
+  if (rows.length === 0) return { total: 0, count: 0 };
+
+  const documentIdOf = (referenceId: string | null): string | null =>
+    referenceId ? (referenceId.split(':')[0] ?? null) : null;
+
+  const saleIds = new Set<string>();
+  const purchaseIds = new Set<string>();
+  for (const row of rows) {
+    const id = documentIdOf(row.referenceId);
+    if (!id) continue;
+    if (row.referenceType === WorkerFinancialReferenceType.PURCHASE) purchaseIds.add(id);
+    else saleIds.add(id);
+  }
+
+  const [cancelledSales, cancelledPurchases] = await Promise.all([
+    saleIds.size === 0
+      ? []
+      : prisma.sale.findMany({
+          where: { storeId, id: { in: [...saleIds] }, status: SaleStatus.CANCELLED },
+          select: { id: true },
+        }),
+    purchaseIds.size === 0
+      ? []
+      : prisma.purchase.findMany({
+          where: { storeId, id: { in: [...purchaseIds] }, status: PurchaseStatus.CANCELLED },
+          select: { id: true },
+        }),
+  ]);
+
+  const cancelled = new Set([
+    ...cancelledSales.map((row) => row.id),
+    ...cancelledPurchases.map((row) => row.id),
+  ]);
+
+  let total = 0;
+  let count = 0;
+  for (const row of rows) {
+    const id = documentIdOf(row.referenceId);
+    if (!id || !cancelled.has(id)) continue;
+    total += fromDbMoney(row.amount);
+    count += 1;
+  }
+  return { total, count };
 }
 
 export async function groupSettledCompensationByWorker(

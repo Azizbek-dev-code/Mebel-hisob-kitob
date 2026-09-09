@@ -1,3 +1,4 @@
+import { FeatureKey } from '@furniture-erp/shared';
 import { Router } from 'express';
 
 import {
@@ -16,6 +17,7 @@ import {
   updateSaleDeliveryStatus,
 } from '../controllers/sales.controller.js';
 import { requireAuth } from '../middleware/require-auth.js';
+import { requireFeature } from '../middleware/require-feature.js';
 import { validate } from '../middleware/validate.js';
 import { idParamsSchema } from '../validators/common.validators.js';
 import {
@@ -31,7 +33,7 @@ import {
 
 export const salesRouter = Router();
 
-salesRouter.use(requireAuth);
+salesRouter.use(requireAuth, requireFeature(FeatureKey.SALES));
 
 salesRouter.get('/', validate({ query: saleListQuerySchema }), listSales);
 salesRouter.post('/', validate({ body: createSaleBodySchema }), createSale);
@@ -78,7 +80,7 @@ salesRouter.post(
 
 export const assemblyTasksRouter = Router();
 
-assemblyTasksRouter.use(requireAuth);
+assemblyTasksRouter.use(requireAuth, requireFeature(FeatureKey.ASSEMBLY));
 
 assemblyTasksRouter.patch(
   '/:id',

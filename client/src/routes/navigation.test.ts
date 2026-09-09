@@ -10,6 +10,7 @@ describe('NAV_ITEMS', () => {
   it('covers every module the sidebar can show', () => {
     expect(NAV_ITEMS.map((item) => item.key)).toEqual([
       'dashboard',
+      'billing',
       'sales',
       'my-sales',
       'my-reports',
@@ -118,12 +119,43 @@ describe('navItemsForUser', () => {
     expect(navItemsForUser(TEST_EMPLOYEE).map((item) => item.key)).not.toContain('store-requests');
   });
 
+  it('shows billing for store admins', () => {
+    expect(navItemsForUser(TEST_ADMIN).map((item) => item.key)).toContain('billing');
+  });
+
+  it('hides START-only modules from a restricted trial snapshot', () => {
+    const trialAdmin = {
+      ...TEST_ADMIN,
+      subscription: {
+        status: 'TRIAL' as const,
+        storedStatus: 'TRIAL' as const,
+        planId: 'plan_trial',
+        planName: 'Bepul sinov',
+        trialEndsAt: '2026-09-15T00:00:00.000Z',
+        currentPeriodEnd: '2026-09-15T00:00:00.000Z',
+        trialWelcomeSeenAt: null,
+        daysRemaining: 7,
+        canWrite: true,
+        hasPendingPaymentRequest: false,
+        featureKeys: ['dashboard', 'sales', 'products', 'customers', 'expenses', 'reports'],
+        featuresRestricted: true,
+      },
+    };
+    const keys = navItemsForUser(trialAdmin).map((item) => item.key);
+    expect(keys).toContain('sales');
+    expect(keys).toContain('billing');
+    expect(keys).not.toContain('inventory');
+    expect(keys).not.toContain('workers');
+    expect(keys).not.toContain('purchases');
+  });
+
   it('gives PLATFORM_ADMIN the platform tree and hides store ERP modules', () => {
     const keys = navItemsForUser(TEST_PLATFORM_ADMIN).map((item) => item.key);
     expect(keys).toEqual([
       'platform-dashboard',
       'store-requests',
       'platform-shops',
+      'subscription-requests',
       'platform-payments',
       'platform-plans',
       'platform-expenses',
@@ -140,6 +172,7 @@ describe('navItemsForUser', () => {
       ROUTES.platformShopsActive,
       ROUTES.platformShopsPendingPayment,
       ROUTES.platformShopsBlocked,
+      ROUTES.adminStores,
     ]);
     const labels = navItemsForUser(TEST_PLATFORM_ADMIN).map((item) => item.labelKey);
     expect(new Set(labels).size).toBe(labels.length);

@@ -591,18 +591,21 @@ export async function updatePurchaseDelivery(
           ? new Date(existing.deliveredAt)
           : undefined;
 
-    // Post once when fee+driver are present; idempotent if already posted.
-    await workerOperationalFees.postPurchaseDriverFee({
-      storeId,
-      purchaseId,
-      purchaseNumber: existing.purchaseNumber,
-      workerId: nextDriverId,
-      driverFee: nextFee,
-      supplierName: existing.supplierName,
-      actorId: actor.id,
-      occurredAt: nextDeliveredAt,
-      client: tx,
-    });
+    // The shopir earns the fee when the goods reach the store, so only post
+    // once there is a delivered date. Idempotent if already posted.
+    if (nextDeliveredAt) {
+      await workerOperationalFees.postPurchaseDriverFee({
+        storeId,
+        purchaseId,
+        purchaseNumber: existing.purchaseNumber,
+        workerId: nextDriverId,
+        driverFee: nextFee,
+        supplierName: existing.supplierName,
+        actorId: actor.id,
+        occurredAt: nextDeliveredAt,
+        client: tx,
+      });
+    }
   });
 
   const detail = await purchasingRepository.getPurchaseDetail(storeId, purchaseId);
@@ -736,10 +739,13 @@ export async function cancelPurchase(
         cancelledAt: new Date(),
       });
 
+      // Keeps the shopir fee when the goods already arrived — the transport was
+      // performed, cancelling the purchase does not undo the trip.
       await workerOperationalFees.reversePurchaseDriverFee({
         storeId,
         purchaseId: purchase.id,
         purchaseNumber: purchase.purchaseNumber,
+        deliveredAt: purchase.deliveredAt,
         actorId: actor.id,
         client: tx,
       });

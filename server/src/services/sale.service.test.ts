@@ -33,6 +33,7 @@ const { prismaMock } = vi.hoisted(() => {
     installmentPayment: { findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn() },
     assemblyTask: {
       create: vi.fn(),
+      count: vi.fn(),
       findMany: vi.fn(),
       findFirst: vi.fn(),
       update: vi.fn(),
@@ -53,6 +54,7 @@ const { prismaMock } = vi.hoisted(() => {
       findFirst: vi.fn(),
       findMany: vi.fn(),
       create: vi.fn(),
+      updateMany: vi.fn(),
     },
     workerCompensationRule: {
       findMany: vi.fn(),
@@ -285,6 +287,8 @@ beforeEach(() => {
   );
   (prismaMock.workerFinancialTransaction.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
   (prismaMock.workerCompensationRule.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+  (prismaMock.assemblyTask.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+  (prismaMock.assemblyTask.count as ReturnType<typeof vi.fn>).mockResolvedValue(0);
 });
 
 describe('createSale', () => {
@@ -748,6 +752,74 @@ describe('cancelSale', () => {
         data: expect.objectContaining({ type: 'SALE_CANCELLED' }),
       }),
     );
+  });
+
+  it('keeps worker fees for completed work and only reverses the rest', async () => {
+    const existing = {
+      ...detailSale({
+        assemblyStatus: AssemblyTaskStatus.COMPLETED,
+        deliveryStatus: FulfilmentStatus.COMPLETED,
+        installationStatus: FulfilmentStatus.PENDING,
+      }),
+      items: [{ productId: PRODUCT_ID, productName: PRODUCT.name, quantity: 1 }],
+      installmentPlan: null,
+      assemblyTasks: [],
+    };
+    (prismaMock.sale.findFirst as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(existing)
+      .mockResolvedValue(detailSale({ status: 'CANCELLED', assemblyTasks: [] }));
+    (prismaMock.sale.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    (prismaMock.assemblyTask.count as ReturnType<typeof vi.fn>).mockResolvedValue(1);
+    (prismaMock.workerFinancialTransaction.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: 'tx_usta',
+        workerId: ALI_ID,
+        amount: 300_000n,
+        type: 'COMMISSION',
+        description: 'Usta haqqi',
+        referenceId: `${SALE_ID}:ASSEMBLY_FEE`,
+        responsibility: 'ASSEMBLER',
+      },
+      {
+        id: 'tx_shopir',
+        workerId: 'user_shopir',
+        amount: 130_000n,
+        type: 'COMMISSION',
+        description: 'Yetkazib berish haqi',
+        referenceId: `${SALE_ID}:DELIVERY_FEE`,
+        responsibility: 'DELIVERY',
+      },
+      {
+        id: 'tx_seller',
+        workerId: SELLER_ID,
+        amount: 400_000n,
+        type: 'COMMISSION',
+        description: 'Komissiya',
+        referenceId: `${SALE_ID}:PERCENT_OF_GROSS_PROFIT`,
+        responsibility: 'SELLER',
+      },
+    ]);
+    (prismaMock.workerFinancialTransaction.create as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 'tx_rev',
+      worker: { id: SELLER_ID, fullName: 'Seller', isActive: true },
+      createdBy: null,
+      amount: 400_000n,
+      transactionDate: new Date(),
+      type: 'REVERSAL',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await saleService.cancelSale(STORE_ID, { id: ADMIN_ID, role: UserRole.ADMIN }, SALE_ID, {
+      reason: 'Customer changed mind',
+    });
+
+    const reversals = (
+      prismaMock.workerFinancialTransaction.create as ReturnType<typeof vi.fn>
+    ).mock.calls.map((call) => call[0]?.data as Record<string, unknown>);
+
+    expect(reversals).toHaveLength(1);
+    expect(reversals[0]).toMatchObject({ type: 'REVERSAL', referenceId: 'tx_seller' });
   });
 
   it('rejects cancellation without a reason', async () => {

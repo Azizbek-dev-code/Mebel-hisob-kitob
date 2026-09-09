@@ -1740,10 +1740,23 @@ export async function cancelSale(
       items: existing.items,
     });
 
+    // Reverses only what is not yet earned. Usta / o'rnatuvchi / shopir fees for
+    // work already COMPLETED stay on the worker ledger; seller compensation
+    // still follows the cancelled sale.
+    const completedAssemblyTasks = await tx.assemblyTask.count({
+      where: { storeId, saleId: existing.id, status: AssemblyTaskStatus.COMPLETED },
+    });
     await workerOperationalFees.reverseSaleOperationalFees({
       storeId,
       saleId: existing.id,
       saleNumber: existing.saleNumber,
+      completion: {
+        assemblyCompleted:
+          completedAssemblyTasks > 0 ||
+          existing.assemblyStatus === AssemblyTaskStatus.COMPLETED,
+        installationCompleted: installationStatus === FulfilmentStatus.COMPLETED,
+        deliveryCompleted: deliveryStatus === FulfilmentStatus.COMPLETED,
+      },
       actorId: actor.id,
       client: tx,
     });

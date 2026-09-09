@@ -13,6 +13,8 @@ import type {
 import {
   ACTIVE_ASSEMBLY_TASK_STATUSES,
   AssemblyTaskStatus,
+  FulfilmentStatus,
+  PurchaseStatus,
   SaleStatus,
   buildPaginationMeta,
   computeWorkerEarnedTotal,
@@ -788,7 +790,11 @@ export async function listWorkerAttributedFees(
     reversals.map((row) => row.referenceId).filter((id): id is string => Boolean(id)),
   );
 
-  const items: WorkerAttributedFeeItem[] = [];
+  const classifiedRows: Array<{
+    row: (typeof commissions)[number];
+    amount: number;
+    classified: NonNullable<ReturnType<typeof classifyPostedCommission>>;
+  }> = [];
 
   for (const row of commissions) {
     if (reversed.has(row.id)) continue;
@@ -797,8 +803,14 @@ export async function listWorkerAttributedFees(
 
     const classified = classifyPostedCommission(row);
     if (!classified) continue;
+    classifiedRows.push({ row, amount, classified });
+  }
 
-    items.push({
+  const sources = await loadAttributedFeeSources(storeId, classifiedRows.map((r) => r.classified));
+
+  const items: WorkerAttributedFeeItem[] = classifiedRows.map(({ row, amount, classified }) => {
+    const source = sources.get(`${classified.source}:${classified.referenceId}`);
+    return {
       id: row.id,
       kind: classified.kind,
       source: classified.source,
@@ -807,8 +819,10 @@ export async function listWorkerAttributedFees(
       referenceId: classified.referenceId,
       referenceLabel: classified.referenceLabel,
       description: row.description,
-    });
-  }
+      sourceCancelled: source?.cancelled ?? false,
+      workCompleted: isFeeWorkCompleted(classified.kind, source),
+    };
+  });
 
   let sellerBonusTotal = 0;
   let assemblerFeeTotal = 0;
@@ -838,6 +852,81 @@ export async function listWorkerAttributedFees(
       purchaseDriverFeeTotal,
     items,
   };
+}
+
+interface AttributedFeeSource {
+  cancelled: boolean;
+  assemblyCompleted: boolean;
+  installationCompleted: boolean;
+  deliveryCompleted: boolean;
+}
+
+/**
+ * Sale / purchase state behind each posted fee, keyed `SOURCE:id`.
+ * A cancelled sale keeps its completed fees, so the profile shows both facts.
+ */
+async function loadAttributedFeeSources(
+  storeId: string,
+  refs: ReadonlyArray<{ source: WorkerAttributedFeeItem['source']; referenceId: string }>,
+): Promise<Map<string, AttributedFeeSource>> {
+  const saleIds = [
+    ...new Set(refs.filter((r) => r.source === 'SALE').map((r) => r.referenceId)),
+  ];
+  const purchaseIds = [
+    ...new Set(refs.filter((r) => r.source === 'PURCHASE').map((r) => r.referenceId)),
+  ];
+
+  const [sales, purchases] = await Promise.all([
+    saleIds.length === 0
+      ? []
+      : prisma.sale.findMany({
+          where: { storeId, id: { in: saleIds } },
+          select: {
+            id: true,
+            status: true,
+            assemblyStatus: true,
+            installationStatus: true,
+            deliveryStatus: true,
+          },
+        }),
+    purchaseIds.length === 0
+      ? []
+      : prisma.purchase.findMany({
+          where: { storeId, id: { in: purchaseIds } },
+          select: { id: true, status: true, deliveredAt: true },
+        }),
+  ]);
+
+  const map = new Map<string, AttributedFeeSource>();
+  for (const sale of sales) {
+    map.set(`SALE:${sale.id}`, {
+      cancelled: sale.status === SaleStatus.CANCELLED,
+      assemblyCompleted: sale.assemblyStatus === AssemblyTaskStatus.COMPLETED,
+      installationCompleted: sale.installationStatus === FulfilmentStatus.COMPLETED,
+      deliveryCompleted: sale.deliveryStatus === FulfilmentStatus.COMPLETED,
+    });
+  }
+  for (const purchase of purchases) {
+    const delivered = purchase.deliveredAt !== null;
+    map.set(`PURCHASE:${purchase.id}`, {
+      cancelled: purchase.status === PurchaseStatus.CANCELLED,
+      assemblyCompleted: false,
+      installationCompleted: false,
+      deliveryCompleted: delivered,
+    });
+  }
+  return map;
+}
+
+function isFeeWorkCompleted(
+  kind: WorkerAttributedFeeItem['kind'],
+  source: AttributedFeeSource | undefined,
+): boolean {
+  if (!source) return false;
+  if (kind === 'ASSEMBLER_FEE') return source.assemblyCompleted;
+  if (kind === 'INSTALLER_FEE') return source.installationCompleted;
+  if (kind === 'DELIVERY_FEE' || kind === 'PURCHASE_DRIVER_FEE') return source.deliveryCompleted;
+  return false;
 }
 
 function saleIdFromFeeRef(refId: string): string {

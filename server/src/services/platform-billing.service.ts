@@ -1,12 +1,14 @@
 import {
   AuditEntityType,
   AuditEventType,
-  DEFAULT_TRIAL_FEATURE_KEYS,
-  FEATURE_CATALOG,
-  LimitResourceKey,
+  BUSINESS_FEATURE_KEYS,
+  PRO_FEATURE_KEYS,
+  PRO_LIMIT_PRESET,
   PlatformBillingStatus,
   PlatformExpenseStatus,
   STARTER_FEATURE_KEYS,
+  STARTER_LIMIT_PRESET,
+  UNLIMITED_LIMIT_PRESET,
   StoreAccessStatus,
   SubscriptionRequestStatus,
   SubscriptionStatus,
@@ -36,6 +38,8 @@ import {
   type PlatformShopDetail,
   type PlatformShopListResponse,
   type PlatformShopSummary,
+  type PlatformStorePaymentsDto,
+  type PlatformStoreStatsDto,
   type RecordPlatformPaymentBody,
   type RejectPlatformPaymentBody,
   type StoreAccessStatusResponse,
@@ -60,6 +64,7 @@ import {
   getResourceUsage,
   planEntitlementInclude,
   planFeaturesRestricted,
+  repairFreePlanEntitlements,
   toPlanDto,
   toPlanLimitDtos,
   syncPlanEntitlements,
@@ -99,7 +104,7 @@ function daysOverdue(dueDate: Date, status: string, now = new Date()): number {
   return days > 0 ? days : 0;
 }
 
-const invoiceInclude = {
+export const invoiceInclude = {
   store: {
     select: {
       id: true,
@@ -115,7 +120,7 @@ const invoiceInclude = {
   recordedBy: { select: { fullName: true } },
 } satisfies Prisma.PlatformInvoiceInclude;
 
-function toInvoiceDto(
+export function toInvoiceDto(
   row: Prisma.PlatformInvoiceGetPayload<{ include: typeof invoiceInclude }>,
 ): PlatformInvoiceDto {
   const owner = row.store.users[0];
@@ -792,9 +797,14 @@ export async function listShops(actorRole: string): Promise<PlatformShopListResp
         take: 8,
         select: { status: true, paidAt: true },
       },
-      users: { where: { role: UserRole.ADMIN }, take: 1, select: { fullName: true, phone: true } },
+      users: {
+        where: { role: UserRole.ADMIN },
+        take: 1,
+        select: { fullName: true, phone: true, email: true },
+      },
     },
   });
+  const now = new Date();
   return {
     items: stores.map((store) => {
       const sub = store.subscriptions[0];
@@ -819,7 +829,9 @@ export async function listShops(actorRole: string): Promise<PlatformShopListResp
           ),
         ownerName: owner?.fullName ?? null,
         ownerPhone: owner?.phone ?? store.phone,
+        ownerEmail: owner?.email ?? null,
         createdAt: store.createdAt.toISOString(),
+        daysSinceCreated: Math.max(0, calendarDaysBetween(store.createdAt, now)),
         subscriptionStatus: effective,
         trialEndsAt: sub?.trialEndsAt?.toISOString() ?? null,
         currentPeriodEnd: sub?.currentPeriodEnd.toISOString() ?? null,
@@ -829,22 +841,115 @@ export async function listShops(actorRole: string): Promise<PlatformShopListResp
   };
 }
 
+/**
+ * ERP activity for one store, counted from its own rows.
+ *
+ * Revenue is the sum of `totalSalePrice` over non-cancelled sales — the same
+ * figure the store's own reports show, so the two screens cannot disagree.
+ */
+async function getStoreStats(storeId: string): Promise<PlatformStoreStatsDto> {
+  const [userCount, activeUserCount, saleAgg, lastSale, lastPayment, lastLogin] = await Promise.all([
+    prisma.user.count({ where: { storeId, role: { not: UserRole.PLATFORM_ADMIN } } }),
+    prisma.user.count({
+      where: { storeId, isActive: true, role: { not: UserRole.PLATFORM_ADMIN } },
+    }),
+    prisma.sale.aggregate({
+      where: { storeId, status: { not: 'CANCELLED' } },
+      _count: { _all: true },
+      _sum: { totalSalePrice: true },
+    }),
+    prisma.sale.findFirst({
+      where: { storeId },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    }),
+    prisma.payment.findFirst({
+      where: { storeId },
+      orderBy: { paidAt: 'desc' },
+      select: { paidAt: true },
+    }),
+    prisma.user.findFirst({
+      where: { storeId, lastLoginAt: { not: null } },
+      orderBy: { lastLoginAt: 'desc' },
+      select: { lastLoginAt: true },
+    }),
+  ]);
+
+  const candidates = [lastSale?.createdAt, lastPayment?.paidAt, lastLogin?.lastLoginAt].filter(
+    (value): value is Date => value instanceof Date,
+  );
+  const lastActivityAt = candidates.length
+    ? new Date(Math.max(...candidates.map((value) => value.getTime())))
+    : null;
+
+  return {
+    totalUsers: userCount,
+    activeUsers: activeUserCount,
+    totalSales: saleAgg._count._all,
+    totalRevenue: money(saleAgg._sum.totalSalePrice ?? 0n),
+    lastActivityAt: lastActivityAt?.toISOString() ?? null,
+  };
+}
+
+/**
+ * Subscription payment ledger for one store.
+ *
+ * Only PAID rows count towards `totalPaid`; a pending or rejected invoice is
+ * not money received. A zero-amount row (a trial that an admin accepted) shows
+ * in the history but adds nothing to the total.
+ */
+async function getStorePayments(storeId: string): Promise<PlatformStorePaymentsDto> {
+  const [history, paidAgg] = await Promise.all([
+    prisma.platformInvoice.findMany({
+      where: { storeId },
+      include: invoiceInclude,
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    }),
+    prisma.platformInvoice.aggregate({
+      where: { storeId, status: PlatformBillingStatus.PAID },
+      _count: { _all: true },
+      _sum: { amount: true },
+    }),
+  ]);
+  const lastPaid = history.find((row) => row.status === PlatformBillingStatus.PAID && row.paidAt);
+  return {
+    totalPaid: money(paidAgg._sum.amount ?? 0n),
+    paidCount: paidAgg._count._all,
+    lastPaymentAt: lastPaid?.paidAt?.toISOString() ?? null,
+    history: history.map(toInvoiceDto),
+  };
+}
+
 export async function getShopDetail(actorRole: string, storeId: string): Promise<PlatformShopDetail> {
   assertPlatform(actorRole);
   await syncBillingStatuses();
   const shops = await listShops(actorRole);
   const shop = shops.items.find((item) => item.id === storeId);
   if (!shop) throw ApiError.notFound("Do'kon topilmadi");
-  const sub = await getCurrentSubscription(storeId);
-  const latest = await prisma.platformInvoice.findFirst({
-    where: { storeId },
-    include: invoiceInclude,
-    orderBy: { dueDate: 'desc' },
-  });
+  const [sub, latest, stats, payments, requests] = await Promise.all([
+    getCurrentSubscription(storeId),
+    prisma.platformInvoice.findFirst({
+      where: { storeId },
+      include: invoiceInclude,
+      orderBy: { dueDate: 'desc' },
+    }),
+    getStoreStats(storeId),
+    getStorePayments(storeId),
+    prisma.subscriptionRequest.findMany({
+      where: { storeId },
+      include: requestInclude,
+      orderBy: { requestedAt: 'desc' },
+      take: 50,
+    }),
+  ]);
   return {
     shop,
     subscription: sub ? toSubscriptionDto({ ...sub, usage: await getResourceUsage(storeId) }) : null,
     latestInvoice: latest ? toInvoiceDto(latest) : null,
+    stats,
+    payments,
+    requests: requests.map(toRequestDto),
   };
 }
 
@@ -1188,7 +1293,17 @@ export async function getDashboard(actorRole: string): Promise<PlatformDashboard
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
   const pnl = await getPnl(actorRole, monthStart, monthEnd, 'Shu oy');
   const analytics = await getAnalytics(actorRole, monthStart, monthEnd);
-  const [stores, pendingRequests, pending, overdue, latestPayments, latestRequests] = await Promise.all([
+  const [
+    stores,
+    pendingRequests,
+    pendingSubscriptionRequests,
+    revenueTotalAgg,
+    revenueMonthAgg,
+    pending,
+    overdue,
+    latestPayments,
+    latestRequests,
+  ] = await Promise.all([
     prisma.store.findMany({
       where: TENANT_STORE_WHERE,
       select: {
@@ -1205,6 +1320,15 @@ export async function getDashboard(actorRole: string): Promise<PlatformDashboard
       },
     }),
     prisma.storeCreationRequest.count({ where: { status: 'PENDING' } }),
+    prisma.subscriptionRequest.count({ where: { status: SubscriptionRequestStatus.PENDING } }),
+    prisma.platformInvoice.aggregate({
+      where: { status: PlatformBillingStatus.PAID },
+      _sum: { amount: true },
+    }),
+    prisma.platformInvoice.aggregate({
+      where: { status: PlatformBillingStatus.PAID, paidAt: { gte: monthStart, lte: monthEnd } },
+      _sum: { amount: true },
+    }),
     prisma.platformInvoice.findMany({ where: { status: PlatformBillingStatus.PENDING } }),
     prisma.platformInvoice.findMany({ where: { status: PlatformBillingStatus.OVERDUE } }),
     prisma.platformInvoice.findMany({
@@ -1235,6 +1359,9 @@ export async function getDashboard(actorRole: string): Promise<PlatformDashboard
       .length,
     expiredStores: statuses.filter((status) => status === SubscriptionStatus.EXPIRED).length,
     pendingStoreRequests: pendingRequests,
+    pendingSubscriptionRequests,
+    subscriptionRevenueTotal: money(revenueTotalAgg._sum.amount ?? 0n),
+    subscriptionRevenueThisMonth: money(revenueMonthAgg._sum.amount ?? 0n),
     pendingPayments: pending.length,
     pendingPaymentAmount: pending.reduce((sum, row) => sum + money(row.amount), 0),
     overduePayments: overdue.length,
@@ -1305,15 +1432,10 @@ export async function seedDefaultPlansAndBackfill(): Promise<void> {
     where: { id: { not: trialPlan.id } },
     data: { isDefaultTrial: false },
   });
-  await attachDefaultEntitlements(
-    trialPlan.id,
-    DEFAULT_TRIAL_FEATURE_KEYS,
-    Object.values(LimitResourceKey).map((resourceKey) => ({
-      resourceKey,
-      unlimited: true,
-      limitValue: null,
-    })),
-  );
+  // Not attachDefaultEntitlements: the trial plan seeded by earlier versions
+  // already has rows (the whole catalog), so an "only if empty" write would
+  // leave the bug in place on every existing database.
+  await repairFreePlanEntitlements(trialPlan.id);
 
   const catalogPlans = [
     {
@@ -1321,13 +1443,7 @@ export async function seedDefaultPlansAndBackfill(): Promise<void> {
       description: 'Asosiy tarif',
       price: env.SEED_PLAN_START_PRICE,
       featureKeys: STARTER_FEATURE_KEYS,
-      limits: [
-        { resourceKey: LimitResourceKey.WORKERS, unlimited: false, limitValue: 3 },
-        { resourceKey: LimitResourceKey.CUSTOMERS, unlimited: false, limitValue: 100 },
-        { resourceKey: LimitResourceKey.PRODUCTS, unlimited: false, limitValue: 80 },
-        { resourceKey: LimitResourceKey.SUPPLIERS, unlimited: false, limitValue: 10 },
-        { resourceKey: LimitResourceKey.SALES, unlimited: true, limitValue: null },
-      ],
+      limits: STARTER_LIMIT_PRESET.map((row) => ({ ...row })),
       features: {
         highlights: ['Asosiy savdo va ombor', '1 oy hisobotlari', '3 xodimgacha'],
         maxUsers: 3,
@@ -1338,14 +1454,8 @@ export async function seedDefaultPlansAndBackfill(): Promise<void> {
       name: 'PRO',
       description: 'Kengaytirilgan tarif',
       price: env.SEED_PLAN_PRO_PRICE,
-      featureKeys: FEATURE_CATALOG.map((item) => item.key).filter((key) => key !== 'backup'),
-      limits: [
-        { resourceKey: LimitResourceKey.WORKERS, unlimited: false, limitValue: 10 },
-        { resourceKey: LimitResourceKey.CUSTOMERS, unlimited: false, limitValue: 500 },
-        { resourceKey: LimitResourceKey.PRODUCTS, unlimited: false, limitValue: 400 },
-        { resourceKey: LimitResourceKey.SUPPLIERS, unlimited: false, limitValue: 50 },
-        { resourceKey: LimitResourceKey.SALES, unlimited: true, limitValue: null },
-      ],
+      featureKeys: PRO_FEATURE_KEYS,
+      limits: PRO_LIMIT_PRESET.map((row) => ({ ...row })),
       features: {
         highlights: ['To‘liq ERP', 'Qarz va installment', '10 xodimgacha'],
         maxUsers: 10,
@@ -1356,12 +1466,8 @@ export async function seedDefaultPlansAndBackfill(): Promise<void> {
       name: 'BUSINESS',
       description: 'Biznes tarif',
       price: env.SEED_PLAN_BUSINESS_PRICE,
-      featureKeys: FEATURE_CATALOG.map((item) => item.key),
-      limits: Object.values(LimitResourceKey).map((resourceKey) => ({
-        resourceKey,
-        unlimited: true,
-        limitValue: null,
-      })),
+      featureKeys: BUSINESS_FEATURE_KEYS,
+      limits: UNLIMITED_LIMIT_PRESET.map((row) => ({ ...row })),
       features: {
         highlights: ['Cheksiz xodimlar', 'Kengaytirilgan hisobotlar', 'Ustuvor qo‘llab-quvvatlash'],
         maxUsers: null,
@@ -1399,7 +1505,7 @@ export async function seedDefaultPlansAndBackfill(): Promise<void> {
   }
 }
 
-const requestInclude = {
+export const requestInclude = {
   store: {
     select: {
       id: true,
@@ -1408,7 +1514,7 @@ const requestInclude = {
       users: {
         where: { role: UserRole.ADMIN },
         take: 1,
-        select: { fullName: true, phone: true },
+        select: { fullName: true, phone: true, email: true },
       },
       subscriptions: {
         where: { isCurrent: true },
@@ -1421,7 +1527,7 @@ const requestInclude = {
   reviewedBy: { select: { fullName: true } },
 } satisfies Prisma.SubscriptionRequestInclude;
 
-function toRequestDto(
+export function toRequestDto(
   row: Prisma.SubscriptionRequestGetPayload<{ include: typeof requestInclude }>,
 ): SubscriptionRequestDto {
   const owner = row.store.users[0];
@@ -1432,9 +1538,10 @@ function toRequestDto(
     storeName: row.store.name,
     ownerName: owner?.fullName ?? null,
     ownerPhone: owner?.phone ?? row.store.phone,
+    ownerEmail: owner?.email ?? null,
     planId: row.planId,
     planName: row.plan.name,
-    currentPlanName: current?.plan.name ?? null,
+    currentPlanName: row.fromPlanName ?? current?.plan.name ?? null,
     currentStatus: current ? effectiveSubscriptionStatus(current) : null,
     requestedPriceSnapshot: money(row.requestedPriceSnapshot),
     currency: row.currency,
@@ -1468,21 +1575,46 @@ export async function approveSubscriptionRequest(
   body: ApproveSubscriptionRequestBody,
 ): Promise<{ request: SubscriptionRequestDto; invoice: PlatformInvoiceDto }> {
   assertPlatform(actor.role);
-  const start = new Date(body.startDate);
-  const end = new Date(body.endDate);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+  const existing = await prisma.subscriptionRequest.findUnique({
+    where: { id: requestId },
+    select: { id: true, status: true },
+  });
+  if (!existing) throw ApiError.notFound("So'rov topilmadi");
+  if (existing.status !== SubscriptionRequestStatus.PENDING) {
+    throw ApiError.conflict("Bu so'rov allaqachon ko'rib chiqilgan");
+  }
+
+  const start = body.startDate ? new Date(body.startDate) : new Date();
+  if (Number.isNaN(start.getTime())) {
+    throw ApiError.validation('Sana oralig‘i noto‘g‘ri');
+  }
+  const end = body.endDate ? new Date(body.endDate) : addMonthsClamped(start, 1);
+  if (Number.isNaN(end.getTime()) || end <= start) {
     throw ApiError.validation('Sana oralig‘i noto‘g‘ri');
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    const request = await tx.subscriptionRequest.findUnique({
+    // Claim the request before doing anything else, filtering on PENDING in the
+    // UPDATE itself. A read-then-write check is not enough: two administrators
+    // pressing Accept at the same time both read PENDING under Postgres'
+    // read-committed default and would each mint a subscription and an invoice.
+    // Whoever loses the race updates zero rows and is turned away here.
+    const claimed = await tx.subscriptionRequest.updateMany({
+      where: { id: requestId, status: SubscriptionRequestStatus.PENDING },
+      data: {
+        status: SubscriptionRequestStatus.APPROVED,
+        reviewedById: actor.id,
+        reviewedAt: new Date(),
+      },
+    });
+    if (claimed.count === 0) {
+      throw ApiError.conflict("Bu so'rov allaqachon ko'rib chiqilgan");
+    }
+
+    const request = await tx.subscriptionRequest.findUniqueOrThrow({
       where: { id: requestId },
       include: { plan: true, store: true },
     });
-    if (!request) throw ApiError.notFound("So'rov topilmadi");
-    if (request.status !== SubscriptionRequestStatus.PENDING) {
-      throw ApiError.conflict("Bu so'rov allaqachon ko'rib chiqilgan");
-    }
 
     const next = await activatePaidPeriod(tx, {
       storeId: request.storeId,
@@ -1491,6 +1623,9 @@ export async function approveSubscriptionRequest(
       end,
     });
 
+    // Accepting a tariff by hand *is* the payment confirmation: the invoice is
+    // written PAID, not PENDING, so the store's total paid and the platform's
+    // revenue both move in the same transaction that grants the plan.
     const invoice = await tx.platformInvoice.create({
       data: {
         storeId: request.storeId,
@@ -1506,7 +1641,7 @@ export async function approveSubscriptionRequest(
         paidAt: start,
         paymentMethod: body.paymentMethod,
         note: body.note?.trim() || request.note,
-        durationMonths: 1,
+        durationMonths: Math.max(1, Math.round(calendarDaysBetween(start, end) / 30)),
         recordedById: actor.id,
       },
       include: invoiceInclude,
@@ -1515,9 +1650,6 @@ export async function approveSubscriptionRequest(
     const updatedRequest = await tx.subscriptionRequest.update({
       where: { id: request.id },
       data: {
-        status: SubscriptionRequestStatus.APPROVED,
-        reviewedById: actor.id,
-        reviewedAt: new Date(),
         createdInvoiceId: invoice.id,
         createdSubscriptionId: next.id,
       },
@@ -1571,14 +1703,27 @@ export async function rejectSubscriptionRequest(
   if (existing.status !== SubscriptionRequestStatus.PENDING) {
     throw ApiError.conflict("Bu so'rov allaqachon ko'rib chiqilgan");
   }
-  const updated = await prisma.subscriptionRequest.update({
-    where: { id: requestId },
+  // Same PENDING-filtered claim as approve, so a double Reject cannot overwrite
+  // an Accept that landed a moment earlier.
+  const claimed = await prisma.subscriptionRequest.updateMany({
+    where: { id: requestId, status: SubscriptionRequestStatus.PENDING },
     data: {
       status: SubscriptionRequestStatus.REJECTED,
       reviewedById: actor.id,
       reviewedAt: new Date(),
       rejectionReason: reason,
     },
+  });
+  if (claimed.count === 0) {
+    throw ApiError.conflict("Bu so'rov allaqachon ko'rib chiqilgan");
+  }
+  // The shop is no longer waiting on this plan, so stop advertising it as next.
+  await prisma.storeSubscription.updateMany({
+    where: { storeId: existing.storeId, isCurrent: true, pendingPlanId: existing.planId },
+    data: { pendingPlanId: null },
+  });
+  const updated = await prisma.subscriptionRequest.findUniqueOrThrow({
+    where: { id: requestId },
     include: requestInclude,
   });
   await recordAudit({

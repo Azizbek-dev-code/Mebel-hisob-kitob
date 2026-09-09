@@ -1,3 +1,4 @@
+import { FeatureKey } from '@furniture-erp/shared';
 import { Router } from 'express';
 
 import {
@@ -26,6 +27,7 @@ import {
   updateWorker,
 } from '../controllers/workers.controller.js';
 import { requireAuth } from '../middleware/require-auth.js';
+import { requireFeature } from '../middleware/require-feature.js';
 import { validate } from '../middleware/validate.js';
 import { idParamsSchema } from '../validators/common.validators.js';
 import {
@@ -61,7 +63,7 @@ import {
  */
 export const workersRouter = Router();
 
-workersRouter.use(requireAuth);
+workersRouter.use(requireAuth, requireFeature(FeatureKey.WORKERS));
 
 workersRouter.get('/options', validate({ query: workerOptionsQuerySchema }), searchWorkerOptions);
 

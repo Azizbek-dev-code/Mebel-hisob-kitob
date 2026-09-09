@@ -1,3 +1,4 @@
+import { FeatureKey } from '@furniture-erp/shared';
 import { Router } from 'express';
 
 import {
@@ -10,6 +11,7 @@ import {
 } from '../controllers/customers.controller.js';
 import { searchCustomers } from '../controllers/lookup.controller.js';
 import { requireAuth } from '../middleware/require-auth.js';
+import { requireFeature } from '../middleware/require-feature.js';
 import { validate } from '../middleware/validate.js';
 import { idParamsSchema } from '../validators/common.validators.js';
 import {
@@ -30,7 +32,7 @@ import { lookupQuerySchema } from '../validators/sales.validators.js';
  */
 export const customersRouter = Router();
 
-customersRouter.use(requireAuth);
+customersRouter.use(requireAuth, requireFeature(FeatureKey.CUSTOMERS));
 
 customersRouter.get('/options', validate({ query: lookupQuerySchema }), searchCustomers);
 

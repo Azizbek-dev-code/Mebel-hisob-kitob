@@ -610,26 +610,41 @@ async function main() {
       await prisma.store.delete({ where: { id: otherStore.id } });
     }
 
-    // Cancel primary sale → reversals (originals retained)
-    const cancel = await request('POST', `/api/sales/${saleId}/cancel`, {
-      cookie,
-      body: { reason: `${MARKER} cancel` },
-    });
-    if (cancel.status !== 200) {
-      throw new Error(`cancel failed ${cancel.status} ${JSON.stringify(cancel.body)}`);
+    const ustaTotalBeforeCancel = Number(
+      (
+        dataOf((await request('GET', `/api/workers/${usta.id}/attributed-fees`, { cookie })).body)
+          .fees as Json
+      ).assemblerFeeTotal,
+    );
+
+    // Cancel primary sale twice → completed work keeps every fee, no reversals.
+    for (let i = 0; i < 2; i += 1) {
+      const cancel = await request('POST', `/api/sales/${saleId}/cancel`, {
+        cookie,
+        body: { reason: `${MARKER} cancel` },
+      });
+      // Second call is expected to conflict — the sale is already cancelled.
+      if (i === 0 && cancel.status !== 200) {
+        throw new Error(`cancel failed ${cancel.status} ${JSON.stringify(cancel.body)}`);
+      }
     }
 
-    for (const [workerId, refType, refId] of [
-      [usta.id, WorkerFinancialReferenceType.ASSEMBLY, `${saleId}:ASSEMBLY_FEE`],
-      [installer.id, WorkerFinancialReferenceType.ASSEMBLY, `${saleId}:INSTALLER_FEE`],
-      [shopir.id, WorkerFinancialReferenceType.SALE, `${saleId}:DELIVERY_FEE`],
+    for (const [workerId, refType, refId, amount] of [
+      [usta.id, WorkerFinancialReferenceType.ASSEMBLY, `${saleId}:ASSEMBLY_FEE`, 340_000],
+      [installer.id, WorkerFinancialReferenceType.ASSEMBLY, `${saleId}:INSTALLER_FEE`, 220_000],
+      [shopir.id, WorkerFinancialReferenceType.SALE, `${saleId}:DELIVERY_FEE`, 150_000],
     ] as const) {
       const open = await countOpenCommissions(store.id, workerId, refType, refId);
-      if (open !== 0) throw new Error(`expected reversed open=0 for ${refId}, got ${open}`);
+      if (open !== 1) {
+        throw new Error(`completed work fee must survive cancel for ${refId}, open=${open}`);
+      }
       const original = await prisma.workerFinancialTransaction.findFirst({
         where: { storeId: store.id, workerId, referenceId: refId, type: 'COMMISSION' },
       });
       if (!original) throw new Error(`original commission missing for ${refId}`);
+      if (Number(original.amount) !== amount) {
+        throw new Error(`fee amount changed for ${refId}: ${String(original.amount)}`);
+      }
       const rev = await prisma.workerFinancialTransaction.findFirst({
         where: {
           storeId: store.id,
@@ -638,7 +653,70 @@ async function main() {
           referenceId: original.id,
         },
       });
-      if (!rev) throw new Error(`reversal missing for ${refId}`);
+      if (rev) throw new Error(`unexpected reversal for completed work ${refId}`);
+    }
+
+    // Worker profile still shows the earning, flagged as a cancelled source.
+    const ustaAfterCancel = dataOf(
+      (await request('GET', `/api/workers/${usta.id}/attributed-fees`, { cookie })).body,
+    ).fees as Json;
+    if (Number(ustaAfterCancel.assemblerFeeTotal) !== ustaTotalBeforeCancel) {
+      throw new Error(
+        `usta earning changed by cancel: ${ustaTotalBeforeCancel} → ${String(
+          ustaAfterCancel.assemblerFeeTotal,
+        )}`,
+      );
+    }
+    const ustaItem = (ustaAfterCancel.items as Json[]).find(
+      (item) => String(item.referenceId) === saleId,
+    );
+    if (!ustaItem || ustaItem.sourceCancelled !== true || ustaItem.workCompleted !== true) {
+      throw new Error('cancelled-but-completed source flags missing on attributed fee');
+    }
+
+    // Incomplete work on a cancelled sale must never create an earning.
+    const pendingSaleRes = await request('POST', '/api/sales', {
+      cookie,
+      body: {
+        customerId: customer.id,
+        sellerId: admin.id,
+        assemblerId: usta.id,
+        deliveryPersonId: shopir.id,
+        assemblerFee: 300_000,
+        driverFee: 130_000,
+        deliveryRequired: true,
+        notes: `${MARKER} pending`,
+        items: [
+          {
+            productId: product.id,
+            quantity: 1,
+            unitCostPrice: 7_000_000,
+            unitSalePrice: 10_000_000,
+          },
+        ],
+        paymentType: 'FULL_PAYMENT',
+        depositAmount: 10_000_000,
+        depositMethod: 'CASH',
+      },
+    });
+    if (pendingSaleRes.status !== 201 && pendingSaleRes.status !== 200) {
+      throw new Error(`pending sale create failed ${pendingSaleRes.status}`);
+    }
+    const pendingSaleId = String((dataOf(pendingSaleRes.body).sale as Json).id);
+
+    const pendingCancel = await request('POST', `/api/sales/${pendingSaleId}/cancel`, {
+      cookie,
+      body: { reason: `${MARKER} pending cancel` },
+    });
+    if (pendingCancel.status !== 200) {
+      throw new Error(`pending cancel failed ${pendingCancel.status}`);
+    }
+
+    const pendingLedger = await prisma.workerFinancialTransaction.count({
+      where: { storeId: store.id, referenceId: { startsWith: `${pendingSaleId}:` } },
+    });
+    if (pendingLedger !== 0) {
+      throw new Error(`incomplete work created ledger rows: ${pendingLedger}`);
     }
 
     console.log('WORKER_FEES_E2E_OK');

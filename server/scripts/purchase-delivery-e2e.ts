@@ -230,6 +230,16 @@ async function main() {
     throw new Error('patch must not change totalCost');
   }
 
+  const feeBeforeCancel = await prisma.workerFinancialTransaction.findFirst({
+    where: {
+      storeId: store.id,
+      workerId: driver.id,
+      type: 'COMMISSION',
+      referenceId: `${purchaseId}:DRIVER_FEE`,
+    },
+  });
+  if (!feeBeforeCancel) throw new Error('shopir fee was not posted on stock-in');
+
   const cancel = await request('POST', `/api/purchases/${purchaseId}/cancel`, {
     cookie,
     body: { reason: `${MARKER} cancel test` },
@@ -245,6 +255,16 @@ async function main() {
   if (Number(cancelled.deliveryDays) !== 5) {
     throw new Error('cancel must keep delivery days in history');
   }
+
+  // Transport was performed (goods arrived) → the shopir keeps the fee.
+  const feeAfterCancel = await prisma.workerFinancialTransaction.findUniqueOrThrow({
+    where: { id: feeBeforeCancel.id },
+  });
+  if (!feeAfterCancel.isOpen) throw new Error('completed transport fee was closed by cancel');
+  const feeReversal = await prisma.workerFinancialTransaction.findFirst({
+    where: { storeId: store.id, type: 'REVERSAL', referenceId: feeBeforeCancel.id },
+  });
+  if (feeReversal) throw new Error('completed transport fee must not be reversed on cancel');
 
   const stock2 = (await prisma.product.findUniqueOrThrow({ where: { id: productId } })).stockQty;
   if (stock2 !== stock0) throw new Error(`stock must reverse to ${stock0}, got ${stock2}`);

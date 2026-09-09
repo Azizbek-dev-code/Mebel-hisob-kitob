@@ -9,7 +9,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '../utils/api-error.js';
 
-const { purchasingRepoMock, inventoryRepoMock, prismaMock, workerRepoMock } = vi.hoisted(() => ({
+const { purchasingRepoMock, inventoryRepoMock, prismaMock, workerRepoMock, workerFeesMock } = vi.hoisted(() => ({
+  workerFeesMock: {
+    postPurchaseDriverFee: vi.fn(async () => true),
+    reversePurchaseDriverFee: vi.fn(async () => ({ reversed: 0, preserved: 0 })),
+  },
   purchasingRepoMock: {
     listSuppliers: vi.fn(),
     getSupplierDetail: vi.fn(),
@@ -51,10 +55,7 @@ const { purchasingRepoMock, inventoryRepoMock, prismaMock, workerRepoMock } = vi
 vi.mock('../repositories/purchasing.repository.js', () => purchasingRepoMock);
 vi.mock('../repositories/inventory.repository.js', () => inventoryRepoMock);
 vi.mock('../repositories/worker.repository.js', () => workerRepoMock);
-vi.mock('./worker-operational-fees.service.js', () => ({
-  postPurchaseDriverFee: vi.fn(async () => true),
-  reversePurchaseDriverFee: vi.fn(async () => undefined),
-}));
+vi.mock('./worker-operational-fees.service.js', () => workerFeesMock);
 vi.mock('../lib/prisma.js', () => ({
   prisma: prismaMock,
   connectDatabase: vi.fn(),
@@ -603,6 +604,32 @@ describe('purchasing.service payments and cancel', () => {
       }),
     );
     expect(purchasingRepoMock.cancelPurchaseInTx).toHaveBeenCalled();
+  });
+
+  it('tells the fee service the goods already arrived so the shopir keeps the fee', async () => {
+    const deliveredAt = new Date('2026-08-20T00:00:00.000Z');
+    purchasingRepoMock.findPurchaseForUpdate.mockResolvedValue({
+      id: PURCHASE_DETAIL.id,
+      storeId: STORE,
+      supplierId: SUPPLIER.id,
+      purchaseNumber: 1,
+      status: PurchaseStatus.ACTIVE,
+      deliveredAt,
+      driverFee: 150_000n,
+      items: [],
+      payments: [],
+    });
+    purchasingRepoMock.cancelPurchaseInTx.mockResolvedValue(undefined);
+    purchasingRepoMock.getPurchaseDetail.mockResolvedValue({
+      ...PURCHASE_DETAIL,
+      status: PurchaseStatus.CANCELLED,
+    });
+
+    await cancelPurchase(STORE, ACTOR, PURCHASE_DETAIL.id, { reason: 'Wrong supplier' });
+
+    expect(workerFeesMock.reversePurchaseDriverFee).toHaveBeenCalledWith(
+      expect.objectContaining({ purchaseId: PURCHASE_DETAIL.id, deliveredAt }),
+    );
   });
 
   it('rejects double cancel', async () => {

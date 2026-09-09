@@ -11,6 +11,7 @@ import {
 } from '@furniture-erp/shared';
 import { AlertTriangle, Clock, History, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { ErrorState } from '@/components/feedback/ErrorState';
@@ -131,6 +132,12 @@ function PlatformPaymentsPage({ tab }: { tab: PaymentsTab }) {
 
       {tab === 'pending' ? (
         <SectionCard title="Obuna so'rovlari">
+          <p className="mb-3 text-xs text-ink-muted">
+            To&apos;liq ro&apos;yxat:{' '}
+            <Link to={ROUTES.platformSubscriptionRequests} className="font-medium text-brand-700 hover:underline">
+              Tarif so&apos;rovlari
+            </Link>
+          </p>
           {requests.isPending && !requests.data ? (
             <Skeleton className="h-24 w-full" />
           ) : requests.isError ? (

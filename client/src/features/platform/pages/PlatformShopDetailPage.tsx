@@ -1,5 +1,8 @@
 import {
+  PLATFORM_BILLING_STATUS_LABELS,
   STORE_ACCESS_STATUS_LABELS,
+  SUBSCRIPTION_REQUEST_STATUS_LABELS,
+  SUBSCRIPTION_STATUS_LABELS,
   StoreAccessStatus,
   formatMoney,
   formatStoreCreationDate,
@@ -36,6 +39,9 @@ export function PlatformShopDetailPage() {
   const shop = detail.data?.shop;
   const sub = detail.data?.subscription;
   const invoice = detail.data?.latestInvoice;
+  const stats = detail.data?.stats;
+  const payments = detail.data?.payments;
+  const shopRequests = detail.data?.requests ?? [];
 
   async function changePlan(planId: string) {
     if (!id) return;
@@ -94,6 +100,21 @@ export function PlatformShopDetailPage() {
         />
       ) : (
         <>
+          <SectionCard title="Asosiy ma'lumotlar">
+            <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+              <Row label="Do'kon nomi" value={shop.name} />
+              <Row label="Egasi / Admin" value={shop.ownerName ?? '—'} />
+              <Row label="Telefon" value={shop.ownerPhone ?? shop.phone ?? '—'} />
+              <Row label="Email" value={shop.ownerEmail ?? '—'} />
+              <Row label="Yaratilgan" value={formatStoreCreationDate(shop.createdAt)} />
+              <Row
+                label="Dasturdan beri"
+                value={`${shop.daysSinceCreated ?? 0} kun`}
+              />
+              <Row label="Holati" value={STORE_ACCESS_STATUS_LABELS[shop.accessStatus]} />
+            </dl>
+          </SectionCard>
+
           <SectionCard title="Obuna">
             <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
               <Row label="Tarif" value={sub?.planName ?? '—'} />
@@ -102,28 +123,34 @@ export function PlatformShopDetailPage() {
                 value={sub ? formatMoney(sub.monthlyPrice) : '—'}
               />
               <Row
-                label="Keyingi to'lov"
-                value={sub ? formatDate(sub.nextPaymentDue) : '—'}
+                label="Tarif boshlangan"
+                value={sub ? formatDate(sub.startedAt) : '—'}
               />
-              <Row label="Obuna statusi" value={sub?.status ?? '—'} />
               <Row
-                label="Sinov"
+                label="Tarif tugashi"
+                value={sub ? formatDate(sub.expiresAt) : '—'}
+              />
+              <Row
+                label="Qolgan kunlar"
+                value={sub?.daysRemaining != null ? `${sub.daysRemaining} kun` : '—'}
+              />
+              <Row
+                label="Trial / Paid"
                 value={
-                  sub?.trialEndsAt
-                    ? `${formatDate(sub.trialStartedAt ?? sub.startedAt)} – ${formatDate(sub.trialEndsAt)}`
-                    : '—'
+                  sub?.status === 'TRIAL'
+                    ? 'Trial'
+                    : sub
+                      ? 'Paid'
+                      : '—'
                 }
               />
-              <Row
-                label="Davr tugashi"
-                value={sub ? formatDate(sub.currentPeriodEnd) : '—'}
-              />
+              <Row label="Obuna statusi" value={sub ? SUBSCRIPTION_STATUS_LABELS[sub.status] : '—'} />
               <Row
                 label="Kirish"
                 value={STORE_ACCESS_STATUS_LABELS[shop.accessStatus]}
               />
               {sub?.pendingPlanName ? (
-                <Row label="Keyingi davr tarifi" value={sub.pendingPlanName} />
+                <Row label="So'ralgan tarif" value={sub.pendingPlanName} />
               ) : null}
             </dl>
             <div className="mt-4 flex flex-wrap gap-2">
@@ -157,6 +184,94 @@ export function PlatformShopDetailPage() {
                 {error}
               </p>
             ) : null}
+          </SectionCard>
+
+          <SectionCard title="Statistika">
+            <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+              <Row label="Jami foydalanuvchilar" value={String(stats?.totalUsers ?? 0)} />
+              <Row label="Jami sotuvlar" value={String(stats?.totalSales ?? 0)} />
+              <Row label="Jami tushum" value={formatMoney(stats?.totalRevenue ?? 0)} />
+              <Row
+                label="Oxirgi faollik"
+                value={stats?.lastActivityAt ? formatDate(stats.lastActivityAt) : '—'}
+              />
+            </dl>
+          </SectionCard>
+
+          <SectionCard title="To'lovlar">
+            <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+              <Row label="Jami to'langan" value={formatMoney(payments?.totalPaid ?? 0)} />
+              <Row
+                label="Oxirgi to'lov"
+                value={payments?.lastPaymentAt ? formatDate(payments.lastPaymentAt) : '—'}
+              />
+            </dl>
+            {(payments?.history.length ?? 0) === 0 ? (
+              <p className="mt-3 text-sm text-ink-muted">To‘lov tarixi yo‘q.</p>
+            ) : (
+              <div className="mt-4 overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="text-xs text-ink-muted">
+                    <tr>
+                      <th className="py-2 pr-3 font-medium">Sana</th>
+                      <th className="py-2 pr-3 font-medium">Tarif</th>
+                      <th className="py-2 pr-3 font-medium">Summa</th>
+                      <th className="py-2 pr-3 font-medium">Holat</th>
+                      <th className="py-2 pr-3 font-medium">Tasdiqlagan</th>
+                      <th className="py-2 font-medium">Izoh</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line">
+                    {payments?.history.map((row) => (
+                      <tr key={row.id}>
+                        <td className="py-2 pr-3 whitespace-nowrap">
+                          {formatDate(row.paidAt ?? row.createdAt)}
+                        </td>
+                        <td className="py-2 pr-3">{row.planName}</td>
+                        <td className="py-2 pr-3 whitespace-nowrap">{formatMoney(row.amount)}</td>
+                        <td className="py-2 pr-3">
+                          {PLATFORM_BILLING_STATUS_LABELS[row.status]}
+                        </td>
+                        <td className="py-2 pr-3">{row.recordedByName ?? '—'}</td>
+                        <td className="py-2">{row.note ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <Link
+              to={ROUTES.platformPayments}
+              className="mt-3 inline-block text-xs font-medium text-brand-700 hover:underline"
+            >
+              Barcha to‘lovlar →
+            </Link>
+          </SectionCard>
+
+          <SectionCard title="Tarif so'rovlari">
+            {shopRequests.length === 0 ? (
+              <p className="text-sm text-ink-muted">Bu do‘kon hali tarif so‘rovini yubormagan.</p>
+            ) : (
+              <ul className="divide-y divide-line">
+                {shopRequests.map((row) => (
+                  <li key={row.id} className="flex justify-between gap-3 py-2 text-sm">
+                    <span>
+                      {row.currentPlanName ?? '—'} → {row.planName}
+                      <span className="ml-2 text-xs text-ink-muted">{formatDate(row.requestedAt)}</span>
+                    </span>
+                    <Badge tone={row.status === 'PENDING' ? 'warning' : row.status === 'APPROVED' ? 'success' : 'neutral'}>
+                      {SUBSCRIPTION_REQUEST_STATUS_LABELS[row.status]}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Link
+              to={ROUTES.platformSubscriptionRequests}
+              className="mt-3 inline-block text-xs font-medium text-brand-700 hover:underline"
+            >
+              Barcha so‘rovlar →
+            </Link>
           </SectionCard>
 
           {invoice ? (

@@ -224,6 +224,10 @@ export interface WorkerAttributedFeeItem {
   referenceLabel: string;
   /** Optional context (customer / supplier / product summary). */
   description: string | null;
+  /** Source sale / purchase was cancelled after the fee was earned. */
+  sourceCancelled: boolean;
+  /** The physical service behind this fee reached COMPLETED. */
+  workCompleted: boolean;
 }
 
 export interface WorkerAttributedFeesSummary {

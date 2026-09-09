@@ -4,7 +4,24 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { Header } from './Header';
 import { MobileSidebar } from './MobileSidebar';
 import { Sidebar } from './Sidebar';
+import { FeatureLockedPanel } from '@/features/subscription/FeatureLockedPanel';
 import { SubscriptionProvider } from '@/features/subscription/SubscriptionProvider';
+import { useSubscription } from '@/features/subscription/subscription-context';
+import { useCurrentUser } from '@/features/auth/hooks/use-auth';
+import { featureForNavKey } from '@furniture-erp/shared';
+import { navItemForPath } from '@/routes/navigation';
+
+function FeatureGatedOutlet() {
+  const { pathname } = useLocation();
+  const { data: user } = useCurrentUser();
+  const { hasFeature, isPlatformAdmin } = useSubscription();
+  const nav = navItemForPath(pathname);
+  const feature = nav ? featureForNavKey(nav.key) : null;
+  if (!isPlatformAdmin && feature && user?.subscription && !hasFeature(feature)) {
+    return <FeatureLockedPanel />;
+  }
+  return <Outlet />;
+}
 
 /**
  * The frame every authenticated screen is rendered in: module rail on the left,
@@ -38,7 +55,7 @@ export function AppLayout() {
       <div className="flex min-h-screen min-w-0 flex-col overflow-x-hidden">
         <Header onOpenNavigation={() => setNavOpen(true)} />
         <main className="min-w-0 flex-1">
-          <Outlet />
+          <FeatureGatedOutlet />
         </main>
       </div>
       </div>

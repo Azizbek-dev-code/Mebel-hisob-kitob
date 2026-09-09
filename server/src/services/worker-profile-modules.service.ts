@@ -905,29 +905,24 @@ export async function getStoreFeeReconciliation(
 ): Promise<WorkerFeeReconciliation> {
   assertCanManageWorkers(actorRole);
 
+  // Completed work stays a real business cost even when the document is later
+  // cancelled, and the ledger keeps those fees — so the P&L side must count
+  // them too, otherwise reconciliation reports a phantom difference.
   const [assemblyPnl, deliveryPnl, installerPnl, purchasePnl, ledger] = await Promise.all([
     prisma.sale.aggregate({
-      where: { storeId, status: { not: SaleStatus.CANCELLED }, assemblyStatus: 'COMPLETED' },
+      where: { storeId, assemblyStatus: 'COMPLETED' },
       _sum: { installationCost: true },
     }),
     prisma.sale.aggregate({
-      where: {
-        storeId,
-        status: { not: SaleStatus.CANCELLED },
-        deliveryStatus: FulfilmentStatus.COMPLETED,
-      },
+      where: { storeId, deliveryStatus: FulfilmentStatus.COMPLETED },
       _sum: { deliveryCost: true },
     }),
     prisma.sale.aggregate({
-      where: {
-        storeId,
-        status: { not: SaleStatus.CANCELLED },
-        installationStatus: FulfilmentStatus.COMPLETED,
-      },
+      where: { storeId, installationStatus: FulfilmentStatus.COMPLETED },
       _sum: { installerFee: true },
     }),
     prisma.purchase.aggregate({
-      where: { storeId, status: { not: 'CANCELLED' }, driverFee: { gt: 0 } },
+      where: { storeId, driverFee: { gt: 0 }, deliveredAt: { not: null } },
       _sum: { driverFee: true },
     }),
     prisma.workerFinancialTransaction.groupBy({

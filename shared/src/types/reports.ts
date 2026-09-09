@@ -42,6 +42,14 @@ export interface ReportsSummaryExtras {
   /** Cancelled expenses in the period (excluded from opex). */
   cancelledExpenseCount: number;
   cancelledExpenseAmount: Money;
+  /**
+   * Completed worker service fees kept on cancelled sales / purchases.
+   * The work was performed, so the fee is a real cost even though the document
+   * no longer contributes revenue. Informational — netProfit does not subtract
+   * COMMISSION rows, so this is never double counted.
+   */
+  retainedWorkerFeesOnCancelled: Money;
+  retainedWorkerFeesOnCancelledCount: number;
   /** Point-in-time receivables (not period-scoped). */
   debt: DebtSummary;
   /**

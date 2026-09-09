@@ -30,6 +30,7 @@ import { PlatformPnlPage } from '@/features/platform/pages/PlatformPnlPage';
 import { PlatformSettingsPage } from '@/features/platform/pages/PlatformSettingsPage';
 import { PlatformShopDetailPage } from '@/features/platform/pages/PlatformShopDetailPage';
 import { PlatformShopsPage } from '@/features/platform/pages/PlatformShopsPage';
+import { PlatformSubscriptionRequestsPage } from '@/features/platform/pages/PlatformSubscriptionRequestsPage';
 import { NewPurchasePage } from '@/features/purchasing/pages/NewPurchasePage';
 import { PurchaseDetailPage } from '@/features/purchasing/pages/PurchaseDetailPage';
 import { PurchasesPage } from '@/features/purchasing/pages/PurchasesPage';
@@ -202,6 +203,22 @@ export const routes: RouteObject[] = [
           {
             path: '/platform/shops/:id',
             element: platformOnly(<PlatformShopDetailPage />),
+          },
+          {
+            path: ROUTES.adminStores,
+            element: platformOnly(<PlatformShopsPage filter="all" />),
+          },
+          {
+            path: '/admin/stores/:id',
+            element: platformOnly(<PlatformShopDetailPage />),
+          },
+          {
+            path: ROUTES.platformSubscriptionRequests,
+            element: platformOnly(<PlatformSubscriptionRequestsPage />),
+          },
+          {
+            path: ROUTES.adminSubscriptionRequests,
+            element: platformOnly(<PlatformSubscriptionRequestsPage />),
           },
           { path: ROUTES.platformPayments, element: platformOnly(<PlatformPaymentsHistoryPage />) },
           {

@@ -64,10 +64,11 @@ export async function getReportsSummary(input: AnalyticsPeriodInput): Promise<Re
   const to = new Date(financial.period.toInstant);
   const storeId = input.storeId;
 
-  const [settled, cancelledSalesCount, cancelledExpenses, debt] = await Promise.all([
+  const [settled, cancelledSalesCount, cancelledExpenses, retainedFees, debt] = await Promise.all([
     reportsRepository.aggregateSettledCompensation(storeId, from, to),
     reportsRepository.countCancelledSales(storeId, from, to),
     reportsRepository.aggregateCancelledExpenses(storeId, from, to),
+    reportsRepository.aggregateRetainedFeesOnCancelledDocuments(storeId, from, to),
     debtRepository.summarizeDebts(storeId, input.now ?? new Date()),
   ]);
 
@@ -81,6 +82,8 @@ export async function getReportsSummary(input: AnalyticsPeriodInput): Promise<Re
       cancelledSalesCount,
       cancelledExpenseCount: cancelledExpenses.count,
       cancelledExpenseAmount: cancelledExpenses.amount,
+      retainedWorkerFeesOnCancelled: retainedFees.total,
+      retainedWorkerFeesOnCancelledCount: retainedFees.count,
       debt,
       compensationInNetProfit: false,
     },

@@ -1,6 +1,8 @@
 import {
   UserRole,
   WorkerResponsibility,
+  featureForNavKey,
+  planAllowsFeature,
   type AuthUser,
 } from '@furniture-erp/shared';
 import {
@@ -45,6 +47,7 @@ export interface NavItem {
 /** The modules of the ERP, in the order the sidebar lists them. */
 export const NAV_ITEMS: readonly NavItem[] = [
   { key: 'dashboard', labelKey: 'nav.dashboard', to: ROUTES.dashboard, icon: LayoutDashboard },
+  { key: 'billing', labelKey: 'nav.billing', to: ROUTES.billing, icon: Tags },
   { key: 'sales', labelKey: 'nav.sales', to: ROUTES.sales, icon: ShoppingCart },
   { key: 'my-sales', labelKey: 'nav.mySales', to: ROUTES.mySales, icon: ShoppingCart },
   { key: 'my-reports', labelKey: 'nav.myReports', to: ROUTES.myReports, icon: BarChart3 },
@@ -95,7 +98,15 @@ export const PLATFORM_NAV_ITEMS: readonly NavItem[] = [
       ROUTES.platformShopsActive,
       ROUTES.platformShopsPendingPayment,
       ROUTES.platformShopsBlocked,
+      ROUTES.adminStores,
     ],
+  },
+  {
+    key: 'subscription-requests',
+    labelKey: 'nav.subscriptionRequests',
+    to: ROUTES.platformSubscriptionRequests,
+    icon: Inbox,
+    matchingPaths: [ROUTES.adminSubscriptionRequests],
   },
   {
     key: 'platform-payments',
@@ -172,25 +183,32 @@ function isStoreManager(user: AuthUser): boolean {
   return user.role === UserRole.ADMIN || user.role === UserRole.PLATFORM_ADMIN;
 }
 
+function allowedByPlan(user: AuthUser, item: NavItem): boolean {
+  if (user.role === UserRole.PLATFORM_ADMIN) return true;
+  const feature = featureForNavKey(item.key);
+  if (!feature) return true;
+  if (!user.subscription) return true;
+  return planAllowsFeature(user.subscription.featureKeys, feature, user.subscription.featuresRestricted);
+}
+
 /**
  * Sidebar modules visible to the signed-in principal.
  *
  * System role gates admin modules; worker responsibilities gate business modules.
  * A worker with multiple responsibilities sees the union of those modules.
+ * Plan features then hide modules the current tariff does not include.
  */
 export function navItemsForUser(user: AuthUser | null | undefined): NavItem[] {
   if (!user) return [];
 
+  let items: NavItem[];
+
   if (user.role === UserRole.PLATFORM_ADMIN) {
-    return [...PLATFORM_NAV_ITEMS];
-  }
-
-  if (isStoreManager(user)) {
-    return NAV_ITEMS.filter((item) => item.key !== 'my-sales' && item.key !== 'my-reports' && item.key !== 'profile');
-  }
-
-  if (user.role === UserRole.CASHIER) {
-    return NAV_ITEMS.filter((item) =>
+    items = [...PLATFORM_NAV_ITEMS];
+  } else if (isStoreManager(user)) {
+    items = NAV_ITEMS.filter((item) => item.key !== 'my-sales' && item.key !== 'my-reports' && item.key !== 'profile');
+  } else if (user.role === UserRole.CASHIER) {
+    items = NAV_ITEMS.filter((item) =>
       [
         'dashboard',
         'sales',
@@ -203,31 +221,31 @@ export function navItemsForUser(user: AuthUser | null | undefined): NavItem[] {
         'profile',
       ].includes(item.key),
     );
+  } else {
+    const keys = new Set<string>(['dashboard', 'profile', 'my-finances']);
+
+    if (hasResponsibility(user, WorkerResponsibility.SELLER)) {
+      keys.add('sales');
+      keys.add('my-sales');
+      keys.add('my-reports');
+      keys.add('customers');
+      keys.add('debts');
+    }
+    if (hasResponsibility(user, WorkerResponsibility.ASSEMBLER)) {
+      keys.add('assembly');
+    }
+    if (hasResponsibility(user, WorkerResponsibility.DELIVERY)) {
+      keys.add('delivery');
+      keys.add('sales');
+    }
+    if (hasResponsibility(user, WorkerResponsibility.INSTALLER)) {
+      keys.add('assembly');
+    }
+
+    items = NAV_ITEMS.filter((item) => keys.has(item.key));
   }
 
-  // EMPLOYEE (and any future non-admin roles): responsibility-driven.
-  const keys = new Set<string>(['dashboard', 'profile', 'my-finances']);
-
-  if (hasResponsibility(user, WorkerResponsibility.SELLER)) {
-    keys.add('sales');
-    keys.add('my-sales');
-    keys.add('my-reports');
-    keys.add('customers');
-    keys.add('debts');
-  }
-  if (hasResponsibility(user, WorkerResponsibility.ASSEMBLER)) {
-    keys.add('assembly');
-  }
-  if (hasResponsibility(user, WorkerResponsibility.DELIVERY)) {
-    keys.add('delivery');
-    // Sales list remains useful context for assigned deliveries.
-    keys.add('sales');
-  }
-  if (hasResponsibility(user, WorkerResponsibility.INSTALLER)) {
-    keys.add('assembly');
-  }
-
-  return NAV_ITEMS.filter((item) => keys.has(item.key));
+  return items.filter((item) => allowedByPlan(user, item));
 }
 
 export function canManageWorkers(user: AuthUser | null | undefined): boolean {

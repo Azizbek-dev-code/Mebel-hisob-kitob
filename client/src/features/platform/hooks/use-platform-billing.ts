@@ -163,6 +163,7 @@ export function useApproveSubscriptionRequest() {
       void client.invalidateQueries({ queryKey: ['platform-invoices'] });
       void client.invalidateQueries({ queryKey: platformBillingQueryKeys.dashboard });
       void client.invalidateQueries({ queryKey: platformShopsQueryKeys.all });
+      void client.invalidateQueries({ queryKey: ['platform-shop'] });
     },
   });
 }

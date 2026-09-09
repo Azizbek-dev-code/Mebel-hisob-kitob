@@ -10,6 +10,7 @@ export const ROUTES = {
   platformShopsPendingPayment: '/platform/shops/pending-payment',
   platformShopsBlocked: '/platform/shops/blocked',
   platformShopDetail: (id: string) => `/platform/shops/${id}`,
+  platformSubscriptionRequests: '/platform/subscription-requests',
   platformPayments: '/platform/payments',
   platformPaymentsPending: '/platform/payments/pending',
   platformPaymentsOverdue: '/platform/payments/overdue',
@@ -23,6 +24,10 @@ export const ROUTES = {
   platformAnalyticsProfit: '/platform/analytics/profit',
   platformSettings: '/platform/settings',
   billing: '/billing',
+  /** Compatibility aliases requested as /admin/... — same pages as /platform/... */
+  adminStores: '/admin/stores',
+  adminStoreDetail: (id: string) => `/admin/stores/${id}`,
+  adminSubscriptionRequests: '/admin/subscription-requests',
   accessBlocked: '/access-blocked',
   dashboard: '/dashboard',
   sales: '/sales',

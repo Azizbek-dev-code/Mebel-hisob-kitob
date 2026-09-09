@@ -232,4 +232,24 @@ describe('worker-profile-modules acceptance', () => {
     const delivery = result.rows.find((r) => r.kind === 'DELIVERY');
     expect(delivery?.difference).toBe(0);
   });
+
+  it('counts completed work on cancelled documents on the P&L side too', async () => {
+    prismaMock.sale.aggregate.mockResolvedValue({ _sum: {} });
+    prismaMock.purchase.aggregate.mockResolvedValue({ _sum: {} });
+    prismaMock.workerFinancialTransaction.groupBy.mockResolvedValue([]);
+    prismaMock.workerFinancialTransaction.aggregate.mockResolvedValue({ _sum: {} });
+
+    await getStoreFeeReconciliation('store_1', UserRole.ADMIN);
+
+    // Cancelled sales keep their completed fees on the ledger, so filtering them
+    // out of the P&L aggregates would report a phantom difference.
+    for (const call of prismaMock.sale.aggregate.mock.calls) {
+      expect((call[0] as { where: Record<string, unknown> }).where).not.toHaveProperty('status');
+    }
+    expect(prismaMock.purchase.aggregate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ deliveredAt: { not: null } }),
+      }),
+    );
+  });
 });

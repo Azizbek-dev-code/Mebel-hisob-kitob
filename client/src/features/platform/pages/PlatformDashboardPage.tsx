@@ -22,6 +22,11 @@ const MODULES: { to: string; title: string; description: string }[] = [
     description: "Faol, to'lov kutilayotgan va bloklangan do'konlar.",
   },
   {
+    to: ROUTES.platformSubscriptionRequests,
+    title: "Tarif so'rovlari",
+    description: "Do'kon tarif o'zgartirish so'rovlarini qabul qilish yoki rad etish.",
+  },
+  {
     to: ROUTES.platformPayments,
     title: "To'lovlar",
     description: "To'lov tarixi, kutilayotganlar va muddati o'tganlar.",
@@ -69,6 +74,16 @@ export function PlatformDashboardPage() {
             context="Do'konlar"
             value={String(data?.totalStores ?? 0)}
             icon={Store}
+            isLoading={dashboard.isPending && !data}
+          />
+        </Link>
+        <Link to={ROUTES.platformShopsActive} className="min-w-0">
+          <KpiCard
+            title="Faol do'konlar"
+            context="Do'konlar"
+            value={String(data?.activeStores ?? 0)}
+            icon={Store}
+            tone="success"
             isLoading={dashboard.isPending && !data}
           />
         </Link>
@@ -122,6 +137,17 @@ export function PlatformDashboardPage() {
             isLoading={dashboard.isPending && !data}
           />
         </Link>
+        <Link to={ROUTES.platformSubscriptionRequests} className="min-w-0">
+          <KpiCard
+            title="Kutilayotgan tarif so'rovlari"
+            context="Tarif so'rovlari"
+            value={String(data?.pendingSubscriptionRequests ?? 0)}
+            icon={Inbox}
+            tone="warning"
+            isLoading={dashboard.isPending && !data}
+            footnote="Tarif so'rovlarini ochish"
+          />
+        </Link>
         <Link to={ROUTES.platformStoreRequests} className="min-w-0">
           <KpiCard
             title="Kutilayotgan do'kon so'rovlari"
@@ -155,6 +181,24 @@ export function PlatformDashboardPage() {
             footnote={data ? formatMoney(data.overduePaymentAmount) : undefined}
           />
         </Link>
+        <Link to={ROUTES.platformPayments} className="min-w-0">
+          <KpiCard
+            title="Jami obuna tushumi"
+            context="To'lovlar"
+            value={data ? formatMoney(data.subscriptionRevenueTotal ?? 0) : '0'}
+            icon={CreditCard}
+            tone="success"
+            isLoading={dashboard.isPending && !data}
+          />
+        </Link>
+        <KpiCard
+          title="Shu oy obuna tushumi"
+          context="To'lovlar"
+          value={data ? formatMoney(data.subscriptionRevenueThisMonth ?? data.monthRevenue) : '0'}
+          icon={CreditCard}
+          tone="success"
+          isLoading={dashboard.isPending && !data}
+        />
         <KpiCard
           title="Shu oy daromad"
           context="P&L"

@@ -124,6 +124,16 @@ export function WorkerAttributedFeesPanel({
                     ) : (
                       item.referenceLabel
                     )}
+                    {item.sourceCancelled ? (
+                      <span className="ml-2 rounded-full bg-danger-50 px-2 py-0.5 text-[11px] text-danger-700">
+                        Bekor qilingan
+                      </span>
+                    ) : null}
+                    {item.sourceCancelled && item.workCompleted ? (
+                      <span className="ml-1 rounded-full bg-success-50 px-2 py-0.5 text-[11px] text-success-700">
+                        Ish bajarilgan
+                      </span>
+                    ) : null}
                   </td>
                   <td className="px-2 py-2 text-ink-soft">{item.description ?? '—'}</td>
                   <td className="px-2 py-2 whitespace-nowrap text-right font-medium">

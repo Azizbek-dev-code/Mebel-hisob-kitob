@@ -33,3 +33,19 @@ export const postPaymentRequest = asyncHandler(async (req: Request, res: Respons
   );
   sendCreated(res, { request });
 });
+
+export const getMySubscriptionRequests = asyncHandler(async (req: Request, res: Response) => {
+  const user = requireUser(req);
+  sendSuccess(res, await storeBilling.listMySubscriptionRequests(user));
+});
+
+export const getMyPayments = asyncHandler(async (req: Request, res: Response) => {
+  const user = requireUser(req);
+  sendSuccess(res, await storeBilling.listMyPayments(user));
+});
+
+export const postCancelMyRequest = asyncHandler(async (req: Request, res: Response) => {
+  const user = requireUser(req);
+  const request = await storeBilling.cancelMySubscriptionRequest(user, req.params.id!);
+  sendSuccess(res, { request });
+});

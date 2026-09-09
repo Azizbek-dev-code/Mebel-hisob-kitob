@@ -61,7 +61,10 @@ export interface PlatformShopSummary {
   hasPendingPayment: boolean;
   ownerName: string | null;
   ownerPhone: string | null;
+  ownerEmail: string | null;
   createdAt: IsoDateString;
+  /** Whole days the store has existed — "dasturdan qanchadan beri foydalanmoqda". */
+  daysSinceCreated: number;
   subscriptionStatus: SubscriptionStatus | null;
   trialEndsAt: IsoDateString | null;
   currentPeriodEnd: IsoDateString | null;
@@ -185,6 +188,7 @@ export interface SubscriptionRequestDto {
   storeName: string;
   ownerName: string | null;
   ownerPhone: string | null;
+  ownerEmail: string | null;
   planId: string;
   planName: string;
   currentPlanName: string | null;
@@ -202,8 +206,10 @@ export interface SubscriptionRequestDto {
 }
 
 export interface ApproveSubscriptionRequestBody {
-  startDate: IsoDateString;
-  endDate: IsoDateString;
+  /** Defaults to now when omitted. */
+  startDate?: IsoDateString;
+  /** Defaults to one month after the start when omitted. */
+  endDate?: IsoDateString;
   paymentMethod: PlatformPaymentMethod;
   note?: string;
 }
@@ -251,10 +257,46 @@ export interface AssignStorePlanBody {
   planId: string;
 }
 
+/** Live ERP usage for one store, counted from its own rows. Never estimated. */
+export interface PlatformStoreStatsDto {
+  totalUsers: number;
+  activeUsers: number;
+  totalSales: number;
+  /** Sum of totalSalePrice over non-cancelled sales. */
+  totalRevenue: Money;
+  /** Most recent sale, payment or login — whichever happened last. */
+  lastActivityAt: IsoDateString | null;
+}
+
+/** Subscription payment ledger for one store. Store ERP payments are not here. */
+export interface PlatformStorePaymentsDto {
+  totalPaid: Money;
+  paidCount: number;
+  lastPaymentAt: IsoDateString | null;
+  history: PlatformInvoiceDto[];
+}
+
 export interface PlatformShopDetail {
   shop: PlatformShopSummary;
   subscription: StoreSubscriptionDto | null;
   latestInvoice: PlatformInvoiceDto | null;
+  stats: PlatformStoreStatsDto;
+  payments: PlatformStorePaymentsDto;
+  /** Full subscription-change request history, newest first. Never deleted. */
+  requests: SubscriptionRequestDto[];
+}
+
+/** A store reading its own subscription payment ledger. */
+export interface StoreBillingPaymentsResponse {
+  totalPaid: Money;
+  paidCount: number;
+  lastPaymentAt: IsoDateString | null;
+  items: PlatformInvoiceDto[];
+}
+
+/** A store reading its own subscription-change requests. */
+export interface StoreBillingRequestsResponse {
+  items: SubscriptionRequestDto[];
 }
 
 export interface PlatformExpenseDto {
@@ -372,6 +414,12 @@ export interface PlatformDashboardResponse {
   pendingPaymentStores: number;
   expiredStores: number;
   pendingStoreRequests: number;
+  /** Stores waiting for a tariff change to be accepted or rejected. */
+  pendingSubscriptionRequests: number;
+  /** All subscription money ever collected (PAID invoices, every period). */
+  subscriptionRevenueTotal: Money;
+  /** Subscription money collected in the current calendar month. */
+  subscriptionRevenueThisMonth: Money;
   pendingPayments: number;
   pendingPaymentAmount: Money;
   overduePayments: number;

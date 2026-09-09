@@ -121,8 +121,10 @@ export const requestStoreSubscriptionBodySchema = z.object({
 });
 
 export const approveSubscriptionRequestBodySchema = z.object({
-  startDate: z.string().min(1),
-  endDate: z.string().min(1),
+  // Optional so a one-click Accept works: the service defaults to now plus one
+  // billing month.
+  startDate: z.string().min(1).optional(),
+  endDate: z.string().min(1).optional(),
   paymentMethod: z.nativeEnum(PlatformPaymentMethod),
   note: z.string().max(500).optional(),
 });

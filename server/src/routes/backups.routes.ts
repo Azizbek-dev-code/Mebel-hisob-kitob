@@ -1,3 +1,4 @@
+import { FeatureKey } from '@furniture-erp/shared';
 import { Router, type RequestHandler } from 'express';
 import multer, { MulterError } from 'multer';
 
@@ -10,6 +11,7 @@ import {
   restoreBackup,
 } from '../controllers/backups.controller.js';
 import { requireAuth } from '../middleware/require-auth.js';
+import { requireFeature } from '../middleware/require-feature.js';
 import { validate } from '../middleware/validate.js';
 import { ApiError } from '../utils/api-error.js';
 import {
@@ -67,7 +69,7 @@ function uploadBackupFile(): RequestHandler {
  */
 export const backupsRouter = Router();
 
-backupsRouter.use(requireAuth);
+backupsRouter.use(requireAuth, requireFeature(FeatureKey.BACKUP));
 
 backupsRouter.get('/', listBackups);
 backupsRouter.post('/', validate({ body: createBackupBodySchema }), createBackup);

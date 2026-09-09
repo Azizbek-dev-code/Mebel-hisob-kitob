@@ -1417,11 +1417,15 @@ model StoreSubscription {
 }
 
 /// Store-initiated "obuna bo'lish" request. Price is snapshotted so later plan
-/// edits cannot rewrite what the shop asked to pay.
+/// edits cannot rewrite what the shop asked to pay. `fromPlan*` is the tariff
+/// the shop was on when it asked — kept even after Accept so history does not
+/// rewrite "hozirgi tarif" to the new plan.
 model SubscriptionRequest {
   id                     String                     @id @default(cuid())
   storeId                String
   planId                 String
+  fromPlanId             String?
+  fromPlanName           String?
   requestedPriceSnapshot BigInt
   currency               String                     @default("UZS")
   status                 SubscriptionRequestStatus  @default(PENDING)

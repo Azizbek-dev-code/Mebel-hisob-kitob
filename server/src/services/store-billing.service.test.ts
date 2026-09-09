@@ -11,6 +11,7 @@ const { prismaMock, recordAuditMock } = vi.hoisted(() => ({
     },
     subscriptionRequest: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       create: vi.fn(),
     },
     user: { count: vi.fn() },
@@ -25,7 +26,7 @@ const { prismaMock, recordAuditMock } = vi.hoisted(() => ({
 vi.mock('../lib/prisma.js', () => ({ prisma: prismaMock }));
 vi.mock('./audit.service.js', () => ({ recordAudit: recordAuditMock }));
 
-const { getStoreSubscription, requestStoreSubscription } = await import('./store-billing.service.js');
+const { getStoreSubscription, listMySubscriptionRequests, requestStoreSubscription } = await import('./store-billing.service.js');
 
 const now = new Date('2026-08-22T12:00:00.000Z');
 const PLAN = {
@@ -44,6 +45,14 @@ const PLAN = {
   updatedAt: now,
 };
 
+const TRIAL_PLAN = {
+  ...PLAN,
+  id: 'plan_trial',
+  name: 'Bepul sinov',
+  monthlyPrice: 0n,
+  isDefaultTrial: true,
+};
+
 const SUB = {
   id: 'sub_1',
   storeId: 'store_a',
@@ -60,7 +69,7 @@ const SUB = {
   pendingPlanId: null,
   cancelledAt: null,
   endedAt: null,
-  plan: PLAN,
+  plan: TRIAL_PLAN,
   pendingPlan: null,
 };
 
@@ -82,6 +91,8 @@ describe('store-billing.service', () => {
       id: 'req_1',
       storeId: 'store_a',
       planId: PLAN.id,
+      fromPlanId: 'plan_trial',
+      fromPlanName: 'Bepul sinov',
       requestedPriceSnapshot: 200000n,
       currency: 'UZS',
       status: SubscriptionRequestStatus.PENDING,
@@ -102,6 +113,16 @@ describe('store-billing.service', () => {
     expect(request.status).toBe(SubscriptionRequestStatus.PENDING);
     expect(request.requestedPriceSnapshot).toBe(200000);
     expect(request.planName).toBe('BUSINESS');
+    expect(request.currentPlanName).toBe('Bepul sinov');
+    expect(prismaMock.subscriptionRequest.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          fromPlanId: 'plan_trial',
+          fromPlanName: 'Bepul sinov',
+          storeId: 'store_a',
+        }),
+      }),
+    );
     expect(recordAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ eventType: 'SUBSCRIPTION_REQUEST_CREATED' }),
     );
@@ -121,6 +142,14 @@ describe('store-billing.service', () => {
     expect(other).toBeNull();
     expect(prismaMock.storeSubscription.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ storeId: 'store_b' }) }),
+    );
+  });
+
+  it('lists only the signed-in store’s subscription requests', async () => {
+    prismaMock.subscriptionRequest.findMany.mockResolvedValue([]);
+    await listMySubscriptionRequests({ storeId: 'store_a' });
+    expect(prismaMock.subscriptionRequest.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { storeId: 'store_a' } }),
     );
   });
 });

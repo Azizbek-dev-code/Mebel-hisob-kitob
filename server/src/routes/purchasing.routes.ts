@@ -1,3 +1,4 @@
+import { FeatureKey } from '@furniture-erp/shared';
 import { Router } from 'express';
 
 import {
@@ -15,6 +16,7 @@ import {
   updateSupplier,
 } from '../controllers/purchasing.controller.js';
 import { requireAuth } from '../middleware/require-auth.js';
+import { requireFeature } from '../middleware/require-feature.js';
 import { validate } from '../middleware/validate.js';
 import { idParamsSchema } from '../validators/common.validators.js';
 import {
@@ -36,8 +38,8 @@ import {
 export const suppliersRouter = Router();
 export const purchasesRouter = Router();
 
-suppliersRouter.use(requireAuth);
-purchasesRouter.use(requireAuth);
+suppliersRouter.use(requireAuth, requireFeature(FeatureKey.SUPPLIERS));
+purchasesRouter.use(requireAuth, requireFeature(FeatureKey.PURCHASES));
 
 suppliersRouter.get('/', validate({ query: supplierListQuerySchema }), listSuppliers);
 suppliersRouter.post('/', validate({ body: createSupplierBodySchema }), createSupplier);

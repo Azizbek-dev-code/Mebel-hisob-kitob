@@ -1,3 +1,4 @@
+import { FeatureKey } from '@furniture-erp/shared';
 import { Router } from 'express';
 
 import {
@@ -8,6 +9,7 @@ import {
   reverseWorkerFinancialTransaction,
 } from '../controllers/worker-financial.controller.js';
 import { requireAuth } from '../middleware/require-auth.js';
+import { requireFeature } from '../middleware/require-feature.js';
 import { validate } from '../middleware/validate.js';
 import {
   createWorkerFinancialTransactionBodySchema,
@@ -26,7 +28,7 @@ import {
  */
 export const workerFinancesRouter = Router();
 
-workerFinancesRouter.use(requireAuth);
+workerFinancesRouter.use(requireAuth, requireFeature(FeatureKey.WORKERS));
 
 workerFinancesRouter.post(
   '/transactions',

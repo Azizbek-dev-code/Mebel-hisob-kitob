@@ -22,10 +22,17 @@ const {
   postDeliveryFeeOnComplete,
   postInstallerFeeOnComplete,
   postPurchaseDriverFee,
+  reversePurchaseDriverFee,
   reverseSaleOperationalFees,
 } = await import('./worker-operational-fees.service.js');
 
 const TX = {} as never;
+
+const NOTHING_COMPLETED = {
+  assemblyCompleted: false,
+  installationCompleted: false,
+  deliveryCompleted: false,
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -172,7 +179,7 @@ describe('worker-operational-fees', () => {
     expect(financialRepoMock.createTransaction).not.toHaveBeenCalled();
   });
 
-  it('reverses open sale operational fees without double reverse', async () => {
+  it('reverses unearned sale operational fees without double reverse', async () => {
     financialRepoMock.findOpenSaleOperationalFeeCommissions.mockResolvedValue([
       {
         id: 'tx_fee',
@@ -180,6 +187,8 @@ describe('worker-operational-fees', () => {
         amount: 340_000n,
         type: WorkerFinancialTransactionType.COMMISSION,
         description: 'Usta haqqi',
+        referenceId: 'sale_1:ASSEMBLY_FEE',
+        responsibility: 'ASSEMBLER',
       },
     ]);
 
@@ -187,6 +196,7 @@ describe('worker-operational-fees', () => {
       storeId: 'store_1',
       saleId: 'sale_1',
       saleNumber: 5,
+      completion: NOTHING_COMPLETED,
       actorId: 'admin_1',
       client: TX,
     });
@@ -207,6 +217,7 @@ describe('worker-operational-fees', () => {
       storeId: 'store_1',
       saleId: 'sale_1',
       saleNumber: 5,
+      completion: NOTHING_COMPLETED,
       actorId: 'admin_1',
       client: TX,
     });
@@ -221,6 +232,8 @@ describe('worker-operational-fees', () => {
         amount: 150_000n,
         type: WorkerFinancialTransactionType.COMMISSION,
         description: 'Komissiya · Sotuv #5',
+        referenceId: 'sale_1:PERCENT_OF_GROSS_PROFIT',
+        responsibility: 'SELLER',
       },
     ]);
 
@@ -228,6 +241,7 @@ describe('worker-operational-fees', () => {
       storeId: 'store_1',
       saleId: 'sale_1',
       saleNumber: 5,
+      completion: NOTHING_COMPLETED,
       actorId: 'admin_1',
       client: TX,
     });
@@ -250,6 +264,8 @@ describe('worker-operational-fees', () => {
         amount: 450_000n,
         type: WorkerFinancialTransactionType.COMMISSION,
         description: 'Komissiya · Sotuv #13 · Yalpi foyda 3 000 000 · Stavka 15%',
+        referenceId: 'sale_13:PERCENT_OF_GROSS_PROFIT',
+        responsibility: 'SELLER',
       },
     ]);
 
@@ -257,6 +273,12 @@ describe('worker-operational-fees', () => {
       storeId: 'store_1',
       saleId: 'sale_13',
       saleNumber: 13,
+      // Seller commission is reversed even when the physical work was done.
+      completion: {
+        assemblyCompleted: true,
+        installationCompleted: true,
+        deliveryCompleted: true,
+      },
       actorId: 'admin_1',
       client: TX,
     });
@@ -269,6 +291,178 @@ describe('worker-operational-fees', () => {
       }),
       TX,
     );
+  });
+
+  describe('cancellation keeps fees for work that was completed', () => {
+    const usta = {
+      id: 'tx_usta',
+      workerId: 'usta_1',
+      amount: 300_000n,
+      type: WorkerFinancialTransactionType.COMMISSION,
+      description: 'Usta haqqi · Sotuv #8',
+      referenceId: 'sale_8:ASSEMBLY_FEE',
+      responsibility: 'ASSEMBLER',
+    };
+    const shopir = {
+      id: 'tx_shopir',
+      workerId: 'shopir_1',
+      amount: 130_000n,
+      type: WorkerFinancialTransactionType.COMMISSION,
+      description: 'Yetkazib berish haqi · Sotuv #8',
+      referenceId: 'sale_8:DELIVERY_FEE',
+      responsibility: 'DELIVERY',
+    };
+    const seller = {
+      id: 'tx_seller',
+      workerId: 'seller_1',
+      amount: 400_000n,
+      type: WorkerFinancialTransactionType.COMMISSION,
+      description: 'Komissiya · Sotuv #8',
+      referenceId: 'sale_8:PERCENT_OF_GROSS_PROFIT',
+      responsibility: 'SELLER',
+    };
+
+    async function cancelSaleFees(completion = NOTHING_COMPLETED) {
+      return reverseSaleOperationalFees({
+        storeId: 'store_1',
+        saleId: 'sale_8',
+        saleNumber: 8,
+        completion,
+        actorId: 'admin_1',
+        client: TX,
+      });
+    }
+
+    it('keeps the usta fee when assembly was completed', async () => {
+      financialRepoMock.findOpenSaleOperationalFeeCommissions.mockResolvedValue([usta]);
+
+      expect(
+        await cancelSaleFees({ ...NOTHING_COMPLETED, assemblyCompleted: true }),
+      ).toEqual({ reversed: 0, preserved: 1 });
+      expect(financialRepoMock.createTransaction).not.toHaveBeenCalled();
+      expect(financialRepoMock.closeOpenCommission).not.toHaveBeenCalled();
+    });
+
+    it('keeps the shopir fee when delivery was completed', async () => {
+      financialRepoMock.findOpenSaleOperationalFeeCommissions.mockResolvedValue([shopir]);
+
+      expect(
+        await cancelSaleFees({ ...NOTHING_COMPLETED, deliveryCompleted: true }),
+      ).toEqual({ reversed: 0, preserved: 1 });
+      expect(financialRepoMock.createTransaction).not.toHaveBeenCalled();
+    });
+
+    it('keeps the installer fee when installation was completed', async () => {
+      financialRepoMock.findOpenSaleOperationalFeeCommissions.mockResolvedValue([
+        {
+          ...usta,
+          id: 'tx_installer',
+          referenceId: 'sale_8:INSTALLER_FEE',
+          responsibility: 'INSTALLER',
+        },
+      ]);
+
+      expect(
+        await cancelSaleFees({ ...NOTHING_COMPLETED, installationCompleted: true }),
+      ).toEqual({ reversed: 0, preserved: 1 });
+      expect(financialRepoMock.createTransaction).not.toHaveBeenCalled();
+    });
+
+    it('reverses fees for work that never happened', async () => {
+      financialRepoMock.findOpenSaleOperationalFeeCommissions.mockResolvedValue([usta, shopir]);
+
+      expect(await cancelSaleFees()).toEqual({ reversed: 2, preserved: 0 });
+      expect(financialRepoMock.createTransaction).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps completed operational fees but still reverses seller commission', async () => {
+      financialRepoMock.findOpenSaleOperationalFeeCommissions.mockResolvedValue([
+        usta,
+        shopir,
+        seller,
+      ]);
+
+      expect(
+        await cancelSaleFees({
+          assemblyCompleted: true,
+          installationCompleted: false,
+          deliveryCompleted: true,
+        }),
+      ).toEqual({ reversed: 1, preserved: 2 });
+      expect(financialRepoMock.createTransaction).toHaveBeenCalledTimes(1);
+      expect(financialRepoMock.createTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({ referenceId: 'tx_seller', amount: 400_000 }),
+        TX,
+      );
+    });
+
+    it('is a no-op for earned fees when cancel runs twice', async () => {
+      financialRepoMock.findOpenSaleOperationalFeeCommissions.mockResolvedValue([usta, shopir]);
+      const completion = {
+        assemblyCompleted: true,
+        installationCompleted: false,
+        deliveryCompleted: true,
+      };
+
+      await cancelSaleFees(completion);
+      await cancelSaleFees(completion);
+      expect(financialRepoMock.createTransaction).not.toHaveBeenCalled();
+    });
+
+    it('keeps the purchase shopir fee once the goods arrived', async () => {
+      financialRepoMock.findOpenPurchaseDriverFeeCommission.mockResolvedValue({
+        id: 'tx_driver',
+        workerId: 'shopir_1',
+        amount: 150_000n,
+        type: WorkerFinancialTransactionType.COMMISSION,
+        description: 'Kirim shopir haqqi · Kirim #4',
+        referenceId: 'pur_1:DRIVER_FEE',
+        responsibility: 'DELIVERY',
+      });
+
+      expect(
+        await reversePurchaseDriverFee({
+          storeId: 'store_1',
+          purchaseId: 'pur_1',
+          purchaseNumber: 4,
+          deliveredAt: new Date('2026-02-01'),
+          actorId: 'admin_1',
+          client: TX,
+        }),
+      ).toEqual({ reversed: 0, preserved: 1 });
+      expect(financialRepoMock.createTransaction).not.toHaveBeenCalled();
+    });
+
+    it('reverses the purchase shopir fee while the goods are still on the way', async () => {
+      financialRepoMock.findOpenPurchaseDriverFeeCommission.mockResolvedValue({
+        id: 'tx_driver',
+        workerId: 'shopir_1',
+        amount: 150_000n,
+        type: WorkerFinancialTransactionType.COMMISSION,
+        description: 'Kirim shopir haqqi · Kirim #4',
+        referenceId: 'pur_1:DRIVER_FEE',
+        responsibility: 'DELIVERY',
+      });
+
+      expect(
+        await reversePurchaseDriverFee({
+          storeId: 'store_1',
+          purchaseId: 'pur_1',
+          purchaseNumber: 4,
+          deliveredAt: null,
+          actorId: 'admin_1',
+          client: TX,
+        }),
+      ).toEqual({ reversed: 1, preserved: 0 });
+      expect(financialRepoMock.createTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: WorkerFinancialTransactionType.REVERSAL,
+          referenceId: 'tx_driver',
+          amount: 150_000,
+        }),
+        TX,
+      );
+    });
   });
 
   describe('multi-responsibility double-pay prevention', () => {

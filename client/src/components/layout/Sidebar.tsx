@@ -4,6 +4,7 @@ import { useLocation } from 'react-router-dom';
 
 import { useCurrentUser } from '@/features/auth/hooks/use-auth';
 import { usePendingStoreRequestCount } from '@/features/store-creation/hooks/use-store-creation';
+import { usePlatformSubscriptionRequests } from '@/features/platform/hooks/use-platform-billing';
 import { cn } from '@/lib/cn';
 import {
   type NavItem,
@@ -11,6 +12,7 @@ import {
   canReviewStoreCreationRequests,
   navItemsForUser,
 } from '@/routes/navigation';
+import { SubscriptionRequestStatus } from '@furniture-erp/shared';
 
 import { SidebarItem } from './SidebarItem';
 import { SignOutButton } from './SignOutButton';
@@ -41,6 +43,11 @@ export function Sidebar({ onNavigate, onRequestClose }: SidebarProps) {
   const items = user ? navItemsForUser(user) : isPending ? [...NAV_ITEMS] : [];
   const pending = usePendingStoreRequestCount(canReviewStoreCreationRequests(user));
   const pendingCount = pending.data?.pendingCount ?? 0;
+  const tariffRequests = usePlatformSubscriptionRequests(
+    SubscriptionRequestStatus.PENDING,
+    canReviewStoreCreationRequests(user),
+  );
+  const tariffPending = tariffRequests.data?.items.length ?? 0;
 
   return (
     <div className="flex h-full w-full flex-col bg-surface">
@@ -86,7 +93,13 @@ export function Sidebar({ onNavigate, onRequestClose }: SidebarProps) {
                     icon={item.icon}
                     onNavigate={onNavigate}
                     end
-                    badge={item.key === 'store-requests' ? pendingCount : undefined}
+                    badge={
+                      item.key === 'store-requests'
+                        ? pendingCount
+                        : item.key === 'subscription-requests'
+                          ? tariffPending
+                          : undefined
+                    }
                   />
                   <ul className="mb-1 space-y-0.5">
                     {item.children.map((child) => (
@@ -110,7 +123,13 @@ export function Sidebar({ onNavigate, onRequestClose }: SidebarProps) {
                   icon={item.icon}
                   onNavigate={onNavigate}
                   end={item.to === '/dashboard'}
-                  badge={item.key === 'store-requests' ? pendingCount : undefined}
+                  badge={
+                    item.key === 'store-requests'
+                      ? pendingCount
+                      : item.key === 'subscription-requests'
+                        ? tariffPending
+                        : undefined
+                  }
                 />
               )}
             </li>

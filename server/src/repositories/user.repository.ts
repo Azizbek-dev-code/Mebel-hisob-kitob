@@ -4,6 +4,7 @@ import {
   canWriteWithSubscription,
   effectiveSubscriptionStatus,
   planAllowsFeature,
+  resolvePlanEntitlements,
   trialDaysRemaining,
   type AuthSubscriptionSnapshot,
   type AuthUser,
@@ -38,6 +39,8 @@ const authUserSelect = {
             select: {
               id: true,
               name: true,
+              isDefaultTrial: true,
+              monthlyPrice: true,
               planFeatures: {
                 include: { feature: { select: { key: true } } },
               },
@@ -114,14 +117,25 @@ function toSubscriptionSnapshot(record: AuthUserRecord): AuthSubscriptionSnapsho
     };
   }
   const effective = effectiveSubscriptionStatus(sub);
-  const planFeatureRows = 'planFeatures' in sub.plan ? sub.plan.planFeatures : [];
-  const featureKeys = planFeatureRows.filter((row) => row.enabled).map((row) => row.feature.key);
-  const featuresRestricted = planFeatureRows.length > 0;
+  const plan = sub.plan as {
+    id: string;
+    name: string;
+    isDefaultTrial?: boolean;
+    monthlyPrice?: bigint | number;
+    planFeatures?: Array<{ enabled: boolean; feature: { key: string } }>;
+  };
+  const planFeatureRows = 'planFeatures' in plan ? plan.planFeatures ?? [] : [];
+  const resolved = resolvePlanEntitlements({
+    isDefaultTrial: 'isDefaultTrial' in plan ? Boolean(plan.isDefaultTrial) : false,
+    monthlyPrice: 'monthlyPrice' in plan ? plan.monthlyPrice : null,
+    enabledFeatureKeys: planFeatureRows.filter((row) => row.enabled).map((row) => row.feature.key),
+    hasPlanFeatureRows: planFeatureRows.length > 0,
+  });
   return {
     status: effective,
     storedStatus: sub.status,
-    planId: sub.plan.id,
-    planName: sub.plan.name,
+    planId: plan.id,
+    planName: plan.name,
     trialEndsAt: sub.trialEndsAt?.toISOString() ?? null,
     currentPeriodEnd: sub.currentPeriodEnd.toISOString(),
     trialWelcomeSeenAt: sub.trialWelcomeSeenAt?.toISOString() ?? null,
@@ -129,8 +143,8 @@ function toSubscriptionSnapshot(record: AuthUserRecord): AuthSubscriptionSnapsho
       effective === 'TRIAL' ? trialDaysRemaining(sub.trialEndsAt ?? sub.currentPeriodEnd) : null,
     canWrite: canWriteWithSubscription(effective),
     hasPendingPaymentRequest: hasPending,
-    featureKeys,
-    featuresRestricted,
+    featureKeys: resolved.featureKeys,
+    featuresRestricted: resolved.featuresRestricted,
   };
 }
 

@@ -125,9 +125,17 @@ function OverviewTab({ data, isLoading }: { data?: ReportsBundle; isLoading: boo
               <span className="text-ink-muted">Bekor qilingan xarajatlar</span>
               <span>{summary?.extras.cancelledExpenseCount ?? 0}</span>
             </li>
+            <li className="flex justify-between gap-3">
+              <span className="text-ink-muted">Bajarilgan ish haqi (bekor qilingan hujjatlarda)</span>
+              <MoneyCell value={summary?.extras.retainedWorkerFeesOnCancelled ?? 0} />
+            </li>
             <li className="pt-2 text-xs text-ink-muted">
               Sof foyda = yalpi foyda − ACTIVE xarajatlar. Komissiya (COMMISSION) bu formulaga
               kiritilmaydi.
+            </li>
+            <li className="text-xs text-ink-muted">
+              Sotuv/kirim bekor qilinsa ham bajarilgan usta, o‘rnatuvchi va shopir haqlari ishchi
+              hisobida qoladi — bu real xarajat, lekin sof foydadan ikkinchi marta ayirilmaydi.
             </li>
           </ul>
         </SectionCard>

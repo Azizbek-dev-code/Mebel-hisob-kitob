@@ -5,6 +5,8 @@
  * Earned: COMMISSION + COMPENSATION ref `${saleId}:PERCENT_OF_*` / FIXED_PER_SALE / MANUAL:SELLER.
  * Settle uses the same refs, so auto-post and settle cannot double-pay.
  * Cancel reverses via reverseSaleOperationalFees (COMPENSATION startsWith saleId).
+ * Seller compensation stays reversible on cancel — unlike usta / shopir fees it
+ * pays for the sale result, not for a physical service that was performed.
  */
 import {
   DateRangePreset,

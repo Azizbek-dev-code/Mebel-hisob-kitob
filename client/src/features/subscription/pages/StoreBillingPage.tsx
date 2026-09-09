@@ -1,4 +1,6 @@
 import {
+  PLATFORM_BILLING_STATUS_LABELS,
+  SUBSCRIPTION_REQUEST_STATUS_LABELS,
   SUBSCRIPTION_STATUS_LABELS,
   formatMoney,
   type RequestStoreSubscriptionBody,
@@ -39,33 +41,57 @@ export function StoreBillingPage() {
     queryKey: ['store-billing-subscription'],
     queryFn: ({ signal }) => storeBillingService.getSubscription(signal),
   });
+  const requests = useQuery({
+    queryKey: ['store-billing-requests'],
+    queryFn: ({ signal }) => storeBillingService.listRequests(signal),
+  });
+  const payments = useQuery({
+    queryKey: ['store-billing-payments'],
+    queryFn: ({ signal }) => storeBillingService.listPayments(signal),
+  });
   const request = useMutation({
     mutationFn: (body: RequestStoreSubscriptionBody) => storeBillingService.requestPayment(body),
     onSuccess: () => {
       setSelected(null);
       setNote('');
-      setSuccess("Arizangiz yuborildi. Platforma administratori siz bilan bog'lanadi.");
+      setSuccess("Tarifni o‘zgartirish so‘rovi yuborildi. Platforma administratori ko‘rib chiqadi.");
       void queryClient.invalidateQueries({ queryKey: ['auth'] });
       void queryClient.invalidateQueries({ queryKey: ['store-billing-subscription'] });
+      void queryClient.invalidateQueries({ queryKey: ['store-billing-requests'] });
+    },
+  });
+  const cancel = useMutation({
+    mutationFn: (id: string) => storeBillingService.cancelRequest(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['auth'] });
+      void queryClient.invalidateQueries({ queryKey: ['store-billing-subscription'] });
+      void queryClient.invalidateQueries({ queryKey: ['store-billing-requests'] });
     },
   });
 
   const subscription = current.data?.subscription ?? null;
+  const pendingRequest = (requests.data?.items ?? []).find((row) => row.status === 'PENDING');
+  const hasPending = Boolean(user?.subscription?.hasPendingPaymentRequest || pendingRequest);
 
   return (
     <PageContainer className="space-y-6 overflow-x-hidden">
       <div>
         <h2 className="text-lg font-semibold tracking-tight text-ink">Tarif / Obuna</h2>
         <p className="mt-1 text-sm text-ink-muted">
-          Online to&apos;lov yo&apos;q — tarif tanlang, administrator telefon orqali bog&apos;lanadi.
+          Online to&apos;lov yo&apos;q — yangi tarifni tanlang, so&apos;rov asosiy admin panelga tushadi.
         </p>
       </div>
 
       {subscription ? <CurrentSubscriptionCard subscription={subscription} /> : null}
 
-      {user?.subscription?.hasPendingPaymentRequest ? (
+      {pendingRequest ? (
         <p className="rounded-card border border-brand-100 bg-brand-50 px-3 py-2.5 text-sm text-brand-800">
-          Sizda kutilayotgan obuna so&apos;rovi bor. Platforma administratori tez orada bog&apos;lanadi.
+          So&apos;rov kutilmoqda: {pendingRequest.planName} ·{' '}
+          {SUBSCRIPTION_REQUEST_STATUS_LABELS[pendingRequest.status]}
+        </p>
+      ) : hasPending ? (
+        <p className="rounded-card border border-brand-100 bg-brand-50 px-3 py-2.5 text-sm text-brand-800">
+          Sizda kutilayotgan obuna so&apos;rovi bor. Platforma administratori tez orada ko&apos;rib chiqadi.
         </p>
       ) : null}
 
@@ -92,50 +118,135 @@ export function StoreBillingPage() {
           <EmptyState icon={Tags} title="Tarif yo'q" description="Platforma hali tarif yaratmagan." />
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {plans.data?.items.map((plan) => (
-              <article
-                key={plan.id}
-                className="flex min-w-0 flex-col rounded-card border border-line bg-surface-muted p-4"
-              >
-                <h3 className="text-base font-semibold text-ink">{plan.name}</h3>
-                <p className="mt-1 text-lg font-semibold text-ink">
-                  {formatMoney(plan.monthlyPrice)}
-                  <span className="ml-1 text-xs font-normal text-ink-muted">/ oy</span>
-                </p>
-                <p className="mt-2 text-sm text-ink-muted">{plan.description || 'Tavsif yo‘q'}</p>
-                <ul className="mt-3 space-y-1 text-sm text-ink">
-                  {(plan.enabledFeatures?.length
-                    ? plan.enabledFeatures
-                    : plan.featuresRestricted
-                      ? []
-                      : [{ id: 'all', name: 'Barcha asosiy funksiyalar' }]
-                  ).map((item) => (
-                    <li key={item.id}>✓ {item.name}</li>
-                  ))}
-                  {(plan.limits ?? []).map((limit) => (
-                    <li key={limit.resourceKey}>
-                      ✓ {limit.name}: {limit.unlimited ? 'cheksiz' : limit.limitValue}
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  type="button"
-                  className="mt-auto pt-4 text-left text-sm font-medium text-brand-700 hover:underline disabled:opacity-50"
-                  onClick={() => setSelected(plan)}
-                  disabled={Boolean(user?.subscription?.hasPendingPaymentRequest)}
+            {plans.data?.items.map((plan) => {
+              const isCurrent = subscription?.planId === plan.id;
+              return (
+                <article
+                  key={plan.id}
+                  className="flex min-w-0 flex-col rounded-card border border-line bg-surface-muted p-4"
                 >
-                  Obuna bo&apos;lish
-                </button>
-              </article>
-            ))}
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="text-base font-semibold text-ink">{plan.name}</h3>
+                    {isCurrent ? <Badge tone="success">Joriy</Badge> : null}
+                  </div>
+                  <p className="mt-1 text-lg font-semibold text-ink">
+                    {formatMoney(plan.monthlyPrice)}
+                    <span className="ml-1 text-xs font-normal text-ink-muted">/ oy</span>
+                  </p>
+                  <p className="mt-2 text-sm text-ink-muted">{plan.description || 'Tavsif yo‘q'}</p>
+                  <ul className="mt-3 space-y-1 text-sm text-ink">
+                    {(plan.enabledFeatures?.length
+                      ? plan.enabledFeatures
+                      : plan.featuresRestricted
+                        ? []
+                        : [{ id: 'all', name: 'Barcha asosiy funksiyalar' }]
+                    ).map((item) => (
+                      <li key={item.id}>✓ {item.name}</li>
+                    ))}
+                    {(plan.limits ?? []).map((limit) => (
+                      <li key={limit.resourceKey}>
+                        ✓ {limit.name}: {limit.unlimited ? 'cheksiz' : limit.limitValue}
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    className="mt-auto pt-4 text-left text-sm font-medium text-brand-700 hover:underline disabled:opacity-50"
+                    onClick={() => setSelected(plan)}
+                    disabled={isCurrent || hasPending}
+                  >
+                    {isCurrent ? 'Joriy tarif' : 'Tarifni o‘zgartirish'}
+                  </button>
+                </article>
+              );
+            })}
           </div>
+        )}
+      </SectionCard>
+
+      <SectionCard title="So'rovlar">
+        {requests.isPending && !requests.data ? (
+          <Skeleton className="h-20 w-full" />
+        ) : (requests.data?.items.length ?? 0) === 0 ? (
+          <p className="text-sm text-ink-muted">Hali tarif so‘rovi yo‘q.</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {requests.data?.items.map((row) => (
+              <li key={row.id} className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-ink">
+                    {row.currentPlanName ?? '—'} → {row.planName}
+                  </p>
+                  <p className="text-xs text-ink-muted">
+                    {formatDate(row.requestedAt)} · {formatMoney(row.requestedPriceSnapshot)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge tone={row.status === 'PENDING' ? 'warning' : row.status === 'APPROVED' ? 'success' : 'neutral'}>
+                    {SUBSCRIPTION_REQUEST_STATUS_LABELS[row.status]}
+                  </Badge>
+                  {row.status === 'PENDING' ? (
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-danger-700 hover:underline disabled:opacity-50"
+                      disabled={cancel.isPending}
+                      onClick={() => cancel.mutate(row.id)}
+                    >
+                      Bekor qilish
+                    </button>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </SectionCard>
+
+      <SectionCard title="To'lovlar tarixi">
+        {payments.isPending && !payments.data ? (
+          <Skeleton className="h-20 w-full" />
+        ) : (
+          <>
+            <p className="mb-3 text-sm text-ink">
+              Jami to‘langan: {formatMoney(payments.data?.totalPaid ?? 0)}
+              {payments.data?.lastPaymentAt ? ` · oxirgi: ${formatDate(payments.data.lastPaymentAt)}` : ''}
+            </p>
+            {(payments.data?.items.length ?? 0) === 0 ? (
+              <p className="text-sm text-ink-muted">To‘lov yozuvi yo‘q.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="text-xs text-ink-muted">
+                    <tr>
+                      <th className="py-2 pr-3 font-medium">Sana</th>
+                      <th className="py-2 pr-3 font-medium">Tarif</th>
+                      <th className="py-2 pr-3 font-medium">Summa</th>
+                      <th className="py-2 pr-3 font-medium">Holat</th>
+                      <th className="py-2 font-medium">Tasdiqlagan</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line">
+                    {payments.data?.items.map((row) => (
+                      <tr key={row.id}>
+                        <td className="py-2 pr-3 whitespace-nowrap">{formatDate(row.paidAt ?? row.createdAt)}</td>
+                        <td className="py-2 pr-3">{row.planName}</td>
+                        <td className="py-2 pr-3 whitespace-nowrap">{formatMoney(row.amount)}</td>
+                        <td className="py-2 pr-3">{PLATFORM_BILLING_STATUS_LABELS[row.status]}</td>
+                        <td className="py-2">{row.recordedByName ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
       </SectionCard>
 
       {selected ? (
         <Dialog
           open
-          title="Obuna bo'lish"
+          title="Tarifni o‘zgartirish"
           description={`${selected.name} · ${formatMoney(selected.monthlyPrice)} / oy`}
           onClose={() => setSelected(null)}
         >
@@ -150,7 +261,9 @@ export function StoreBillingPage() {
               {user?.storeName} · {user?.fullName}
               {user?.phone ? ` · ${user.phone}` : ''}
             </p>
-            <p className="text-sm text-ink-muted">Muddat: 1 oy</p>
+            <p className="text-sm text-ink-muted">
+              Hozirgi: {subscription?.planName ?? '—'} → so‘ralgan: {selected.name}
+            </p>
             <label className="block space-y-1 text-sm">
               <span className="font-medium text-ink">Izoh (ixtiyoriy)</span>
               <textarea
@@ -177,7 +290,7 @@ export function StoreBillingPage() {
                 className="inline-flex items-center gap-1.5 rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
               >
                 {request.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-                Yuborish
+                Tarifni o‘zgartirish
               </button>
             </div>
           </form>
@@ -194,7 +307,7 @@ function CurrentSubscriptionCard({ subscription }: { subscription: StoreSubscrip
       <div className="space-y-3 text-sm">
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-base font-semibold text-ink">
-            {isTrial ? 'FREE TRIAL' : subscription.planName}
+            {isTrial ? `${subscription.planName} (sinov)` : subscription.planName}
           </p>
           <Badge
             tone={
@@ -208,12 +321,18 @@ function CurrentSubscriptionCard({ subscription }: { subscription: StoreSubscrip
             {SUBSCRIPTION_STATUS_LABELS[subscription.status]}
           </Badge>
         </div>
-        {isTrial ? <p className="text-ink-muted">7 kunlik sinov</p> : null}
+        {isTrial ? (
+          <p className="text-ink-muted">
+            {subscription.daysRemaining != null
+              ? `Sinovdan ${subscription.daysRemaining} kun qoldi`
+              : '7 kunlik sinov'}
+          </p>
+        ) : null}
         <p className="text-ink-muted">
           Boshlangan: {formatDate(subscription.startedAt)}
           <br />
           Tugash: {formatDate(subscription.expiresAt)}
-          {subscription.daysRemaining != null ? (
+          {subscription.daysRemaining != null && !isTrial ? (
             <>
               <br />
               Qolgan: {subscription.daysRemaining} kun

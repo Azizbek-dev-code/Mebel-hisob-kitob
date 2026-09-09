@@ -3,7 +3,11 @@
  *
  * Posts COMMISSION ledger rows (not COMPENSATION settle rows) so seller %
  * settlement and simple fee fields do not collide. Idempotent via stable
- * referenceType + referenceId; reverses on sale/purchase cancel.
+ * referenceType + referenceId.
+ *
+ * Fees are credited only when the physical work reaches COMPLETED, and a later
+ * sale / purchase cancellation does NOT take them back — see
+ * `shared/accounting/worker-fee-cancellation` for the rule.
  *
  * Ref scheme (per sale / purchase):
  * - `${saleId}:ASSEMBLY_FEE` — usta / assembler (assembly COMPLETED)
@@ -13,9 +17,12 @@
  * Legacy refs (`:INSTALLATION_COST`, `:DELIVERY_COST`, `:ASSEMBLY:FEE`, …) still reverse/dedupe.
  */
 import {
+  isEarnedPurchaseDriverFee,
+  isEarnedSaleWorkerFee,
   WorkerFinancialReferenceType,
   WorkerFinancialTransactionType,
   WorkerResponsibility,
+  type SaleWorkCompletion,
 } from '@furniture-erp/shared';
 
 import { fromDbMoney } from '../lib/money-mapper.js';
@@ -365,23 +372,54 @@ export async function postPurchaseDriverFee(input: {
   });
 }
 
+export interface OperationalFeeReversalResult {
+  /** Rows that were actually reversed by this cancellation. */
+  reversed: number;
+  /** Earned fees for completed work that were deliberately left in place. */
+  preserved: number;
+}
+
 /**
- * Reverse every open COMMISSION posted from this sale (Usta / Shopir / Installer
- * fees and settled seller compensation). Idempotent — already-reversed rows skip.
+ * Reverse the open COMMISSION rows of a cancelled sale that are NOT yet earned.
+ *
+ * Work completed = earning earned: usta / o'rnatuvchi / shopir fees whose
+ * service reached COMPLETED stay on the worker ledger, because the physical
+ * service was performed regardless of what happened to the sale afterwards.
+ * Seller compensation follows the sale result and is still reversed.
+ *
+ * Idempotent — already-reversed rows skip, and preserved rows are never touched
+ * so calling cancel twice cannot double-reverse or delete a worker earning.
  */
 export async function reverseSaleOperationalFees(input: {
   storeId: string;
   saleId: string;
   saleNumber: number;
+  /** Which physical services on the sale reached COMPLETED before the cancel. */
+  completion: SaleWorkCompletion;
   actorId: string;
   client: WorkerFinancialTxClient;
-}): Promise<void> {
+}): Promise<OperationalFeeReversalResult> {
   const open = await workerFinancialRepository.findOpenSaleOperationalFeeCommissions(
     input.storeId,
     input.saleId,
     input.client,
   );
+  const completion = input.completion;
+
+  const result: OperationalFeeReversalResult = { reversed: 0, preserved: 0 };
+
   for (const row of open) {
+    if (
+      isEarnedSaleWorkerFee({
+        referenceId: row.referenceId,
+        responsibility: row.responsibility,
+        completion,
+      })
+    ) {
+      result.preserved += 1;
+      continue;
+    }
+
     await reverseOpenCommission(
       input.storeId,
       row,
@@ -389,22 +427,37 @@ export async function reverseSaleOperationalFees(input: {
       `Reversal · Sotuv #${input.saleNumber} bekor qilindi — ishchi haqqi minus`,
       input.client,
     );
+    result.reversed += 1;
   }
+
+  return result;
 }
 
+/**
+ * Reverse a purchase shopir fee only while the goods have not arrived yet.
+ * Once `deliveredAt` is set the transport was performed, so cancelling the
+ * purchase leaves the fee on the worker ledger.
+ */
 export async function reversePurchaseDriverFee(input: {
   storeId: string;
   purchaseId: string;
   purchaseNumber: number;
+  /** When the goods arrived at the store; null while they are still on the way. */
+  deliveredAt: Date | null;
   actorId: string;
   client: WorkerFinancialTxClient;
-}): Promise<void> {
+}): Promise<OperationalFeeReversalResult> {
   const open = await workerFinancialRepository.findOpenPurchaseDriverFeeCommission(
     input.storeId,
     input.purchaseId,
     input.client,
   );
-  if (!open) return;
+  if (!open) return { reversed: 0, preserved: 0 };
+
+  if (isEarnedPurchaseDriverFee({ deliveredAt: input.deliveredAt })) {
+    return { reversed: 0, preserved: 1 };
+  }
+
   await reverseOpenCommission(
     input.storeId,
     open,
@@ -412,4 +465,5 @@ export async function reversePurchaseDriverFee(input: {
     `Reversal · Kirim #${input.purchaseNumber} bekor qilindi`,
     input.client,
   );
+  return { reversed: 1, preserved: 0 };
 }
