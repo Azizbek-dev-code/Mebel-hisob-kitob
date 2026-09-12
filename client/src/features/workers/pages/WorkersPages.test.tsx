@@ -62,6 +62,8 @@ const PROFILE_MODULES = {
       outstanding: 300_000,
       monthEarned: 100_000,
       monthPaid: 50_000,
+      monthAdvances: 0,
+      monthOutstanding: 50_000,
       bonuses: 0,
       advances: 0,
       debt: 0,
@@ -253,6 +255,24 @@ describe('WorkerDetailPage', () => {
         status: 200,
         body: { success: true, data: { items: [] } },
       },
+      [`/workers/${WORKER.id}/attributed-fees`]: {
+        status: 200,
+        body: {
+          success: true,
+          data: {
+            fees: {
+              sellerBonusTotal: 0,
+              assemblerFeeTotal: 0,
+              installerFeeTotal: 0,
+              deliveryFeeTotal: 0,
+              purchaseDriverFeeTotal: 0,
+              manualFeeTotal: 0,
+              grandTotal: 0,
+              items: [],
+            },
+          },
+        },
+      },
       [`/workers/${WORKER.id}/profile-modules`]: {
         status: 200,
         body: { success: true, data: { modules: PROFILE_MODULES } },
@@ -296,6 +316,7 @@ describe('WorkerDashboardPage', () => {
     expect(await screen.findByText(/Xush kelibsiz, Ali/i)).toBeInTheDocument();
     expect(await screen.findByText('Bugun')).toBeInTheDocument();
     expect(screen.getByText('Shu oy')).toBeInTheDocument();
+    expect(screen.getByText('Ishlab topilgan')).toBeInTheDocument();
     expect(screen.getByText('Kutilayotgan terlash')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Moliyaviy hisob' })).toHaveAttribute(
       'href',

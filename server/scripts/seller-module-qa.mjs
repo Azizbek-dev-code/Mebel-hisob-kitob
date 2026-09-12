@@ -119,14 +119,6 @@ async function profileModules(workerId) {
   return { res, modules: dataOf(res.body).modules ?? dataOf(res.body) };
 }
 
-async function financeSummary(workerId, extra = '') {
-  const res = await request(
-    'GET',
-    `/api/worker-finances/workers/${workerId}/summary${extra}`,
-  );
-  return { res, summary: dataOf(res.body).summary ?? dataOf(res.body) };
-}
-
 async function main() {
   console.log(`SELLER QA against ${BASE} marker=${MARKER}`);
 

@@ -9,12 +9,14 @@ import { Badge } from '@/components/ui/Badge';
 import { SectionCard } from '@/components/ui/SectionCard';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ResponsibilityBadges } from '@/features/workers/components/ResponsibilityBadges';
+import { WorkerAttributedFeesPanel } from '@/features/workers/components/WorkerAttributedFeesPanel';
 import { WorkerProfileModulesPanel } from '@/features/workers/components/WorkerProfileModulesPanel';
 import {
   useResetWorkerPassword,
   useUpdateWorker,
   useWorker,
   useWorkerActivity,
+  useWorkerAttributedFees,
   useWorkerProfileModules,
 } from '@/features/workers/hooks/use-workers';
 import { ApiClientError } from '@/lib/api-client';
@@ -32,6 +34,7 @@ export function WorkerDetailPage() {
   const { id = '' } = useParams();
   const worker = useWorker(id);
   const modulesQuery = useWorkerProfileModules(id);
+  const attributedFees = useWorkerAttributedFees(id);
   const activity = useWorkerActivity(id);
   const updateWorker = useUpdateWorker(id);
   const resetPassword = useResetWorkerPassword(id);
@@ -181,6 +184,13 @@ export function WorkerDetailPage() {
           onRetry={() => void modulesQuery.refetch()}
         />
       </SectionCard>
+
+      <WorkerAttributedFeesPanel
+        fees={attributedFees.data}
+        isLoading={attributedFees.isLoading}
+        isError={attributedFees.isError}
+        onRetry={() => void attributedFees.refetch()}
+      />
 
       <SectionCard title="Activity history">
         <ActivityList items={activity.data ?? []} loading={activity.isLoading} />

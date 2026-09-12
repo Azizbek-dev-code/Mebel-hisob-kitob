@@ -1,5 +1,6 @@
 import type { FulfilmentStatus } from '../constants/enums.js';
 import type { IsoDateString, Money } from './api.js';
+import type { SaleDetail } from './sales.js';
 
 /** Shopir operational panel — separate from profile summary. */
 export type DeliveryOpsSourceFilter = 'ALL' | 'SALE' | 'PURCHASE';
@@ -44,17 +45,21 @@ export interface SaleDeliveryOpsItem {
   canComplete: boolean;
 }
 
+export type PurchaseDeliveryOpsStatus = 'PENDING' | 'COMPLETED' | 'CANCELLED';
+
 export interface PurchaseDeliveryOpsItem {
   kind: 'PURCHASE';
   id: string;
   purchaseNumber: number;
   supplierName: string;
   date: IsoDateString;
-  /** Purchase has no fulfilment machine — informational only. */
-  status: string;
+  deliveredAt: IsoDateString | null;
+  /** Purchase document status (ACTIVE / CANCELLED). */
+  purchaseStatus: string;
+  /** Shopir workflow status derived from deliveredAt + document status. */
+  status: PurchaseDeliveryOpsStatus;
   fee: Money;
   ledgerStatus: DeliveryLedgerStatus;
-  /** Shopir cannot start/complete purchase deliveries in v1. */
   canStart: boolean;
   canComplete: boolean;
   hint: string | null;
@@ -72,7 +77,19 @@ export interface UpdateSaleDeliveryStatusRequest {
 }
 
 export interface UpdateSaleDeliveryStatusResponse {
-  sale: import('./sales.js').SaleDetail;
+  sale: SaleDetail;
+  ledgerPosted: boolean;
+  message: string;
+}
+
+export interface UpdatePurchaseDeliveryStatusRequest {
+  status: 'COMPLETED';
+}
+
+export interface UpdatePurchaseDeliveryStatusResponse {
+  purchaseId: string;
+  purchaseNumber: number;
+  deliveredAt: IsoDateString | null;
   ledgerPosted: boolean;
   message: string;
 }

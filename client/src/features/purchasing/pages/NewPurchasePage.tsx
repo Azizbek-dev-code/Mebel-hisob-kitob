@@ -16,7 +16,6 @@ import {
   type SearchSelectOption,
 } from '@/features/sales/components/SearchSelect';
 import { useWorkerLookup } from '@/features/sales/hooks/use-sales';
-import { todayInputDate } from '@/features/expenses/utils/date';
 import { ApiClientError } from '@/lib/api-client';
 import { ROUTES } from '@/routes/paths';
 import { formatMoney } from '@/utils/format';
@@ -64,7 +63,7 @@ export function NewPurchasePage() {
   const [paidAmount, setPaidAmount] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(PaymentMethod.CASH);
   const [notes, setNotes] = useState('');
-  const [deliveredAt, setDeliveredAt] = useState(todayInputDate());
+  const [deliveredAt, setDeliveredAt] = useState('');
   const [deliveryDays, setDeliveryDays] = useState(0);
   const [driverId, setDriverId] = useState('');
   const [driverFee, setDriverFee] = useState(0);
@@ -176,10 +175,6 @@ export function NewPurchasePage() {
       setFormError('Shopir haqi noto‘g‘ri');
       return;
     }
-    if (!deliveredAt) {
-      setFormError('Olib kelingan sanani kiriting');
-      return;
-    }
 
     const body: CreatePurchaseRequest = {
       supplierId: supplier.id,
@@ -191,7 +186,7 @@ export function NewPurchasePage() {
       paidAmount: paidAmount > 0 ? paidAmount : undefined,
       paymentMethod: paidAmount > 0 ? paymentMethod : undefined,
       notes: notes.trim() || null,
-      deliveredAt,
+      deliveredAt: deliveredAt || undefined,
       deliveryDays,
       driverId: driverId || null,
       driverFee,
@@ -319,11 +314,13 @@ export function NewPurchasePage() {
 
           <SectionCard
             title="Yetkazib berish"
-            description="Olib kelingan sana, muddat va shopir haqi (yetkazuvchidan alohida)"
+            description="Yuk olib kelingan bo‘lsa sanani kiriting — shopir haqi shunda hisobga tushadi. Hali yo‘lda bo‘lsa, bo‘sh qoldiring; shopir yakunlaganda haq yoziladi."
           >
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block text-sm">
-                <span className="mb-1.5 block font-medium text-ink">Olib kelingan sana</span>
+                <span className="mb-1.5 block font-medium text-ink">
+                  Olib kelingan sana (ixtiyoriy)
+                </span>
                 <input
                   type="date"
                   className={fieldClass}

@@ -6,6 +6,7 @@ import type {
   CreateSaleResponse,
   MyDeliveriesResponse,
   SaleDetailResponse,
+  UpdatePurchaseDeliveryStatusResponse,
   UpdateSaleDeliveryStatusResponse,
 } from '@furniture-erp/shared';
 import type { Request, Response } from 'express';
@@ -23,6 +24,7 @@ import type {
   CreateSaleBody,
   SaleListQuery,
   UpdateAssemblyTaskBody,
+  UpdatePurchaseDeliveryStatusBody,
   UpdateSaleBody,
   UpdateSaleDeliveryStatusBody,
 } from '../validators/sales.validators.js';
@@ -159,4 +161,17 @@ export const updateSaleDeliveryStatus = asyncHandler(async (req: Request, res: R
     body,
   );
   sendSuccess<UpdateSaleDeliveryStatusResponse>(res, result);
+});
+
+export const updatePurchaseDeliveryStatus = asyncHandler(async (req: Request, res: Response) => {
+  const user = requireUser(req);
+  const { id } = req.params as IdParams;
+  const body = req.body as UpdatePurchaseDeliveryStatusBody;
+  const result = await deliveryOpsService.updateMyPurchaseDeliveryStatus(
+    user.storeId,
+    { id: user.id, role: user.role },
+    id,
+    body,
+  );
+  sendSuccess<UpdatePurchaseDeliveryStatusResponse>(res, result);
 });

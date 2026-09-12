@@ -54,7 +54,7 @@ describe('UserMenu', () => {
     renderMenu();
 
     expect(await screen.findByText('Anvar Aliyev')).toBeInTheDocument();
-    expect(screen.getByText('Cashier')).toBeInTheDocument();
+    expect(screen.getByText('Kassir')).toBeInTheDocument();
     expect(screen.getByText('AA')).toBeInTheDocument();
   });
 
@@ -65,11 +65,12 @@ describe('UserMenu', () => {
 
     await user.click(await screen.findByRole('button', { name: /Anvar Aliyev/ }));
 
-    const menu = within(screen.getByRole('menu', { name: 'Account' }));
+    const menu = within(screen.getByRole('menu', { name: 'Hisob' }));
     expect(menu.getByText('cashier')).toBeInTheDocument();
-    expect(menu.getByText('Cashier · Mebel Savdo')).toBeInTheDocument();
-    expect(menu.getByRole('menuitem', { name: 'Profile' })).toBeInTheDocument();
-    expect(menu.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
+    expect(menu.getByText(/Kassir/)).toBeInTheDocument();
+    expect(menu.getByText(/Mebel Savdo/)).toBeInTheDocument();
+    expect(menu.getByRole('menuitem', { name: 'Profil' })).toBeInTheDocument();
+    expect(menu.getByRole('button', { name: 'Chiqish' })).toBeInTheDocument();
   });
 
   it('closes on Escape', async () => {
@@ -101,7 +102,7 @@ describe('UserMenu', () => {
     renderMenu();
 
     await user.click(await screen.findByRole('button', { name: /Anvar Aliyev/ }));
-    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+    await user.click(screen.getByRole('button', { name: 'Chiqish' }));
 
     await waitFor(() => {
       const [url, init] = fetchMock.mock.calls.find(([called]) =>

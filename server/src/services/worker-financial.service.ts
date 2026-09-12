@@ -11,6 +11,7 @@ import {
   type ReverseWorkerFinancialTransactionRequest,
   type WorkerFinancialSummary,
   type WorkerFinancialTransaction,
+  type WorkerResponsibility,
 } from '@furniture-erp/shared';
 
 import { parseFlexibleDate } from '../lib/date-input.js';
@@ -130,16 +131,26 @@ export async function createTransaction(
     ]);
   }
 
+  const referenceType = input.referenceType ?? null;
+  const referenceId = input.referenceId?.trim() || null;
+
+  // Admin manual rows (bonus, commission, advance, debt, payment, adjustment)
+  // do not need a document reference. Automatic operational / settle posts
+  // always supply one; those refs stay unique so they cannot collide with
+  // unreferenced manual COMMISSION rows.
   if (
     input.type === WorkerFinancialTransactionType.COMMISSION &&
-    (!input.referenceType || !input.referenceId?.trim())
+    referenceType &&
+    referenceId
   ) {
-    throw ApiError.validation('Manual COMMISSION requires a reference', [
-      {
-        field: 'referenceId',
-        message: 'Provide referenceType + referenceId so commissions cannot silently duplicate operational fees',
-      },
-    ]);
+    const existing = await workerFinancialRepository.findOpenCommissionByRef(
+      storeId,
+      referenceType,
+      referenceId,
+    );
+    if (existing) {
+      throw ApiError.conflict('A commission for this reference is already on the ledger');
+    }
   }
 
   const workerId = await assertWorkerForCreate(storeId, input.workerId);
@@ -198,8 +209,8 @@ export async function createTransaction(
     amount: input.amount,
     transactionDate,
     description: normaliseDescription(input.description),
-    referenceType: input.referenceType ?? null,
-    referenceId: input.referenceId ?? null,
+    referenceType,
+    referenceId,
     responsibility,
     reversesType: null,
     createdById: actor.id,
@@ -213,7 +224,7 @@ export async function listWorkerTransactions(options: {
   page?: number;
   pageSize?: number;
   type?: WorkerFinancialTransaction['type'];
-  responsibility?: import('@furniture-erp/shared').WorkerResponsibility;
+  responsibility?: WorkerResponsibility;
   from?: string;
   to?: string;
   search?: string;

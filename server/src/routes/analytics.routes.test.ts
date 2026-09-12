@@ -22,6 +22,11 @@ vi.mock('../lib/prisma.js', () => ({
   disconnectDatabase: vi.fn(),
 }));
 
+vi.mock('../services/entitlement.service.js', () => ({
+  assertCanUseFeature: vi.fn(async () => undefined),
+  assertCanCreateResource: vi.fn(async () => undefined),
+}));
+
 vi.mock('../services/analytics.service.js', () => analyticsServiceMock);
 
 const app = createApp();

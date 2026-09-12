@@ -4,6 +4,7 @@
  */
 import {
   FulfilmentStatus,
+  PurchaseStatus,
   SaleStatus,
   UserRole,
   WorkerFinancialReferenceType,
@@ -15,6 +16,8 @@ import {
   type PurchaseDeliveryOpsItem,
   type SaleDeliveryOpsItem,
   type SaleDetail,
+  type UpdatePurchaseDeliveryStatusRequest,
+  type UpdatePurchaseDeliveryStatusResponse,
   type UpdateSaleDeliveryStatusRequest,
 } from '@furniture-erp/shared';
 
@@ -77,6 +80,7 @@ async function ledgerStatusForPurchase(
   storeId: string,
   purchaseId: string,
   fee: number,
+  delivered: boolean,
 ): Promise<'PENDING' | 'POSTED' | 'REVERSED' | 'NONE'> {
   if (fee <= 0) return 'NONE';
   const open = await workerFinancialRepository.findOpenCommissionByRef(
@@ -85,6 +89,7 @@ async function ledgerStatusForPurchase(
     workerOperationalFees.PURCHASE_DRIVER_FEE_REF(purchaseId),
   );
   if (open) return 'POSTED';
+  if (!delivered) return 'PENDING';
   const any = await prisma.workerFinancialTransaction.findFirst({
     where: {
       storeId,
@@ -118,7 +123,6 @@ export async function listMyDeliveries(
         storeId,
         deliveryPersonId: workerId,
         deliveryStatus: { not: FulfilmentStatus.NOT_REQUIRED },
-        status: { not: SaleStatus.CANCELLED },
       },
       select: {
         id: true,
@@ -140,6 +144,7 @@ export async function listMyDeliveries(
         id: true,
         purchaseNumber: true,
         purchaseDate: true,
+        deliveredAt: true,
         driverFee: true,
         status: true,
         supplier: { select: { name: true } },
@@ -218,24 +223,37 @@ export async function listMyDeliveries(
   const purchaseDeliveries: PurchaseDeliveryOpsItem[] = [];
   for (const p of purchases) {
     const fee = fromDbMoney(p.driverFee);
-    const ledgerStatus = await ledgerStatusForPurchase(storeId, p.id, fee);
+    const delivered = p.deliveredAt != null;
+    const status: PurchaseDeliveryOpsItem['status'] =
+      p.status === 'CANCELLED' && !delivered
+        ? 'CANCELLED'
+        : delivered
+          ? 'COMPLETED'
+          : 'PENDING';
+    const ledgerStatus = await ledgerStatusForPurchase(storeId, p.id, fee, delivered);
+    const canComplete =
+      status === 'PENDING' && p.status !== 'CANCELLED' && Boolean(p.id);
     purchaseDeliveries.push({
       kind: 'PURCHASE',
       id: p.id,
       purchaseNumber: p.purchaseNumber,
       supplierName: p.supplier.name,
       date: p.purchaseDate.toISOString(),
-      status: p.status,
+      deliveredAt: p.deliveredAt?.toISOString() ?? null,
+      purchaseStatus: p.status,
+      status,
       fee,
       ledgerStatus,
       canStart: false,
-      canComplete: false,
+      canComplete,
       hint:
         ledgerStatus === 'POSTED'
           ? 'Kirim shopir haqi hisobga olingan.'
-          : fee > 0
-            ? 'Kirim shopir haqi kirim hujjati asosida hisobga olinadi (admin).'
-            : null,
+          : status === 'PENDING' && fee > 0
+            ? 'Shopir haqi yuk olib kelingandan (yakunlangandan) keyin hisobga olinadi.'
+            : status === 'PENDING'
+              ? 'Yukni olib kelib yakunlang.'
+              : null,
     });
   }
 
@@ -404,4 +422,105 @@ export async function updateMySaleDeliveryStatus(
           : 'Yetkazib berish yakunlandi.';
 
   return { sale: detail, ledgerPosted, message };
+}
+
+/**
+ * Shopir (or admin) marks a kirim pickup as completed.
+ * Sets deliveredAt if missing and posts DRIVER_FEE once.
+ */
+export async function updateMyPurchaseDeliveryStatus(
+  storeId: string,
+  actor: { id: string; role: string },
+  purchaseId: string,
+  input: UpdatePurchaseDeliveryStatusRequest,
+): Promise<UpdatePurchaseDeliveryStatusResponse> {
+  if (input.status !== 'COMPLETED') {
+    throw ApiError.validation('Only COMPLETED is allowed for purchase deliveries', [
+      { field: 'status', message: 'Use COMPLETED' },
+    ]);
+  }
+
+  const purchase = await prisma.purchase.findFirst({
+    where: { id: purchaseId, storeId },
+    select: {
+      id: true,
+      purchaseNumber: true,
+      status: true,
+      driverId: true,
+      driverFee: true,
+      deliveredAt: true,
+      supplier: { select: { name: true } },
+    },
+  });
+  if (!purchase) throw ApiError.notFound('Purchase not found');
+  if (purchase.status === PurchaseStatus.CANCELLED) {
+    throw ApiError.badRequest('Cancelled purchases cannot be delivered');
+  }
+  if (!purchase.driverId) {
+    throw ApiError.badRequest('No delivery worker is assigned');
+  }
+
+  const admin = isAdminRole(actor.role);
+  if (!admin) {
+    if (purchase.driverId !== actor.id) {
+      throw ApiError.forbidden('You can only update deliveries assigned to you');
+    }
+    const hasDelivery = await workerRepository.workerHasResponsibility(
+      storeId,
+      actor.id,
+      WorkerResponsibility.DELIVERY,
+    );
+    if (!hasDelivery) {
+      throw ApiError.forbidden('Delivery responsibility required');
+    }
+    const active = await workerRepository.findActiveWorkerInStore(storeId, actor.id);
+    if (!active) throw ApiError.forbidden('Inactive workers cannot update deliveries');
+  }
+
+  const now = purchase.deliveredAt ?? new Date();
+  await prisma.$transaction(async (tx) => {
+    if (!purchase.deliveredAt) {
+      await tx.purchase.update({
+        where: { id: purchase.id },
+        data: { deliveredAt: now },
+      });
+    }
+    await workerOperationalFees.postPurchaseDriverFee({
+      storeId,
+      purchaseId: purchase.id,
+      purchaseNumber: purchase.purchaseNumber,
+      workerId: purchase.driverId,
+      driverFee: fromDbMoney(purchase.driverFee),
+      supplierName: purchase.supplier.name,
+      actorId: actor.id,
+      occurredAt: now,
+      client: tx,
+    });
+  });
+
+  const open = await workerFinancialRepository.findOpenCommissionByRef(
+    storeId,
+    WorkerFinancialReferenceType.PURCHASE,
+    workerOperationalFees.PURCHASE_DRIVER_FEE_REF(purchase.id),
+  );
+  const fee = fromDbMoney(purchase.driverFee);
+  const alreadyDone = Boolean(purchase.deliveredAt);
+  const ledgerPosted = Boolean(open);
+  const message = alreadyDone
+    ? ledgerPosted
+      ? 'Kirim yetkazib berish allaqachon yakunlangan. Shopir haqi hisobda.'
+      : 'Kirim yetkazib berish allaqachon yakunlangan.'
+    : ledgerPosted
+      ? `Kirim yetkazib berish yakunlandi. ${fee.toLocaleString('uz-UZ')} so‘m shopir haqi hisobga tushdi.`
+      : fee > 0
+        ? 'Kirim yetkazib berish yakunlandi, lekin ishchi haqini hisoblashda xatolik yuz berdi yoki haq 0.'
+        : 'Kirim yetkazib berish yakunlandi.';
+
+  return {
+    purchaseId: purchase.id,
+    purchaseNumber: purchase.purchaseNumber,
+    deliveredAt: now.toISOString(),
+    ledgerPosted,
+    message,
+  };
 }

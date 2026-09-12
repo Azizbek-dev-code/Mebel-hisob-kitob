@@ -412,8 +412,16 @@ export async function createPurchase(
   const remainingAmount = totalCost - paidAmount;
   const paymentStatus = paymentStatusFromAmounts(paidAmount, totalCost);
   const purchaseDate = parseFlexibleDate(input.purchaseDate) ?? new Date();
-  const deliveredAt =
-    parseFlexibleDate(input.deliveredAt) ?? purchaseDate;
+  let deliveredAt: Date | null = null;
+  if (input.deliveredAt) {
+    const parsed = parseFlexibleDate(input.deliveredAt);
+    if (!parsed) {
+      throw ApiError.validation('Invalid delivery date', [
+        { field: 'deliveredAt', message: 'Use YYYY-MM-DD or ISO datetime' },
+      ]);
+    }
+    deliveredAt = parsed;
+  }
   const deliveryDays = resolveDeliveryDays(input.deliveryDays);
   const driverFee = resolveDriverFee(input.driverFee);
   const driverId = await assertDeliveryDriver(storeId, input.driverId ?? null);
@@ -487,17 +495,21 @@ export async function createPurchase(
         });
       }
 
-      await workerOperationalFees.postPurchaseDriverFee({
-        storeId,
-        purchaseId: created.id,
-        purchaseNumber,
-        workerId: driverId,
-        driverFee,
-        supplierName: supplier.name,
-        actorId: actor.id,
-        occurredAt: deliveredAt,
-        client: tx,
-      });
+      // Fee only when the goods actually arrived. Creating a kirim without
+      // deliveredAt leaves the shopir task pending until complete.
+      if (deliveredAt) {
+        await workerOperationalFees.postPurchaseDriverFee({
+          storeId,
+          purchaseId: created.id,
+          purchaseNumber,
+          workerId: driverId,
+          driverFee,
+          supplierName: supplier.name,
+          actorId: actor.id,
+          occurredAt: deliveredAt,
+          client: tx,
+        });
+      }
 
       return created.id;
     });

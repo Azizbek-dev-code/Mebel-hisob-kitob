@@ -168,6 +168,7 @@ function financeMocks(overrides: MockApiRoutes = {}): MockApiRoutes {
               installerFeeTotal: 0,
               deliveryFeeTotal: 0,
               purchaseDriverFeeTotal: 0,
+              manualFeeTotal: 0,
               grandTotal: 0,
               items: [],
             },
@@ -551,6 +552,7 @@ describe('WorkerFinancesPage', () => {
               installerFeeTotal: 0,
                   deliveryFeeTotal: 0,
                   purchaseDriverFeeTotal: 0,
+              manualFeeTotal: 0,
                   grandTotal: 0,
                   items: [],
                 },
@@ -581,9 +583,7 @@ describe('WorkerFinancesPage', () => {
     const dialog = await screen.findByRole('dialog');
     await user.selectOptions(within(dialog).getByLabelText(/^Turi$/i), 'COMMISSION');
     expect(within(dialog).getByLabelText(/^Turi$/i)).toHaveValue('COMMISSION');
-    expect(
-      within(dialog).getByText('Sotuv yoki boshqa faoliyat uchun komissiya.'),
-    ).toBeInTheDocument();
+    expect(within(dialog).getByText(/komissiya yoki haq/i)).toBeInTheDocument();
     await user.type(within(dialog).getByLabelText(/Summa/i), '123456');
     await user.click(within(dialog).getByRole('button', { name: /^Saqlash$/i }));
 
@@ -680,6 +680,7 @@ describe('WorkerFinancesPage', () => {
               installerFeeTotal: 0,
                   deliveryFeeTotal: 0,
                   purchaseDriverFeeTotal: 0,
+              manualFeeTotal: 0,
                   grandTotal: 0,
                   items: [],
                 },
@@ -786,6 +787,7 @@ describe('WorkerFinancesPage', () => {
               installerFeeTotal: 0,
                   deliveryFeeTotal: 0,
                   purchaseDriverFeeTotal: 0,
+              manualFeeTotal: 0,
                   grandTotal: 0,
                   items: [],
                 },
@@ -945,6 +947,7 @@ describe('WorkerFinancesPage', () => {
               installerFeeTotal: 0,
                   deliveryFeeTotal: 0,
                   purchaseDriverFeeTotal: 0,
+              manualFeeTotal: 0,
                   grandTotal: 0,
                   items: [],
                 },
@@ -1053,6 +1056,7 @@ describe('WorkerFinancesPage', () => {
               installerFeeTotal: 0,
                   deliveryFeeTotal: 0,
                   purchaseDriverFeeTotal: 0,
+              manualFeeTotal: 0,
                   grandTotal: 0,
                   items: [],
                 },
@@ -1097,6 +1101,24 @@ describe('WorkerDetailPage finance link', () => {
         status: 200,
         body: { success: true, data: { items: [] } },
       },
+      [`/workers/${WORKER_ID}/attributed-fees`]: {
+        status: 200,
+        body: {
+          success: true,
+          data: {
+            fees: {
+              sellerBonusTotal: 0,
+              assemblerFeeTotal: 0,
+              installerFeeTotal: 0,
+              deliveryFeeTotal: 0,
+              purchaseDriverFeeTotal: 0,
+              manualFeeTotal: 0,
+              grandTotal: 0,
+              items: [],
+            },
+          },
+        },
+      },
       [`/workers/${WORKER_ID}/profile-modules`]: {
         status: 200,
         body: {
@@ -1121,6 +1143,8 @@ describe('WorkerDetailPage finance link', () => {
                   outstanding: 0,
                   monthEarned: 0,
                   monthPaid: 0,
+                  monthAdvances: 0,
+                  monthOutstanding: 0,
                   bonuses: 0,
                   advances: 0,
                   debt: 0,

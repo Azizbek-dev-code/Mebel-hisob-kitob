@@ -21,6 +21,7 @@ const { prismaMock, saleServiceMock, deliveryOpsMock } = vi.hoisted(() => ({
   deliveryOpsMock: {
     listMyDeliveries: vi.fn(),
     updateMySaleDeliveryStatus: vi.fn(),
+    updateMyPurchaseDeliveryStatus: vi.fn(),
   },
 }));
 
@@ -28,6 +29,11 @@ vi.mock('../lib/prisma.js', () => ({
   prisma: prismaMock,
   connectDatabase: vi.fn(),
   disconnectDatabase: vi.fn(),
+}));
+
+vi.mock('../services/entitlement.service.js', () => ({
+  assertCanUseFeature: vi.fn(async () => undefined),
+  assertCanCreateResource: vi.fn(async () => undefined),
 }));
 
 vi.mock('../services/sale.service.js', () => saleServiceMock);
@@ -201,5 +207,26 @@ describe('sales routes auth', () => {
       .send({ status: 'PENDING' })
       .expect(422);
     expect(deliveryOpsMock.updateMySaleDeliveryStatus).not.toHaveBeenCalled();
+  });
+
+  it('patches purchase delivery complete through delivery-ops', async () => {
+    deliveryOpsMock.updateMyPurchaseDeliveryStatus.mockResolvedValue({
+      purchaseId: 'cjld2purc0000qzrmn831i7rn',
+      purchaseNumber: 5,
+      deliveredAt: '2026-09-12T00:00:00.000Z',
+      ledgerPosted: true,
+      message: 'Kirim yetkazib berish yakunlandi.',
+    });
+    const agent = await signedInAgent();
+    await agent
+      .patch('/api/sales/purchases/cjld2purc0000qzrmn831i7rn/delivery')
+      .send({ status: 'COMPLETED' })
+      .expect(200);
+    expect(deliveryOpsMock.updateMyPurchaseDeliveryStatus).toHaveBeenCalledWith(
+      'store_1',
+      expect.objectContaining({ id: 'user_admin', role: UserRole.ADMIN }),
+      'cjld2purc0000qzrmn831i7rn',
+      { status: 'COMPLETED' },
+    );
   });
 });

@@ -15,8 +15,9 @@ const {
 } = vi.hoisted(() => ({
   prismaMock: {
     sale: { findMany: vi.fn(), findFirst: vi.fn() },
-    purchase: { findMany: vi.fn() },
+    purchase: { findMany: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
     workerFinancialTransaction: { findFirst: vi.fn() },
+    $transaction: vi.fn(),
   },
   financialRepoMock: {
     findOpenCommissionByRef: vi.fn(),
@@ -34,6 +35,7 @@ const {
   feesMock: {
     DELIVERY_FEE_REF: (id: string) => `${id}:DELIVERY_FEE`,
     PURCHASE_DRIVER_FEE_REF: (id: string) => `${id}:DRIVER_FEE`,
+    postPurchaseDriverFee: vi.fn(async () => true),
   },
 }));
 
@@ -43,7 +45,9 @@ vi.mock('../repositories/worker.repository.js', () => workerRepoMock);
 vi.mock('./sale.service.js', () => saleServiceMock);
 vi.mock('./worker-operational-fees.service.js', () => feesMock);
 
-const { listMyDeliveries, updateMySaleDeliveryStatus } = await import('./delivery-ops.service.js');
+const { listMyDeliveries, updateMySaleDeliveryStatus, updateMyPurchaseDeliveryStatus } = await import(
+  './delivery-ops.service.js'
+);
 
 const STORE = 'store_1';
 const SHOPIR = 'shopir_1';
@@ -68,6 +72,10 @@ beforeEach(() => {
   financialRepoMock.findOpenCommissionByRef.mockResolvedValue(null);
   prismaMock.workerFinancialTransaction.findFirst.mockResolvedValue(null);
   prismaMock.purchase.findMany.mockResolvedValue([]);
+  prismaMock.$transaction.mockImplementation(async (fn: (tx: typeof prismaMock) => Promise<unknown>) =>
+    fn(prismaMock),
+  );
+  feesMock.postPurchaseDriverFee.mockResolvedValue(true);
 });
 
 describe('delivery-ops.service', () => {
@@ -230,6 +238,101 @@ describe('delivery-ops.service', () => {
       { status: FulfilmentStatus.COMPLETED },
     );
     expect(saleServiceMock.updateSale).toHaveBeenCalled();
+  });
+
+  it('lists pending purchase pickups as completable', async () => {
+    prismaMock.sale.findMany.mockResolvedValue([]);
+    prismaMock.purchase.findMany.mockResolvedValue([
+      {
+        id: 'pur_1',
+        purchaseNumber: 5,
+        purchaseDate: new Date(),
+        deliveredAt: null,
+        driverFee: 100_000n,
+        status: 'ACTIVE',
+        supplier: { name: 'Wood' },
+      },
+    ]);
+
+    const result = await listMyDeliveries(STORE, SHOPIR);
+    expect(result.purchaseDeliveries).toHaveLength(1);
+    expect(result.purchaseDeliveries[0]?.status).toBe('PENDING');
+    expect(result.purchaseDeliveries[0]?.canComplete).toBe(true);
+    expect(result.purchaseDeliveries[0]?.ledgerStatus).toBe('PENDING');
+  });
+
+  it('completes purchase pickup and posts driver fee', async () => {
+    prismaMock.purchase.findFirst.mockResolvedValue({
+      id: 'pur_1',
+      purchaseNumber: 5,
+      status: 'ACTIVE',
+      driverId: SHOPIR,
+      driverFee: 100_000n,
+      deliveredAt: null,
+      supplier: { name: 'Wood' },
+    });
+    financialRepoMock.findOpenCommissionByRef.mockResolvedValue({ id: 'tx_p' });
+
+    const result = await updateMyPurchaseDeliveryStatus(
+      STORE,
+      { id: SHOPIR, role: UserRole.EMPLOYEE },
+      'pur_1',
+      { status: 'COMPLETED' },
+    );
+    expect(feesMock.postPurchaseDriverFee).toHaveBeenCalled();
+    expect(result.ledgerPosted).toBe(true);
+    expect(result.message).toMatch(/hisobga/);
+  });
+
+  it('forbids another shopir from completing a purchase pickup', async () => {
+    prismaMock.purchase.findFirst.mockResolvedValue({
+      id: 'pur_1',
+      purchaseNumber: 5,
+      status: 'ACTIVE',
+      driverId: SHOPIR,
+      driverFee: 100_000n,
+      deliveredAt: null,
+      supplier: { name: 'Wood' },
+    });
+
+    await expect(
+      updateMyPurchaseDeliveryStatus(
+        STORE,
+        { id: OTHER, role: UserRole.EMPLOYEE },
+        'pur_1',
+        { status: 'COMPLETED' },
+      ),
+    ).rejects.toMatchObject({ statusCode: 403 });
+    expect(feesMock.postPurchaseDriverFee).not.toHaveBeenCalled();
+  });
+
+  it('is idempotent when purchase pickup is already delivered', async () => {
+    prismaMock.purchase.findFirst.mockResolvedValue({
+      id: 'pur_1',
+      purchaseNumber: 5,
+      status: 'ACTIVE',
+      driverId: SHOPIR,
+      driverFee: 100_000n,
+      deliveredAt: new Date('2026-09-01T00:00:00.000Z'),
+      supplier: { name: 'Wood' },
+    });
+    financialRepoMock.findOpenCommissionByRef.mockResolvedValue({ id: 'tx_p' });
+
+    const first = await updateMyPurchaseDeliveryStatus(
+      STORE,
+      { id: SHOPIR, role: UserRole.EMPLOYEE },
+      'pur_1',
+      { status: 'COMPLETED' },
+    );
+    const second = await updateMyPurchaseDeliveryStatus(
+      STORE,
+      { id: SHOPIR, role: UserRole.EMPLOYEE },
+      'pur_1',
+      { status: 'COMPLETED' },
+    );
+    expect(first.ledgerPosted).toBe(true);
+    expect(second.ledgerPosted).toBe(true);
+    expect(feesMock.postPurchaseDriverFee).toHaveBeenCalledTimes(2);
   });
 });
 

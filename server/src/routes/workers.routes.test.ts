@@ -41,6 +41,11 @@ vi.mock('../lib/prisma.js', () => ({
   disconnectDatabase: vi.fn(),
 }));
 
+vi.mock('../services/entitlement.service.js', () => ({
+  assertCanUseFeature: vi.fn(async () => undefined),
+  assertCanCreateResource: vi.fn(async () => undefined),
+}));
+
 vi.mock('../services/worker.service.js', () => workerServiceMock);
 vi.mock('../services/worker-profile-modules.service.js', () => profileModulesServiceMock);
 vi.mock('../services/seller-commission.service.js', () => sellerCommissionServiceMock);

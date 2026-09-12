@@ -63,6 +63,7 @@ function emptyFinanceSummary(overrides: Record<string, number> = {}) {
     totalReversals: 0,
     netFinancialPosition: 0,
     transactionCount: 0,
+    reversalsByOriginalType: {},
     ...overrides,
   };
 }
@@ -79,6 +80,8 @@ describe('worker-profile-modules acceptance', () => {
       deliveryFeeTotal: 0,
       purchaseDriverFeeTotal: 0,
       installerFeeTotal: 0,
+      manualFeeTotal: 0,
+      grandTotal: 0,
       items: [],
     });
     prismaMock.sale.count.mockResolvedValue(0);
@@ -165,6 +168,8 @@ describe('worker-profile-modules acceptance', () => {
       deliveryFeeTotal: 150_000,
       purchaseDriverFeeTotal: 0,
       installerFeeTotal: 0,
+      manualFeeTotal: 0,
+      grandTotal: 950_000,
       items: [{ kind: 'SELLER_BONUS' }, { kind: 'ASSEMBLER_FEE' }, { kind: 'DELIVERY_FEE' }],
     });
 
@@ -209,6 +214,11 @@ describe('worker-profile-modules acceptance', () => {
     expect(modules.tabs).toEqual(['GENERAL', 'INSTALLER', 'SMM']);
     expect(modules.installer).not.toBeNull();
     expect(modules.smm).not.toBeNull();
+    expect(modules.smm?.hasAssignedWork).toBe(false);
+    expect(modules.smm?.hasAttributedFee).toBe(false);
+    expect(modules.smm?.emptyWorkMessage).toMatch(/tayinlangan ish yo/i);
+    expect(modules.smm?.emptyFeeMessage).toMatch(/haq belgilanmagan/i);
+    expect(modules.smm?.monthEarned).toBe(0);
   });
 
   it('reconciliation marks differences when P&L ≠ ledger', async () => {

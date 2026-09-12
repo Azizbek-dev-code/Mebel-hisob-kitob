@@ -19,6 +19,7 @@ const KIND_LABEL: Record<WorkerAttributedFeeKind, string> = {
   INSTALLER_FEE: 'O‘rnatuvchi haqqi',
   DELIVERY_FEE: 'Yetkazib berish / shopir haqqi',
   PURCHASE_DRIVER_FEE: 'Kirimdan shopir haqqi',
+  MANUAL_COMMISSION: "Qo'lda komissiya / haq",
 };
 
 function referenceHref(item: WorkerAttributedFeeItem): string | null {
@@ -28,7 +29,9 @@ function referenceHref(item: WorkerAttributedFeeItem): string | null {
 }
 
 function sourceLabel(source: WorkerAttributedFeeItem['source']): string {
-  return source === 'PURCHASE' ? 'Kirim' : 'Sotuv';
+  if (source === 'PURCHASE') return 'Kirim';
+  if (source === 'MANUAL') return "Qo'lda";
+  return 'Sotuv';
 }
 
 export function WorkerAttributedFeesPanel({
@@ -75,7 +78,7 @@ export function WorkerAttributedFeesPanel({
         <EmptyState
           icon={Wallet}
           title="Hali haq yo‘q"
-          description="Komissiya settle yoki usta/shopir ishi yakunlanganda shu yerda ko‘rinadi."
+          description="Komissiya settle, usta/shopir ishi yakunlanganda yoki admin qo‘lda qo‘shganda shu yerda ko‘rinadi."
         />
       </SectionCard>
     );
@@ -87,16 +90,44 @@ export function WorkerAttributedFeesPanel({
       description="Manba bo‘yicha — ledger’dagi haqiqiy COMMISSION yozuvlari"
       data-testid="worker-attributed-fees"
     >
-      <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
         <SummaryChip label="Sotuvchi komissiyasi" amount={fees.sellerBonusTotal} />
         <SummaryChip label="Usta haqlari" amount={fees.assemblerFeeTotal} />
         <SummaryChip label="O‘rnatuvchi haqlari" amount={fees.installerFeeTotal} />
         <SummaryChip label="Yetkazib berish" amount={fees.deliveryFeeTotal} />
         <SummaryChip label="Kirim shopir" amount={fees.purchaseDriverFeeTotal} />
+        <SummaryChip label="Qo‘lda" amount={fees.manualFeeTotal} />
         <SummaryChip label="Jami" amount={fees.grandTotal} emphasize />
       </div>
 
-      <div className="overflow-x-auto">
+      <ul className="space-y-2 md:hidden">
+        {fees.items.map((item) => {
+          const href = linkReferences ? referenceHref(item) : null;
+          return (
+            <li key={item.id} className="rounded-panel border border-line bg-surface p-3 shadow-card">
+              <p className="text-sm font-medium text-ink">{KIND_LABEL[item.kind]}</p>
+              <p className="mt-1 text-xs text-ink-muted">
+                {formatDate(item.occurredAt)} · {sourceLabel(item.source)}
+              </p>
+              <p className="mt-1 text-sm">
+                {href ? (
+                  <Link to={href} className="text-brand-700 hover:underline">
+                    {item.referenceLabel}
+                  </Link>
+                ) : (
+                  item.referenceLabel
+                )}
+              </p>
+              {item.description ? (
+                <p className="mt-1 text-xs text-ink-soft">{item.description}</p>
+              ) : null}
+              <p className="tabular-money mt-2 text-sm font-semibold">+{formatMoney(item.amount)}</p>
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="hidden overflow-x-auto md:block">
         <table className="min-w-full text-left text-sm">
           <thead className="border-b border-line text-xs text-ink-muted">
             <tr>

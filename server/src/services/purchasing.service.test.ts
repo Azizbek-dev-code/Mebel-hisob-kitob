@@ -402,6 +402,86 @@ describe('purchasing.service create purchase', () => {
     expect(result.remainingAmount).toBe(1_000_000);
   });
 
+  it('does not post shopir fee until deliveredAt is set', async () => {
+    const DRIVER_ID = 'clxxxxxxxxxxxxxxxxxxxxxxxx9';
+    purchasingRepoMock.findSupplierInStore.mockResolvedValue(SUPPLIER);
+    (prismaMock.product.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: 'clxxxxxxxxxxxxxxxxxxxxxxxx3',
+        name: 'Divan',
+        trackStock: true,
+        minStockQty: 2,
+      },
+    ]);
+    workerRepoMock.findActiveWorkerWithResponsibility.mockResolvedValue({ id: DRIVER_ID });
+    purchasingRepoMock.nextPurchaseNumber.mockResolvedValue(1);
+    purchasingRepoMock.createPurchaseInTx.mockResolvedValue({ id: PURCHASE_DETAIL.id });
+    inventoryRepoMock.applyStockDelta.mockResolvedValue({
+      movement: { id: 'mov_1' },
+      stockQty: 2,
+    });
+    purchasingRepoMock.getPurchaseDetail.mockResolvedValue({
+      ...PURCHASE_DETAIL,
+      deliveredAt: null,
+      driverId: DRIVER_ID,
+      driverFee: 100_000,
+    });
+
+    await createPurchase(STORE, ACTOR, {
+      supplierId: SUPPLIER.id,
+      items: [{ productId: 'clxxxxxxxxxxxxxxxxxxxxxxxx3', quantity: 2, unitCost: 500_000 }],
+      driverId: DRIVER_ID,
+      driverFee: 100_000,
+    });
+
+    expect(workerFeesMock.postPurchaseDriverFee).not.toHaveBeenCalled();
+    expect(purchasingRepoMock.createPurchaseInTx).toHaveBeenCalledWith(
+      prismaMock,
+      expect.objectContaining({ deliveredAt: null, driverId: DRIVER_ID, driverFee: 100_000 }),
+    );
+  });
+
+  it('posts shopir fee when kirim is created already delivered', async () => {
+    const DRIVER_ID = 'clxxxxxxxxxxxxxxxxxxxxxxxx9';
+    purchasingRepoMock.findSupplierInStore.mockResolvedValue(SUPPLIER);
+    (prismaMock.product.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: 'clxxxxxxxxxxxxxxxxxxxxxxxx3',
+        name: 'Divan',
+        trackStock: true,
+        minStockQty: 2,
+      },
+    ]);
+    workerRepoMock.findActiveWorkerWithResponsibility.mockResolvedValue({ id: DRIVER_ID });
+    purchasingRepoMock.nextPurchaseNumber.mockResolvedValue(1);
+    purchasingRepoMock.createPurchaseInTx.mockResolvedValue({ id: PURCHASE_DETAIL.id });
+    inventoryRepoMock.applyStockDelta.mockResolvedValue({
+      movement: { id: 'mov_1' },
+      stockQty: 2,
+    });
+    purchasingRepoMock.getPurchaseDetail.mockResolvedValue({
+      ...PURCHASE_DETAIL,
+      driverId: DRIVER_ID,
+      driverFee: 100_000,
+    });
+
+    await createPurchase(STORE, ACTOR, {
+      supplierId: SUPPLIER.id,
+      items: [{ productId: 'clxxxxxxxxxxxxxxxxxxxxxxxx3', quantity: 2, unitCost: 500_000 }],
+      deliveredAt: '2026-08-24',
+      driverId: DRIVER_ID,
+      driverFee: 100_000,
+    });
+
+    expect(workerFeesMock.postPurchaseDriverFee).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workerId: DRIVER_ID,
+        driverFee: 100_000,
+        purchaseId: PURCHASE_DETAIL.id,
+      }),
+    );
+  });
+
   it('allows shopir fee without a driver', async () => {
     purchasingRepoMock.findSupplierInStore.mockResolvedValue(SUPPLIER);
     (prismaMock.product.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([

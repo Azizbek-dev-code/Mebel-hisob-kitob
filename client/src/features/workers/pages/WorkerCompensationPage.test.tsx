@@ -558,6 +558,24 @@ describe('WorkerDetailPage compensation link', () => {
         status: 200,
         body: { success: true, data: { items: [] } },
       },
+      [`/workers/${WORKER_ID}/attributed-fees`]: {
+        status: 200,
+        body: {
+          success: true,
+          data: {
+            fees: {
+              sellerBonusTotal: 0,
+              assemblerFeeTotal: 0,
+              installerFeeTotal: 0,
+              deliveryFeeTotal: 0,
+              purchaseDriverFeeTotal: 0,
+              manualFeeTotal: 0,
+              grandTotal: 0,
+              items: [],
+            },
+          },
+        },
+      },
       [`/workers/${WORKER_ID}/profile-modules`]: {
         status: 200,
         body: {

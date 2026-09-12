@@ -92,6 +92,7 @@ export interface CreateWorkerFinancialTransactionRequest {
   amount: Money;
   transactionDate: string;
   description?: string;
+  /** Omit on admin manual rows. Automatic operational / settle posts always send both. */
   referenceType?: Exclude<WorkerFinancialReferenceType, 'REVERSAL'>;
   referenceId?: string;
   responsibility?: WorkerResponsibility;

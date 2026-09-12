@@ -207,9 +207,10 @@ export type WorkerAttributedFeeKind =
   | 'ASSEMBLER_FEE'
   | 'INSTALLER_FEE'
   | 'DELIVERY_FEE'
-  | 'PURCHASE_DRIVER_FEE';
+  | 'PURCHASE_DRIVER_FEE'
+  | 'MANUAL_COMMISSION';
 
-export type WorkerAttributedFeeSource = 'SALE' | 'PURCHASE';
+export type WorkerAttributedFeeSource = 'SALE' | 'PURCHASE' | 'MANUAL';
 
 export interface WorkerAttributedFeeItem {
   id: string;
@@ -236,6 +237,8 @@ export interface WorkerAttributedFeesSummary {
   installerFeeTotal: Money;
   deliveryFeeTotal: Money;
   purchaseDriverFeeTotal: Money;
+  /** Admin-entered COMMISSION with no operational document ref. */
+  manualFeeTotal: Money;
   grandTotal: Money;
   items: WorkerAttributedFeeItem[];
 }

@@ -26,6 +26,7 @@ export function WorkerDashboardPage() {
   const showDelivery = responsibilities.includes(WorkerResponsibility.DELIVERY);
   const showInstaller = responsibilities.includes(WorkerResponsibility.INSTALLER);
   const showSmm = responsibilities.includes(WorkerResponsibility.SMM);
+  const showOther = responsibilities.includes(WorkerResponsibility.OTHER);
 
   return (
     <PageContainer className="space-y-6">
@@ -54,10 +55,18 @@ export function WorkerDashboardPage() {
       {modulesQuery.isLoading && !modules ? <Skeleton className="h-40 w-full" /> : null}
 
       {finance ? (
-        <div className="grid gap-2 sm:grid-cols-3">
-          <KpiMini label="Hisoblangan" value={formatMoney(finance.earned)} />
-          <KpiMini label="To‘langan" value={formatMoney(finance.paid)} />
-          <KpiMini label="Qolgan" value={formatMoney(finance.outstanding)} emphasize />
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-ink">Shu oy</h3>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <KpiMini label="Ishlab topilgan" value={formatMoney(finance.monthEarned)} emphasize />
+            <KpiMini label="To‘langan" value={formatMoney(finance.monthPaid)} />
+            <KpiMini label="Avans" value={formatMoney(finance.monthAdvances ?? 0)} />
+            <KpiMini
+              label="Qolgan"
+              value={formatMoney(finance.monthOutstanding ?? finance.outstanding)}
+              emphasize
+            />
+          </div>
         </div>
       ) : null}
 
@@ -71,7 +80,7 @@ export function WorkerDashboardPage() {
               value={formatMoney(modules.seller.salesAmountToday ?? 0)}
             />
           </div>
-          <h3 className="pt-2 text-sm font-semibold text-ink">Shu oy</h3>
+          <h3 className="pt-2 text-sm font-semibold text-ink">Sotuvlar — shu oy</h3>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             <KpiMini label="Sotuvlar" value={String(modules.seller.salesThisMonth)} />
             <KpiMini
@@ -149,11 +158,33 @@ export function WorkerDashboardPage() {
       ) : null}
 
       {modules?.smm && showSmm ? (
-        <div className="grid gap-2 sm:grid-cols-3">
-          <KpiMini label="SMM bu oy" value={formatMoney(modules.smm.monthEarned)} emphasize />
-          <KpiMini label="To‘langan" value={formatMoney(modules.smm.paid)} />
-          <KpiMini label="Qolgan" value={formatMoney(modules.smm.outstanding)} />
-        </div>
+        modules.smm.hasAssignedWork || modules.smm.hasAttributedFee ? (
+          <div className="grid gap-2 sm:grid-cols-3">
+            <KpiMini label="SMM bu oy" value={formatMoney(modules.smm.monthEarned)} emphasize />
+            <KpiMini label="To‘langan" value={formatMoney(modules.smm.paid)} />
+            <KpiMini label="Qolgan" value={formatMoney(modules.smm.outstanding)} />
+          </div>
+        ) : (
+          <SectionCard title="SMM">
+            <p className="text-sm text-ink-muted">{modules.smm.emptyWorkMessage}</p>
+            <p className="mt-1 text-sm text-ink-muted">{modules.smm.emptyFeeMessage}</p>
+          </SectionCard>
+        )
+      ) : null}
+
+      {modules?.other && showOther ? (
+        modules.other.hasAssignedWork || modules.other.hasAttributedFee ? (
+          <div className="grid gap-2 sm:grid-cols-3">
+            <KpiMini label="Bu oy" value={formatMoney(modules.other.monthEarned)} emphasize />
+            <KpiMini label="To‘langan" value={formatMoney(modules.other.paid)} />
+            <KpiMini label="Qolgan" value={formatMoney(modules.other.outstanding)} />
+          </div>
+        ) : (
+          <SectionCard title="Boshqa">
+            <p className="text-sm text-ink-muted">{modules.other.emptyWorkMessage}</p>
+            <p className="mt-1 text-sm text-ink-muted">{modules.other.emptyFeeMessage}</p>
+          </SectionCard>
+        )
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">

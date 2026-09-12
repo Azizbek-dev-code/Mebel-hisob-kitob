@@ -13,6 +13,7 @@ import {
   listPayments,
   listSales,
   updateAssemblyTask,
+  updatePurchaseDeliveryStatus,
   updateSale,
   updateSaleDeliveryStatus,
 } from '../controllers/sales.controller.js';
@@ -27,6 +28,7 @@ import {
   createSaleBodySchema,
   saleListQuerySchema,
   updateAssemblyTaskBodySchema,
+  updatePurchaseDeliveryStatusBodySchema,
   updateSaleBodySchema,
   updateSaleDeliveryStatusBodySchema,
 } from '../validators/sales.validators.js';
@@ -42,6 +44,11 @@ salesRouter.post('/', validate({ body: createSaleBodySchema }), createSale);
 salesRouter.get('/assembly-tasks/mine', listMyAssemblyTasks);
 /** Shopir operational inbox — assigned sale + purchase deliveries. */
 salesRouter.get('/deliveries/mine', listMyDeliveries);
+salesRouter.patch(
+  '/purchases/:id/delivery',
+  validate({ params: idParamsSchema, body: updatePurchaseDeliveryStatusBodySchema }),
+  updatePurchaseDeliveryStatus,
+);
 
 salesRouter.get('/:id', validate({ params: idParamsSchema }), getSale);
 salesRouter.patch(

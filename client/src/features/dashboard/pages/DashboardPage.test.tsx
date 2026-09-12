@@ -481,6 +481,45 @@ describe('DashboardPage (financial summary)', () => {
   it('does not show financial KPI cards to EMPLOYEE on the home route', async () => {
     mockApi({
       '/auth/me': { status: 200, body: { success: true, data: { user: EMPLOYEE } } },
+      '/me/profile-modules': {
+        status: 200,
+        body: {
+          success: true,
+          data: {
+            modules: {
+              worker: {
+                id: EMPLOYEE.id,
+                fullName: EMPLOYEE.fullName,
+                username: EMPLOYEE.username,
+                phone: EMPLOYEE.phone,
+                role: EMPLOYEE.role,
+                isActive: true,
+                responsibilities: EMPLOYEE.responsibilities,
+                createdAt: '2026-01-01T00:00:00.000Z',
+              },
+              tabs: ['GENERAL', 'SELLER', 'ASSEMBLER'],
+              general: {
+                finance: {
+                  earned: 0,
+                  paid: 0,
+                  outstanding: 0,
+                  monthEarned: 0,
+                  monthPaid: 0,
+                  monthAdvances: 0,
+                  monthOutstanding: 0,
+                  bonuses: 0,
+                  advances: 0,
+                  debt: 0,
+                  adjustments: 0,
+                  reversals: 0,
+                  commissions: 0,
+                },
+                breakdown: [],
+              },
+            },
+          },
+        },
+      },
       '/me/stats': workerStatsResponse(),
       '/analytics/financial-summary': financialResponse(POPULATED_FINANCIAL_SUMMARY),
       '/analytics/financial-trend': trendResponse(POPULATED_FINANCIAL_TREND),
@@ -490,7 +529,7 @@ describe('DashboardPage (financial summary)', () => {
     const router = createMemoryRouter(routes, { initialEntries: [ROUTES.dashboard] });
     renderWithProviders(<RouterProvider router={router} />);
 
-    expect(await screen.findByText(/Welcome/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Xush kelibsiz,\s*Ali/i)).toBeInTheDocument();
     expect(screen.queryByText('Sotuv')).not.toBeInTheDocument();
     expect(screen.queryByText(moneyMatcher(20_450_000))).not.toBeInTheDocument();
   });

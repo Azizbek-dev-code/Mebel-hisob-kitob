@@ -11,6 +11,7 @@ const USTA_FEE_ON_CANCELLED_SALE: WorkerAttributedFeesSummary = {
   installerFeeTotal: 0,
   deliveryFeeTotal: 0,
   purchaseDriverFeeTotal: 0,
+  manualFeeTotal: 0,
   grandTotal: 300_000,
   items: [
     {
@@ -40,10 +41,10 @@ describe('WorkerAttributedFeesPanel', () => {
   it('keeps the earning visible and flags the cancelled source as completed work', () => {
     renderPanel(USTA_FEE_ON_CANCELLED_SALE);
 
-    expect(screen.getByText('Usta haqqi')).toBeInTheDocument();
+    expect(screen.getAllByText('Usta haqqi').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/300 000/).length).toBeGreaterThan(0);
-    expect(screen.getByText('Bekor qilingan')).toBeInTheDocument();
-    expect(screen.getByText('Ish bajarilgan')).toBeInTheDocument();
+    expect(screen.getAllByText('Bekor qilingan').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Ish bajarilgan').length).toBeGreaterThan(0);
   });
 
   it('does not flag fees whose source document is still active', () => {
@@ -54,5 +55,35 @@ describe('WorkerAttributedFeesPanel', () => {
 
     expect(screen.queryByText('Bekor qilingan')).not.toBeInTheDocument();
     expect(screen.queryByText('Ish bajarilgan')).not.toBeInTheDocument();
+  });
+
+  it('renders a manual COMMISSION without a sale or purchase link', () => {
+    renderPanel({
+      sellerBonusTotal: 0,
+      assemblerFeeTotal: 0,
+      installerFeeTotal: 0,
+      deliveryFeeTotal: 0,
+      purchaseDriverFeeTotal: 0,
+      manualFeeTotal: 200_000,
+      grandTotal: 200_000,
+      items: [
+        {
+          id: 'tx_manual',
+          kind: 'MANUAL_COMMISSION',
+          source: 'MANUAL',
+          amount: 200_000,
+          occurredAt: '2026-09-12T10:00:00.000Z',
+          referenceId: 'tx_manual',
+          referenceLabel: "Qo'lda",
+          description: 'Admin qo‘lda komissiya',
+          sourceCancelled: false,
+          workCompleted: true,
+        },
+      ],
+    });
+
+    expect(screen.getAllByText(/Qo['‘]lda komissiya/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Qo'lda").length).toBeGreaterThan(0);
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 });

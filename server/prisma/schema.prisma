@@ -1149,7 +1149,10 @@ model WorkerFinancialTransaction {
   reversesType    WorkerFinancialTransactionType?
   /// Which worker responsibility bucket this row belongs to (SELLER / ASSEMBLER / …).
   responsibility  WorkerResponsibility?
-  /// Open COMMISSION credits participate in the partial unique index; closed after REVERSAL.
+  /// Open COMMISSION credits participate in the partial unique index
+  /// `worker_financial_transactions_store_ref_commission_open_unique`
+  /// on (storeId, referenceType, referenceId) WHERE type=COMMISSION AND isOpen
+  /// AND refs are not null. Closed after REVERSAL so the same business ref may re-post.
   isOpen          Boolean                         @default(true)
   createdById     String?
 

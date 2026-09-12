@@ -541,7 +541,7 @@ export async function createPurchaseInTx(
     supplierId: string;
     purchaseNumber: number;
     purchaseDate: Date;
-    deliveredAt: Date;
+    deliveredAt: Date | null;
     deliveryDays: number;
     driverId: string | null;
     driverFee: number;

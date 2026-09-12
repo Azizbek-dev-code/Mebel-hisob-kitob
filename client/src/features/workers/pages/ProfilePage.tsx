@@ -6,13 +6,15 @@ import { Badge } from '@/components/ui/Badge';
 import { SectionCard } from '@/components/ui/SectionCard';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ResponsibilityBadges } from '@/features/workers/components/ResponsibilityBadges';
+import { WorkerAttributedFeesPanel } from '@/features/workers/components/WorkerAttributedFeesPanel';
 import { WorkerProfileModulesPanel } from '@/features/workers/components/WorkerProfileModulesPanel';
-import { useMyProfileModules } from '@/features/workers/hooks/use-workers';
+import { useMyAttributedFees, useMyProfileModules } from '@/features/workers/hooks/use-workers';
 import { ROUTES } from '@/routes/paths';
 import { formatDate } from '@/utils/format';
 
 export function ProfilePage() {
   const modulesQuery = useMyProfileModules();
+  const feesQuery = useMyAttributedFees();
 
   if (modulesQuery.isError && !modulesQuery.data) {
     return (
@@ -76,6 +78,14 @@ export function ProfilePage() {
           onRetry={() => void modulesQuery.refetch()}
         />
       </SectionCard>
+
+      <WorkerAttributedFeesPanel
+        fees={feesQuery.data}
+        isLoading={feesQuery.isLoading}
+        isError={feesQuery.isError}
+        onRetry={() => void feesQuery.refetch()}
+        linkReferences
+      />
     </PageContainer>
   );
 }

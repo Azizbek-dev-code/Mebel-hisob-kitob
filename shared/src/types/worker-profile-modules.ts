@@ -25,6 +25,8 @@ export interface WorkerProfileFinanceSnapshot {
   outstanding: Money;
   monthEarned: Money;
   monthPaid: Money;
+  monthAdvances: Money;
+  monthOutstanding: Money;
   bonuses: Money;
   advances: Money;
   debt: Money;
@@ -138,7 +140,10 @@ export interface WorkerProfilePurchaseDeliveryItem {
   supplierName: string;
   driverFee: Money;
   date: IsoDateString;
+  deliveredAt: IsoDateString | null;
   status: string;
+  /** PENDING until goods arrived; COMPLETED once deliveredAt is set. */
+  deliveryStatus: 'PENDING' | 'COMPLETED' | 'CANCELLED';
   ledgerStatus: 'PENDING' | 'POSTED' | 'REVERSED' | 'NONE';
 }
 
@@ -176,7 +181,21 @@ export interface WorkerProfileInstallerModule {
   installations: WorkerProfileInstallationItem[];
 }
 
+export interface WorkerProfileSmmFeeItem {
+  id: string;
+  amount: Money;
+  description: string | null;
+  occurredAt: IsoDateString;
+}
+
 export interface WorkerProfileSmmModule {
+  /** SMM operational task system is not wired yet — stay empty rather than invent work. */
+  hasAssignedWork: boolean;
+  hasAttributedFee: boolean;
+  emptyWorkMessage: string;
+  emptyFeeMessage: string;
+  tasks: Array<{ id: string; title: string; status: string }>;
+  fees: WorkerProfileSmmFeeItem[];
   monthEarned: Money;
   paid: Money;
   outstanding: Money;

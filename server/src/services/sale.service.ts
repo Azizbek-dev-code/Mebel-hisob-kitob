@@ -1518,10 +1518,17 @@ export async function updateAssemblyTask(
     }
 
     if (input.status === AssemblyTaskStatus.COMPLETED) {
-      data.completedAt = now;
-      data.completedBy = { connect: { id: actorId } };
-      if (!existing.startedAt) {
-        data.startedAt = now;
+      if (existing.status === AssemblyTaskStatus.COMPLETED) {
+        data.completedAt = existing.completedAt ?? now;
+        data.completedBy = existing.completedById
+          ? { connect: { id: existing.completedById } }
+          : { connect: { id: actorId } };
+      } else {
+        data.completedAt = now;
+        data.completedBy = { connect: { id: actorId } };
+        if (!existing.startedAt) {
+          data.startedAt = now;
+        }
       }
     }
 
@@ -1555,7 +1562,7 @@ export async function updateAssemblyTask(
 
     await tx.sale.update({ where: { id: existing.saleId }, data: salePatch });
 
-    if (input.status === AssemblyTaskStatus.IN_PROGRESS) {
+    if (input.status === AssemblyTaskStatus.IN_PROGRESS && existing.status !== AssemblyTaskStatus.COMPLETED) {
       await workerRepository.recordActivity(
         {
           storeId,
@@ -1571,18 +1578,20 @@ export async function updateAssemblyTask(
     }
 
     if (input.status === AssemblyTaskStatus.COMPLETED) {
-      await workerRepository.recordActivity(
-        {
-          storeId,
-          workerId: existing.assigneeId,
-          actorId,
-          type: WorkerActivityType.ASSEMBLY_COMPLETED,
-          relatedSaleId: existing.saleId,
-          relatedTaskId: taskId,
-          message: 'Assembly completed',
-        },
-        tx,
-      );
+      if (existing.status !== AssemblyTaskStatus.COMPLETED) {
+        await workerRepository.recordActivity(
+          {
+            storeId,
+            workerId: existing.assigneeId,
+            actorId,
+            type: WorkerActivityType.ASSEMBLY_COMPLETED,
+            relatedSaleId: existing.saleId,
+            relatedTaskId: taskId,
+            message: 'Assembly completed',
+          },
+          tx,
+        );
+      }
 
       const saleForFee = await tx.sale.findFirst({
         where: { id: existing.saleId, storeId },

@@ -1,6 +1,8 @@
 import {
   UserRole,
+  WorkerFinancialReferenceType,
   WorkerFinancialTransactionType,
+  WorkerResponsibility,
 } from '@furniture-erp/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -153,8 +155,9 @@ describe('worker-financial.service createTransaction', () => {
     ).rejects.toMatchObject({ statusCode: 422 });
   });
 
-  it('creates COMMISSION with required reference', async () => {
+  it('creates COMMISSION with an optional document reference', async () => {
     prismaMock.user.findFirst.mockResolvedValue(ACTIVE_WORKER);
+    prismaMock.workerFinancialTransaction.findFirst.mockResolvedValue(null);
     prismaMock.workerFinancialTransaction.create.mockResolvedValue(
       txRecord({
         type: WorkerFinancialTransactionType.COMMISSION,
@@ -181,7 +184,53 @@ describe('worker-financial.service createTransaction', () => {
     expect(transaction.referenceId).toBe('manual:aug');
   });
 
-  it('rejects COMMISSION without reference', async () => {
+  it('creates COMMISSION without a reference', async () => {
+    prismaMock.user.findFirst.mockResolvedValue(ACTIVE_WORKER);
+    prismaMock.workerFinancialTransaction.create.mockResolvedValue(
+      txRecord({
+        type: WorkerFinancialTransactionType.COMMISSION,
+        amount: 200_000n,
+        description: 'Manual usta haqqi',
+        referenceType: null,
+        referenceId: null,
+        responsibility: WorkerResponsibility.ASSEMBLER,
+      }),
+    );
+
+    const transaction = await createTransaction(
+      STORE_ID,
+      { id: ADMIN_ID, role: UserRole.ADMIN },
+      {
+        workerId: WORKER_ID,
+        type: WorkerFinancialTransactionType.COMMISSION,
+        amount: 200_000,
+        transactionDate: '2026-08-09',
+        description: 'Manual usta haqqi',
+        responsibility: WorkerResponsibility.ASSEMBLER,
+      },
+    );
+    expect(transaction.type).toBe(WorkerFinancialTransactionType.COMMISSION);
+    expect(transaction.referenceType).toBeNull();
+    expect(transaction.referenceId).toBeNull();
+
+    const createArgs = prismaMock.workerFinancialTransaction.create.mock.calls[0]![0] as {
+      data: { referenceType: string | null; referenceId: string | null; responsibility: string };
+    };
+    expect(createArgs.data.referenceType).toBeNull();
+    expect(createArgs.data.referenceId).toBeNull();
+    expect(createArgs.data.responsibility).toBe(WorkerResponsibility.ASSEMBLER);
+  });
+
+  it('rejects COMMISSION that reuses an open operational reference', async () => {
+    prismaMock.user.findFirst.mockResolvedValue(ACTIVE_WORKER);
+    prismaMock.workerFinancialTransaction.findFirst.mockResolvedValueOnce(
+      txRecord({
+        type: WorkerFinancialTransactionType.COMMISSION,
+        referenceType: WorkerFinancialReferenceType.SALE,
+        referenceId: 'sale_1:DELIVERY_FEE',
+      }),
+    );
+
     await expect(
       createTransaction(
         STORE_ID,
@@ -189,11 +238,14 @@ describe('worker-financial.service createTransaction', () => {
         {
           workerId: WORKER_ID,
           type: WorkerFinancialTransactionType.COMMISSION,
-          amount: 200_000,
+          amount: 130_000,
           transactionDate: '2026-08-09',
+          referenceType: WorkerFinancialReferenceType.SALE,
+          referenceId: 'sale_1:DELIVERY_FEE',
         },
       ),
-    ).rejects.toMatchObject({ statusCode: 422 });
+    ).rejects.toMatchObject({ statusCode: 409 });
+    expect(prismaMock.workerFinancialTransaction.create).not.toHaveBeenCalled();
   });
 
   it('persists amount as BigInt so\'m and preserves transactionDate', async () => {

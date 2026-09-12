@@ -179,6 +179,10 @@ export const updateSaleDeliveryStatusBodySchema = z.object({
   status: z.enum([FulfilmentStatus.IN_TRANSIT, FulfilmentStatus.COMPLETED]),
 });
 
+export const updatePurchaseDeliveryStatusBodySchema = z.object({
+  status: z.literal('COMPLETED'),
+});
+
 export const saleListQuerySchema = paginationQuerySchema.extend({
   search: z.string().trim().max(120).optional(),
   paymentStatus: z.nativeEnum(SalePaymentStatus).optional(),
@@ -211,6 +215,9 @@ export type AddPaymentBody = z.infer<typeof addPaymentBodySchema>;
 export type AssignAssemblyBody = z.infer<typeof assignAssemblyBodySchema>;
 export type UpdateAssemblyTaskBody = z.infer<typeof updateAssemblyTaskBodySchema>;
 export type UpdateSaleDeliveryStatusBody = z.infer<typeof updateSaleDeliveryStatusBodySchema>;
+export type UpdatePurchaseDeliveryStatusBody = z.infer<
+  typeof updatePurchaseDeliveryStatusBodySchema
+>;
 export type CancelSaleBody = z.infer<typeof cancelSaleBodySchema>;
 export type SaleListQuery = z.infer<typeof saleListQuerySchema>;
 export type LookupQuery = z.infer<typeof lookupQuerySchema>;

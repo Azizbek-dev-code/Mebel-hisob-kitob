@@ -188,6 +188,22 @@ async function main() {
     data: { passwordHash: await bcrypt.hash(e2ePassword, 4) },
   });
 
+  const originalSub = await prisma.storeSubscription.findFirst({
+    where: { storeId: store.id, isCurrent: true },
+  });
+  if (originalSub) {
+    const periodEnd = new Date();
+    periodEnd.setUTCFullYear(periodEnd.getUTCFullYear() + 1);
+    await prisma.storeSubscription.update({
+      where: { id: originalSub.id },
+      data: {
+        status: 'ACTIVE',
+        currentPeriodEnd: periodEnd,
+        trialEndsAt: periodEnd,
+      },
+    });
+  }
+
   try {
     const login = await request('POST', '/api/auth/login', {
       body: {
@@ -719,12 +735,139 @@ async function main() {
       throw new Error(`incomplete work created ledger rows: ${pendingLedger}`);
     }
 
+    const shopirLogin = await request('POST', '/api/auth/login', {
+      body: { identifier: shopir.username ?? shopir.email, password: 'WorkerFees123!' },
+    });
+    if (shopirLogin.status !== 200) {
+      throw new Error(`shopir login failed ${shopirLogin.status}`);
+    }
+    const shopirCookie = extractCookie(shopirLogin.setCookie, '');
+
+    const forbiddenFees = await request('GET', `/api/workers/${usta.id}/attributed-fees`, {
+      cookie: shopirCookie,
+    });
+    if (forbiddenFees.status !== 403) {
+      throw new Error(`expected 403 reading another worker fees, got ${forbiddenFees.status}`);
+    }
+
+    const ownFees = await request('GET', '/api/me/attributed-fees', { cookie: shopirCookie });
+    if (ownFees.status !== 200) {
+      throw new Error(`shopir /me/attributed-fees failed ${ownFees.status}`);
+    }
+    const ownFeeItems = (dataOf(ownFees.body).fees as Json).items as Json[];
+    if (ownFeeItems.some((item) => String(item.kind) === 'ASSEMBLER_FEE')) {
+      throw new Error('shopir saw assembler fees on own attributed list');
+    }
+
+    const stealDelivery = await request('PATCH', `/api/sales/${pendingSaleId}/delivery`, {
+      cookie: shopirCookie,
+      body: { status: 'COMPLETED' },
+    });
+    if (stealDelivery.status !== 400 && stealDelivery.status !== 404 && stealDelivery.status !== 409) {
+      // Cancelled sale — shopir must not complete it.
+      if (stealDelivery.status === 200) {
+        throw new Error('shopir completed a cancelled pending delivery');
+      }
+    }
+
+    const supplier = await prisma.supplier.create({
+      data: {
+        storeId: store.id,
+        name: `${MARKER} Wood`,
+        notes: MARKER,
+        status: 'ACTIVE',
+      },
+    });
+    const purchaseRes = await request('POST', '/api/purchases', {
+      cookie,
+      body: {
+        supplierId: supplier.id,
+        items: [{ productId: product.id, quantity: 1, unitCost: 500_000 }],
+        driverId: shopir.id,
+        driverFee: 100_000,
+      },
+    });
+    if (purchaseRes.status !== 201 && purchaseRes.status !== 200) {
+      throw new Error(`purchase create failed ${purchaseRes.status} ${JSON.stringify(purchaseRes.body)}`);
+    }
+    const purchase = dataOf(purchaseRes.body).purchase as Json | undefined;
+    const purchaseId = String(purchase?.id ?? (dataOf(purchaseRes.body) as Json).id ?? '');
+    if (!purchaseId) throw new Error('purchase id missing');
+
+    const purchaseFeeBefore = await countOpenCommissions(
+      store.id,
+      shopir.id,
+      WorkerFinancialReferenceType.PURCHASE,
+      `${purchaseId}:DRIVER_FEE`,
+    );
+    if (purchaseFeeBefore !== 0) {
+      throw new Error(`purchase fee posted before complete, count=${purchaseFeeBefore}`);
+    }
+
+    for (let i = 0; i < 3; i += 1) {
+      const done = await request('PATCH', `/api/sales/purchases/${purchaseId}/delivery`, {
+        cookie: shopirCookie,
+        body: { status: 'COMPLETED' },
+      });
+      if (done.status !== 200) {
+        throw new Error(
+          `purchase complete #${i} failed ${done.status} ${JSON.stringify(done.body)}`,
+        );
+      }
+    }
+    const purchaseFeeAfter = await countOpenCommissions(
+      store.id,
+      shopir.id,
+      WorkerFinancialReferenceType.PURCHASE,
+      `${purchaseId}:DRIVER_FEE`,
+    );
+    if (purchaseFeeAfter !== 1) {
+      throw new Error(`expected 1 purchase driver fee after triple complete, got ${purchaseFeeAfter}`);
+    }
+
+    const ustaStealPurchase = await request('POST', '/api/auth/login', {
+      body: { identifier: usta.username ?? usta.email, password: 'WorkerFees123!' },
+    });
+    const ustaCookie = extractCookie(ustaStealPurchase.setCookie, '');
+    const forbiddenPurchase = await request('PATCH', `/api/sales/purchases/${purchaseId}/delivery`, {
+      cookie: ustaCookie,
+      body: { status: 'COMPLETED' },
+    });
+    if (forbiddenPurchase.status !== 403) {
+      throw new Error(`expected 403 usta completing shopir purchase, got ${forbiddenPurchase.status}`);
+    }
+
+    const { runOperationalFeeBackfill } = await import(
+      '../src/services/worker-operational-fees-backfill.service.js'
+    );
+    const backfillAgain = await runOperationalFeeBackfill({ apply: true });
+    const purchaseFeeAfterBackfill = await countOpenCommissions(
+      store.id,
+      shopir.id,
+      WorkerFinancialReferenceType.PURCHASE,
+      `${purchaseId}:DRIVER_FEE`,
+    );
+    if (purchaseFeeAfterBackfill !== 1) {
+      throw new Error(`backfill duplicated purchase fee: ${purchaseFeeAfterBackfill}`);
+    }
+    void backfillAgain;
+
     console.log('WORKER_FEES_E2E_OK');
   } finally {
     await prisma.user.update({
       where: { id: admin.id },
       data: { passwordHash: originalHash },
     });
+    if (originalSub) {
+      await prisma.storeSubscription.update({
+        where: { id: originalSub.id },
+        data: {
+          status: originalSub.status,
+          currentPeriodEnd: originalSub.currentPeriodEnd,
+          trialEndsAt: originalSub.trialEndsAt,
+        },
+      });
+    }
     await cleanup(store.id);
     await prisma.$disconnect();
   }

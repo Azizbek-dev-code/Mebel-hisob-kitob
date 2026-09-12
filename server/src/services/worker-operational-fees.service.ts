@@ -158,7 +158,7 @@ async function reverseOpenCommission(
       reversesType: original.type as 'COMMISSION',
       // Keep responsibility so module-scoped KPI aggregates still net reversals.
       responsibility:
-        (original.responsibility as import('@furniture-erp/shared').WorkerResponsibility | null) ??
+        (original.responsibility as WorkerResponsibility | null) ??
         null,
       createdById: actorId,
     },

@@ -17,6 +17,8 @@ import type {
   UpdateAssemblyTaskRequest,
   UpdateSaleDeliveryStatusRequest,
   UpdateSaleDeliveryStatusResponse,
+  UpdatePurchaseDeliveryStatusRequest,
+  UpdatePurchaseDeliveryStatusResponse,
   UpdateSaleRequest,
 } from '@furniture-erp/shared';
 
@@ -98,6 +100,16 @@ export const salesService = {
     return apiClient.patch<UpdateSaleDeliveryStatusResponse>(`/sales/${saleId}/delivery`, {
       body,
     });
+  },
+
+  async updatePurchaseDeliveryStatus(
+    purchaseId: string,
+    body: UpdatePurchaseDeliveryStatusRequest,
+  ): Promise<UpdatePurchaseDeliveryStatusResponse> {
+    return apiClient.patch<UpdatePurchaseDeliveryStatusResponse>(
+      `/sales/purchases/${purchaseId}/delivery`,
+      { body },
+    );
   },
 };
 

@@ -10,11 +10,14 @@ import { DeliveryPage } from './DeliveryPage';
 
 const myDeliveriesMock = vi.fn();
 const updateDeliveryStatusMock = vi.fn();
+const updatePurchaseDeliveryStatusMock = vi.fn();
 
 vi.mock('@/services/sales.service', () => ({
   salesService: {
     myDeliveries: (...args: unknown[]) => myDeliveriesMock(...args),
     updateDeliveryStatus: (...args: unknown[]) => updateDeliveryStatusMock(...args),
+    updatePurchaseDeliveryStatus: (...args: unknown[]) =>
+      updatePurchaseDeliveryStatusMock(...args),
   },
 }));
 
@@ -48,6 +51,7 @@ function renderPage() {
 beforeEach(() => {
   myDeliveriesMock.mockReset();
   updateDeliveryStatusMock.mockReset();
+  updatePurchaseDeliveryStatusMock.mockReset();
   myDeliveriesMock.mockResolvedValue({
     kpis: {
       todayTotal: 1,
@@ -204,5 +208,59 @@ describe('DeliveryPage', () => {
     expect(
       await screen.findByText(/Yetkazib berishlarni yuklashda xatolik/i),
     ).toBeInTheDocument();
+  });
+
+  it('completes a pending purchase pickup', async () => {
+    const user = userEvent.setup();
+    myDeliveriesMock.mockResolvedValue({
+      kpis: {
+        todayTotal: 0,
+        todayPending: 0,
+        todayInProgress: 0,
+        todayCompleted: 0,
+        todayEarned: 0,
+        monthTotal: 1,
+        monthEarned: 0,
+        monthPaid: 0,
+        monthOutstanding: 0,
+      },
+      saleDeliveries: [],
+      purchaseDeliveries: [
+        {
+          kind: 'PURCHASE',
+          id: 'pur_1',
+          purchaseNumber: 5,
+          supplierName: 'Wood Supply',
+          date: '2026-08-25T10:00:00.000Z',
+          deliveredAt: null,
+          purchaseStatus: 'ACTIVE',
+          status: 'PENDING',
+          fee: 100_000,
+          ledgerStatus: 'PENDING',
+          canStart: false,
+          canComplete: true,
+          hint: 'Shopir haqi yuk olib kelingandan (yakunlangandan) keyin hisobga olinadi.',
+        },
+      ],
+    });
+    updatePurchaseDeliveryStatusMock.mockResolvedValue({
+      purchaseId: 'pur_1',
+      purchaseNumber: 5,
+      deliveredAt: '2026-09-12T00:00:00.000Z',
+      ledgerPosted: true,
+      message: 'Kirim yetkazib berish yakunlandi. 100 000 so‘m shopir haqi hisobga tushdi.',
+    });
+
+    renderPage();
+    await user.click(await screen.findByTestId('complete-purchase-delivery-pur_1'));
+    const dialog = await screen.findByRole('alertdialog');
+    await user.click(within(dialog).getByRole('button', { name: /Yakunlash/i }));
+
+    await waitFor(() => {
+      expect(updatePurchaseDeliveryStatusMock).toHaveBeenCalledWith('pur_1', {
+        status: 'COMPLETED',
+      });
+    });
+    expect(await screen.findByText(/Kirim yetkazib berish yakunlandi/i)).toBeInTheDocument();
   });
 });

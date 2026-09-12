@@ -10,6 +10,7 @@ import {
   type WorkerFinancialTransaction,
   type WorkerFinancialTransactionType as WorkerFinancialTransactionTypeValue,
   type PaginatedResult,
+  type WorkerResponsibility,
 } from '@furniture-erp/shared';
 import type {
   Prisma,
@@ -80,7 +81,7 @@ export interface WorkerFinancialListFilters {
   storeId: string;
   workerId: string;
   type?: WorkerFinancialTransactionTypeValue;
-  responsibility?: import('@furniture-erp/shared').WorkerResponsibility;
+  responsibility?: WorkerResponsibility;
   /** Inclusive start instant (half-open range with dateTo). */
   dateFrom?: Date;
   /** Exclusive end instant. */

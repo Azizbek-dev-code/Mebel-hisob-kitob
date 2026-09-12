@@ -113,6 +113,8 @@ function GeneralTab({ modules }: { modules: WorkerProfileModules }) {
         <KpiChip label="Qolgan" value={formatMoney(finance.outstanding)} emphasize />
         <KpiChip label="Bu oy hisoblangan" value={formatMoney(finance.monthEarned)} />
         <KpiChip label="Bu oy to‘langan" value={formatMoney(finance.monthPaid)} />
+        <KpiChip label="Bu oy avans" value={formatMoney(finance.monthAdvances ?? 0)} />
+        <KpiChip label="Bu oy qolgan" value={formatMoney(finance.monthOutstanding ?? 0)} />
         <KpiChip label="Bonus" value={formatMoney(finance.bonuses)} />
         <KpiChip label="Avans" value={formatMoney(finance.advances)} />
         <KpiChip label="Qarz" value={formatMoney(finance.debt)} />
@@ -435,7 +437,13 @@ function DeliveryTab({ modules }: { modules: WorkerProfileModules }) {
                       <td className="whitespace-nowrap px-3 py-2.5 text-ink-soft">
                         {formatDate(item.date)}
                       </td>
-                      <td className="px-3 py-2.5">{item.status}</td>
+                      <td className="px-3 py-2.5">
+                        {item.deliveryStatus === 'COMPLETED'
+                          ? 'Yakunlangan'
+                          : item.deliveryStatus === 'CANCELLED'
+                            ? 'Bekor'
+                            : 'Kutilmoqda'}
+                      </td>
                       <td className="tabular-money px-3 py-2.5">
                         {formatMoney(item.driverFee)}
                       </td>
@@ -495,7 +503,12 @@ function PurchaseDeliveryCard({ item }: { item: WorkerProfilePurchaseDeliveryIte
       </div>
       <p className="mt-1 text-sm text-ink-soft">{item.supplierName}</p>
       <p className="text-xs text-ink-muted">
-        {formatDate(item.date)} · {item.status}
+        {formatDate(item.date)} ·{' '}
+        {item.deliveryStatus === 'COMPLETED'
+          ? 'Yakunlangan'
+          : item.deliveryStatus === 'CANCELLED'
+            ? 'Bekor'
+            : 'Kutilmoqda'}
       </p>
       <p className="tabular-money mt-2 text-sm font-semibold">{formatMoney(item.driverFee)}</p>
     </li>
@@ -631,16 +644,38 @@ function SmmOrOtherTab({
     );
   }
 
+  const showEmptyWork = !module.hasAssignedWork;
+  const showEmptyFee = !module.hasAttributedFee;
+
   return (
-    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-      <KpiChip label="Bu oy hisoblangan" value={formatMoney(module.monthEarned)} emphasize />
-      <KpiChip label="To‘langan" value={formatMoney(module.paid)} />
-      <KpiChip label="Qolgan" value={formatMoney(module.outstanding)} emphasize />
-      <KpiChip label="Bonus" value={formatMoney(module.bonuses)} />
-      <KpiChip label="Avans" value={formatMoney(module.advances)} />
-      <KpiChip label="Qarz" value={formatMoney(module.debt)} />
-      <KpiChip label="To‘lov" value={formatMoney(module.payments)} />
-      <KpiChip label="Tuzatish" value={formatMoney(module.adjustments)} />
+    <div className="space-y-4">
+      {showEmptyWork ? (
+        <ModuleEmpty title={module.emptyWorkMessage} description="SMM vazifalari paydo bo‘lganda shu yerda ko‘rinadi." />
+      ) : (
+        <SectionCard title="Vazifalar">
+          <ul className="space-y-2">
+            {module.tasks.map((task) => (
+              <li key={task.id} className="rounded-panel border border-line p-3 text-sm">
+                {task.title} · {task.status}
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
+      )}
+      {showEmptyFee ? (
+        <ModuleEmpty title={module.emptyFeeMessage} description="Haq ledgerga yozilganda shu yerda chiqadi." />
+      ) : (
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <KpiChip label="Bu oy hisoblangan" value={formatMoney(module.monthEarned)} emphasize />
+          <KpiChip label="To‘langan" value={formatMoney(module.paid)} />
+          <KpiChip label="Qolgan" value={formatMoney(module.outstanding)} emphasize />
+          <KpiChip label="Bonus" value={formatMoney(module.bonuses)} />
+          <KpiChip label="Avans" value={formatMoney(module.advances)} />
+          <KpiChip label="Qarz" value={formatMoney(module.debt)} />
+          <KpiChip label="To‘lov" value={formatMoney(module.payments)} />
+          <KpiChip label="Tuzatish" value={formatMoney(module.adjustments)} />
+        </div>
+      )}
     </div>
   );
 }
@@ -656,7 +691,10 @@ export function WorkerProfileModulesPanel({
   isError?: boolean;
   onRetry?: () => void;
 }) {
-  const availableTabs = modules?.tabs ?? (['GENERAL'] as WorkerProfileModuleTab[]);
+  const availableTabs = useMemo(
+    () => modules?.tabs ?? (['GENERAL'] as WorkerProfileModuleTab[]),
+    [modules?.tabs],
+  );
   const [activeTab, setActiveTab] = useState<WorkerProfileModuleTab>('GENERAL');
 
   const resolvedTab = useMemo(() => {

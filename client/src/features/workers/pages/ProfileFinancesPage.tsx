@@ -1,5 +1,6 @@
 import {
   computeWorkerEarnedTotal,
+  computeWorkerNetFinancialPosition,
   computeWorkerPaidTotal,
   signedWorkerTransactionAmount,
   WorkerFinancialTransactionType,
@@ -23,10 +24,12 @@ import {
   isPeriodRequestable,
   type DashboardPeriod,
 } from '@/features/dashboard/period';
+import { WorkerAttributedFeesPanel } from '@/features/workers/components/WorkerAttributedFeesPanel';
 import {
   useMyFinanceSummary,
   useMyFinanceTransactions,
 } from '@/features/workers/hooks/use-worker-finances';
+import { useMyAttributedFees } from '@/features/workers/hooks/use-workers';
 import {
   collectReversedOriginalIds,
   workerFinanceTypeDisplayLabel,
@@ -123,6 +126,7 @@ export function ProfileFinancesPage() {
 
   const summary = useMyFinanceSummary(summaryParams, queriesEnabled);
   const transactions = useMyFinanceTransactions(listParams, queriesEnabled);
+  const attributedFees = useMyAttributedFees();
 
   const items = transactions.data?.items;
   const reversedOriginalIds = useMemo(
@@ -143,7 +147,18 @@ export function ProfileFinancesPage() {
       })
     : 0;
   const paid = summary.data ? computeWorkerPaidTotal(summary.data) : 0;
-  const outstanding = earned - paid;
+  const outstanding = summary.data
+    ? (summary.data.netFinancialPosition ??
+      computeWorkerNetFinancialPosition({
+        totalBonuses: summary.data.totalBonuses,
+        totalCommissions: summary.data.totalCommissions,
+        totalAdvances: summary.data.totalAdvances,
+        totalDebt: summary.data.totalDebt,
+        totalPayments: summary.data.totalPayments,
+        totalAdjustments: summary.data.totalAdjustments,
+        reversalsByOriginalType: summary.data.reversalsByOriginalType,
+      }))
+    : 0;
 
   function onPeriodChange(next: DashboardPeriod) {
     setPeriod(next);
@@ -221,6 +236,13 @@ export function ProfileFinancesPage() {
           />
         </div>
       )}
+
+      <WorkerAttributedFeesPanel
+        fees={attributedFees.data}
+        isLoading={attributedFees.isLoading}
+        isError={attributedFees.isError}
+        onRetry={() => void attributedFees.refetch()}
+      />
 
       <SectionCard title="Operatsiyalar">
         <div className="mb-4 grid gap-3 sm:grid-cols-2">

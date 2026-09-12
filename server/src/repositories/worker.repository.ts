@@ -5,8 +5,6 @@ import type {
   WorkerDetail,
   WorkerListItem,
   WorkerLookupItem,
-  WorkerResponsibility,
-  WorkerSaleItem,
   WorkerStats,
   WorkerTaskItem,
 } from '@furniture-erp/shared';
@@ -23,6 +21,7 @@ import {
   normalisePagination,
   WorkerFinancialReferenceType,
   WorkerFinancialTransactionType,
+  WorkerResponsibility,
 } from '@furniture-erp/shared';
 import type { Prisma, User, WorkerActivityType } from '@prisma/client';
 
@@ -753,14 +752,6 @@ export async function listWorkerAttributedFees(
       storeId,
       workerId,
       type: WorkerFinancialTransactionType.COMMISSION,
-      referenceType: {
-        in: [
-          WorkerFinancialReferenceType.COMPENSATION,
-          WorkerFinancialReferenceType.SALE,
-          WorkerFinancialReferenceType.ASSEMBLY,
-          WorkerFinancialReferenceType.PURCHASE,
-        ],
-      },
     },
     select: {
       id: true,
@@ -769,6 +760,7 @@ export async function listWorkerAttributedFees(
       description: true,
       referenceType: true,
       referenceId: true,
+      responsibility: true,
     },
     orderBy: { transactionDate: 'desc' },
   });
@@ -820,7 +812,8 @@ export async function listWorkerAttributedFees(
       referenceLabel: classified.referenceLabel,
       description: row.description,
       sourceCancelled: source?.cancelled ?? false,
-      workCompleted: isFeeWorkCompleted(classified.kind, source),
+      workCompleted:
+        classified.source === 'MANUAL' || isFeeWorkCompleted(classified.kind, source),
     };
   });
 
@@ -829,13 +822,15 @@ export async function listWorkerAttributedFees(
   let installerFeeTotal = 0;
   let deliveryFeeTotal = 0;
   let purchaseDriverFeeTotal = 0;
+  let manualFeeTotal = 0;
   for (const item of items) {
     if (item.kind === 'SELLER_COMMISSION' || item.kind === 'SELLER_BONUS') {
       sellerBonusTotal += item.amount;
     } else if (item.kind === 'ASSEMBLER_FEE') assemblerFeeTotal += item.amount;
     else if (item.kind === 'INSTALLER_FEE') installerFeeTotal += item.amount;
     else if (item.kind === 'DELIVERY_FEE') deliveryFeeTotal += item.amount;
-    else purchaseDriverFeeTotal += item.amount;
+    else if (item.kind === 'PURCHASE_DRIVER_FEE') purchaseDriverFeeTotal += item.amount;
+    else manualFeeTotal += item.amount;
   }
 
   return {
@@ -844,12 +839,14 @@ export async function listWorkerAttributedFees(
     installerFeeTotal,
     deliveryFeeTotal,
     purchaseDriverFeeTotal,
+    manualFeeTotal,
     grandTotal:
       sellerBonusTotal +
       assemblerFeeTotal +
       installerFeeTotal +
       deliveryFeeTotal +
-      purchaseDriverFeeTotal,
+      purchaseDriverFeeTotal +
+      manualFeeTotal,
     items,
   };
 }
@@ -947,9 +944,11 @@ function saleIdFromFeeRef(refId: string): string {
 }
 
 function classifyPostedCommission(row: {
+  id: string;
   description: string | null;
   referenceType: string | null;
   referenceId: string | null;
+  responsibility: string | null;
 }): {
   kind: WorkerAttributedFeeItem['kind'];
   source: WorkerAttributedFeeItem['source'];
@@ -959,6 +958,16 @@ function classifyPostedCommission(row: {
   const refId = row.referenceId ?? '';
   const desc = row.description ?? '';
   const saleNum = desc.match(/Sotuv\s*#(\d+)/i)?.[1];
+  const hasDocumentRef =
+    Boolean(refId) &&
+    (row.referenceType === WorkerFinancialReferenceType.SALE ||
+      row.referenceType === WorkerFinancialReferenceType.ASSEMBLY ||
+      row.referenceType === WorkerFinancialReferenceType.PURCHASE ||
+      row.referenceType === WorkerFinancialReferenceType.COMPENSATION);
+
+  if (!hasDocumentRef) {
+    return classifyManualCommission(row);
+  }
 
   if (row.referenceType === WorkerFinancialReferenceType.PURCHASE) {
     const purchaseId = refId.replace(/:DRIVER_FEE$/, '') || refId;
@@ -1064,5 +1073,34 @@ function classifyPostedCommission(row: {
     };
   }
 
-  return null;
+  return classifyManualCommission(row);
+}
+
+function classifyManualCommission(row: {
+  id: string;
+  description: string | null;
+  responsibility: string | null;
+}): {
+  kind: WorkerAttributedFeeItem['kind'];
+  source: WorkerAttributedFeeItem['source'];
+  referenceId: string;
+  referenceLabel: string;
+} {
+  const kind: WorkerAttributedFeeItem['kind'] =
+    row.responsibility === WorkerResponsibility.SELLER
+      ? 'SELLER_COMMISSION'
+      : row.responsibility === WorkerResponsibility.ASSEMBLER
+        ? 'ASSEMBLER_FEE'
+        : row.responsibility === WorkerResponsibility.INSTALLER
+          ? 'INSTALLER_FEE'
+          : row.responsibility === WorkerResponsibility.DELIVERY
+            ? 'DELIVERY_FEE'
+            : 'MANUAL_COMMISSION';
+
+  return {
+    kind,
+    source: 'MANUAL',
+    referenceId: row.id,
+    referenceLabel: "Qo'lda",
+  };
 }

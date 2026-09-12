@@ -69,6 +69,7 @@ export const createWorkerFinancialTransactionBodySchema = z.object({
   amount: positiveMoneySchema,
   transactionDate: flexibleDateSchema,
   description: z.string().trim().max(1000).optional(),
+  /** Optional. Automatic operational/settle posts supply these; admin manual rows omit them. */
   referenceType: referenceTypeSchema.optional(),
   referenceId: z.string().trim().min(1).max(120).optional(),
   responsibility: z.nativeEnum(WorkerResponsibility).optional(),

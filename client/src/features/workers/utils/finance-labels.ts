@@ -30,7 +30,8 @@ export const WORKER_FINANCE_CREATE_TYPE_OPTIONS: ReadonlyArray<{
 /** Subtle help under the type select in the create dialog. */
 export const WORKER_FINANCE_CREATE_TYPE_HELP: Record<WorkerFinancialCreatableType, string> = {
   [WorkerFinancialTransactionType.BONUS]: 'Xodimga beriladigan bonus.',
-  [WorkerFinancialTransactionType.COMMISSION]: 'Sotuv yoki boshqa faoliyat uchun komissiya.',
+  [WorkerFinancialTransactionType.COMMISSION]:
+    'Qo‘lda yoziladigan komissiya yoki haq. Sotuv/assembly avtomatik fee emas.',
   [WorkerFinancialTransactionType.ADVANCE]: 'Xodimga oldindan berilgan pul.',
   [WorkerFinancialTransactionType.DEBT]: 'Xodim zimmasiga yozilgan qarz.',
   [WorkerFinancialTransactionType.PAYMENT]: "Xodimga amalga oshirilgan to'lov.",

@@ -26,7 +26,7 @@ import {
   formatSaleNumber,
 } from '@/utils/sales';
 
-import { useMyDeliveries, useUpdateSaleDeliveryStatus } from '../hooks/use-sales';
+import { useMyDeliveries, useUpdatePurchaseDeliveryStatus, useUpdateSaleDeliveryStatus } from '../hooks/use-sales';
 
 type StatusFilter = DeliveryOpsStatusFilter;
 type SourceFilter = DeliveryOpsSourceFilter;
@@ -39,6 +39,18 @@ function matchesStatusFilter(status: FulfilmentStatus, filter: StatusFilter): bo
   if (filter === 'IN_PROGRESS') return status === FulfilmentStatus.IN_TRANSIT;
   if (filter === 'COMPLETED') return status === FulfilmentStatus.COMPLETED;
   if (filter === 'CANCELLED') return status === FulfilmentStatus.CANCELLED;
+  return true;
+}
+
+function matchesPurchaseStatusFilter(
+  status: PurchaseDeliveryOpsItem['status'],
+  filter: StatusFilter,
+): boolean {
+  if (filter === 'ALL') return true;
+  if (filter === 'PENDING') return status === 'PENDING';
+  if (filter === 'IN_PROGRESS') return false;
+  if (filter === 'COMPLETED') return status === 'COMPLETED';
+  if (filter === 'CANCELLED') return status === 'CANCELLED';
   return true;
 }
 
@@ -57,17 +69,20 @@ function ledgerStatusLabel(status: DeliveryLedgerStatus): string {
 
 /**
  * Shopir operational inbox — sale deliveries (start/complete) + purchase
- * deliveries (read-only). Ledger posting stays on the server.
+ * pickups (complete when goods arrive). Ledger posting stays on the server.
  */
 export function DeliveryPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('ALL');
   const [completeTarget, setCompleteTarget] = useState<SaleDeliveryOpsItem | null>(null);
+  const [completePurchaseTarget, setCompletePurchaseTarget] =
+    useState<PurchaseDeliveryOpsItem | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   const deliveries = useMyDeliveries();
   const updateDelivery = useUpdateSaleDeliveryStatus();
+  const updatePurchaseDelivery = useUpdatePurchaseDeliveryStatus();
 
   const saleItems = useMemo(() => {
     const items = deliveries.data?.saleDeliveries ?? [];
@@ -78,9 +93,7 @@ export function DeliveryPage() {
   const purchaseItems = useMemo(() => {
     const items = deliveries.data?.purchaseDeliveries ?? [];
     if (sourceFilter === 'SALE') return [];
-    // Purchase rows have no fulfilment machine — show only when status is ALL.
-    if (statusFilter !== 'ALL') return [];
-    return items;
+    return items.filter((item) => matchesPurchaseStatusFilter(item.status, statusFilter));
   }, [deliveries.data?.purchaseDeliveries, sourceFilter, statusFilter]);
 
   const isEmpty = saleItems.length === 0 && purchaseItems.length === 0;
@@ -113,6 +126,22 @@ export function DeliveryPage() {
       setCompleteTarget(null);
     } catch (error) {
       setActionError(mutationErrorMessage(error, 'Yetkazib berishni yakunlab bo‘lmadi.'));
+    }
+  }
+
+  async function handleConfirmPurchaseComplete() {
+    if (!completePurchaseTarget) return;
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      const result = await updatePurchaseDelivery.mutateAsync({
+        purchaseId: completePurchaseTarget.id,
+        body: { status: 'COMPLETED' },
+      });
+      setActionSuccess(result.message);
+      setCompletePurchaseTarget(null);
+    } catch (error) {
+      setActionError(mutationErrorMessage(error, 'Kirim yetkazib berishni yakunlab bo‘lmadi.'));
     }
   }
 
@@ -257,7 +286,11 @@ export function DeliveryPage() {
               <h3 className="text-base font-semibold text-ink">Kirim yetkazib berishlari</h3>
               {purchaseItems.map((item) => (
                 <div key={`purchase-${item.id}`} data-testid={`purchase-delivery-card-${item.id}`}>
-                  <PurchaseDeliveryCard item={item} />
+                  <PurchaseDeliveryCard
+                    item={item}
+                    busy={updatePurchaseDelivery.isPending}
+                    onComplete={() => setCompletePurchaseTarget(item)}
+                  />
                 </div>
               ))}
             </section>
@@ -283,6 +316,25 @@ export function DeliveryPage() {
         busy={updateDelivery.isPending}
         onConfirm={() => void handleConfirmComplete()}
         onCancel={() => !updateDelivery.isPending && setCompleteTarget(null)}
+      />
+      <ConfirmDialog
+        open={Boolean(completePurchaseTarget)}
+        title="Kirim yetkazib berishni yakunlash"
+        message={
+          completePurchaseTarget ? (
+            <span>
+              Yuk haqiqatan do‘konga olib kelindimi?
+              {completePurchaseTarget.fee > 0
+                ? ` Shopir haqi ${formatMoney(completePurchaseTarget.fee)} hisobga olinadi.`
+                : ''}
+            </span>
+          ) : null
+        }
+        confirmLabel={updatePurchaseDelivery.isPending ? 'Yakunlanmoqda…' : 'Yakunlash'}
+        cancelLabel="Bekor qilish"
+        busy={updatePurchaseDelivery.isPending}
+        onConfirm={() => void handleConfirmPurchaseComplete()}
+        onCancel={() => !updatePurchaseDelivery.isPending && setCompletePurchaseTarget(null)}
       />
     </PageContainer>
   );
@@ -386,11 +438,25 @@ function SaleDeliveryCard({
   );
 }
 
-function PurchaseDeliveryCard({ item }: { item: PurchaseDeliveryOpsItem }) {
+function PurchaseDeliveryCard({
+  item,
+  busy,
+  onComplete,
+}: {
+  item: PurchaseDeliveryOpsItem;
+  busy: boolean;
+  onComplete: () => void;
+}) {
+  const statusLabel =
+    item.status === 'COMPLETED'
+      ? 'Yakunlangan'
+      : item.status === 'CANCELLED'
+        ? 'Bekor'
+        : 'Kutilmoqda';
   return (
     <SectionCard
       title={`Kirim #${item.purchaseNumber} · ${item.supplierName}`}
-      action={<Badge tone="neutral">Kirim</Badge>}
+      action={<Badge tone={item.status === 'COMPLETED' ? 'success' : 'neutral'}>{statusLabel}</Badge>}
     >
       <dl className="grid gap-2 text-sm sm:grid-cols-2">
         <div>
@@ -398,8 +464,10 @@ function PurchaseDeliveryCard({ item }: { item: PurchaseDeliveryOpsItem }) {
           <dd className="text-ink">{formatDate(item.date)}</dd>
         </div>
         <div>
-          <dt className="text-ink-muted">Holat</dt>
-          <dd className="text-ink">{item.status}</dd>
+          <dt className="text-ink-muted">Olib kelingan</dt>
+          <dd className="text-ink">
+            {item.deliveredAt ? formatDate(item.deliveredAt) : 'Hali olib kelinmagan'}
+          </dd>
         </div>
         <div>
           <dt className="text-ink-muted">Shopir haqi</dt>
@@ -416,10 +484,20 @@ function PurchaseDeliveryCard({ item }: { item: PurchaseDeliveryOpsItem }) {
           </div>
         ) : null}
       </dl>
-      <p className="mt-3 text-xs text-ink-muted">
-        Kirim yetkazib berishini shopir panelidan boshlab/yakunlab bo‘lmaydi — faqat ko‘rish.
-        Haq kirim hujjati asosida hisobga olinadi.
-      </p>
+      {item.canComplete ? (
+        <div className="mt-4">
+          <button
+            type="button"
+            disabled={busy}
+            data-testid={`complete-purchase-delivery-${item.id}`}
+            onClick={onComplete}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-input bg-success-600 px-3 py-2.5 text-sm font-medium text-white hover:bg-success-700 disabled:opacity-60 sm:w-auto"
+          >
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+            Yakunlash
+          </button>
+        </div>
+      ) : null}
     </SectionCard>
   );
 }

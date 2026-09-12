@@ -125,8 +125,8 @@ describe('ExpensesPage', () => {
     renderExpensesPage();
 
     expect(await screen.findByRole('heading', { level: 2, name: 'Xarajatlar' })).toBeInTheDocument();
-    expect(screen.getByText(/Do'kon xarajatlarini tez va oson boshqaring/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Xarajat qo'shish/i })).toBeInTheDocument();
+    expect(screen.getByText(/Do.kon xarajatlarini tez va oson boshqaring/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Xarajat qo.shish/i })).toBeInTheDocument();
   });
 
   it('renders expense list rows', async () => {
@@ -153,7 +153,7 @@ describe('ExpensesPage', () => {
 
     renderExpensesPage();
 
-    expect(await screen.findByText(/Xarajatlar yo'q/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Xarajatlar yo.q/i)).toBeInTheDocument();
   });
 
   it('shows an error state when the list request fails', async () => {
@@ -171,7 +171,7 @@ describe('ExpensesPage', () => {
 
     renderExpensesPage();
 
-    expect(await screen.findByText(/Xarajatlarni yuklab bo'lmadi/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Xarajatlarni yuklab bo.lmadi/i)).toBeInTheDocument();
   });
 
   it('opens the add expense form and loads categories', async () => {
@@ -185,14 +185,15 @@ describe('ExpensesPage', () => {
     renderExpensesPage();
     await screen.findByRole('heading', { level: 2, name: 'Xarajatlar' });
 
-    await user.click(screen.getByRole('button', { name: /Xarajat qo'shish/i }));
+    await user.click(screen.getByRole('button', { name: /Xarajat qo.shish/i }));
 
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByLabelText(/Kategoriya/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Summa/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/^Sana$/i)).toBeInTheDocument();
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByPlaceholderText(/Kategoriya/i)).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/Summa/i)).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/^Sana$/i)).toBeInTheDocument();
 
-    await user.click(screen.getByLabelText(/Kategoriya/i));
+    await user.click(within(dialog).getByPlaceholderText(/Kategoriya/i));
     expect(await screen.findByRole('button', { name: 'Elektr' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Transport' })).toBeInTheDocument();
   });
@@ -206,7 +207,7 @@ describe('ExpensesPage', () => {
     });
 
     renderExpensesPage();
-    await user.click(await screen.findByRole('button', { name: /Xarajat qo'shish/i }));
+    await user.click(await screen.findByRole('button', { name: /Xarajat qo.shish/i }));
 
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /^Saqlash$/i }));
@@ -224,7 +225,7 @@ describe('ExpensesPage', () => {
     });
 
     renderExpensesPage();
-    await user.click(await screen.findByRole('button', { name: /Xarajat qo'shish/i }));
+    await user.click(await screen.findByRole('button', { name: /Xarajat qo.shish/i }));
     const dialog = await screen.findByRole('dialog');
 
     await user.click(within(dialog).getByLabelText(/Kategoriya/i));
@@ -280,7 +281,7 @@ describe('ExpensesPage', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     renderExpensesPage();
-    await user.click(await screen.findByRole('button', { name: /Xarajat qo'shish/i }));
+    await user.click(await screen.findByRole('button', { name: /Xarajat qo.shish/i }));
     const dialog = await screen.findByRole('dialog');
 
     await user.click(within(dialog).getByLabelText(/Kategoriya/i));
@@ -354,7 +355,7 @@ describe('ExpensesPage', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     renderExpensesPage();
-    await user.click(await screen.findByRole('button', { name: /Xarajat qo'shish/i }));
+    await user.click(await screen.findByRole('button', { name: /Xarajat qo.shish/i }));
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByLabelText(/Kategoriya/i));
     await user.click(await screen.findByRole('button', { name: 'Elektr' }));
@@ -374,8 +375,8 @@ describe('ExpensesPage', () => {
     });
 
     renderExpensesPage();
-    expect(await screen.findAllByRole('button', { name: /Edit Elektr/i })).not.toHaveLength(0);
-    expect(screen.getAllByRole('button', { name: /Cancel Elektr/i }).length).toBeGreaterThan(0);
+    expect(await screen.findAllByRole('button', { name: /Tahrirlash Elektr/i })).not.toHaveLength(0);
+    expect(screen.getAllByRole('button', { name: /Bekor Elektr/i }).length).toBeGreaterThan(0);
   });
 
   it('opens the edit dialog with existing values prefilled', async () => {
@@ -387,7 +388,7 @@ describe('ExpensesPage', () => {
     });
 
     renderExpensesPage();
-    await user.click((await screen.findAllByRole('button', { name: /Edit Elektr/i }))[0]!);
+    await user.click((await screen.findAllByRole('button', { name: /Tahrirlash Elektr/i }))[0]!);
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Xarajatni tahrirlash')).toBeInTheDocument();
@@ -450,7 +451,7 @@ describe('ExpensesPage', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     renderExpensesPage();
-    await user.click((await screen.findAllByRole('button', { name: /Edit Elektr/i }))[0]!);
+    await user.click((await screen.findAllByRole('button', { name: /Tahrirlash Elektr/i }))[0]!);
     const dialog = await screen.findByRole('dialog');
 
     const amountInput = within(dialog).getByLabelText(/Summa/i);
@@ -525,7 +526,7 @@ describe('ExpensesPage', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     renderExpensesPage();
-    await user.click((await screen.findAllByRole('button', { name: /Edit Elektr/i }))[0]!);
+    await user.click((await screen.findAllByRole('button', { name: /Tahrirlash Elektr/i }))[0]!);
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /^Saqlash$/i }));
 
@@ -544,7 +545,7 @@ describe('ExpensesPage', () => {
     });
 
     renderExpensesPage();
-    await user.click((await screen.findAllByRole('button', { name: /Cancel Elektr/i }))[0]!);
+    await user.click((await screen.findAllByRole('button', { name: /Bekor Elektr/i }))[0]!);
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText(/Xarajatni bekor qilish\?/i)).toBeInTheDocument();
@@ -617,7 +618,7 @@ describe('ExpensesPage', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     renderExpensesPage();
-    await user.click((await screen.findAllByRole('button', { name: /Cancel Elektr/i }))[0]!);
+    await user.click((await screen.findAllByRole('button', { name: /Bekor Elektr/i }))[0]!);
     const dialog = await screen.findByRole('dialog');
     await user.type(within(dialog).getByRole('textbox'), 'Duplicate entry');
     await user.click(within(dialog).getByRole('button', { name: /^Bekor qilish$/i }));
@@ -677,7 +678,7 @@ describe('ExpensesPage', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     renderExpensesPage();
-    await user.click((await screen.findAllByRole('button', { name: /Cancel Elektr/i }))[0]!);
+    await user.click((await screen.findAllByRole('button', { name: /Bekor Elektr/i }))[0]!);
     const dialog = await screen.findByRole('dialog');
     await user.type(within(dialog).getByRole('textbox'), 'Duplicate entry');
     await user.click(within(dialog).getByRole('button', { name: /^Bekor qilish$/i }));
@@ -718,6 +719,45 @@ describe('expense route authorization', () => {
           },
         },
       },
+      '/me/profile-modules': {
+        status: 200,
+        body: {
+          success: true,
+          data: {
+            modules: {
+              worker: {
+                id: TEST_EMPLOYEE.id,
+                fullName: TEST_EMPLOYEE.fullName,
+                username: TEST_EMPLOYEE.username,
+                phone: TEST_EMPLOYEE.phone,
+                role: TEST_EMPLOYEE.role,
+                isActive: true,
+                responsibilities: TEST_EMPLOYEE.responsibilities,
+                createdAt: '2026-01-01T00:00:00.000Z',
+              },
+              tabs: ['GENERAL'],
+              general: {
+                finance: {
+                  earned: 0,
+                  paid: 0,
+                  outstanding: 0,
+                  monthEarned: 0,
+                  monthPaid: 0,
+                  monthAdvances: 0,
+                  monthOutstanding: 0,
+                  bonuses: 0,
+                  advances: 0,
+                  debt: 0,
+                  adjustments: 0,
+                  reversals: 0,
+                  commissions: 0,
+                },
+                breakdown: [],
+              },
+            },
+          },
+        },
+      },
       '/me/profile': {
         status: 200,
         body: {
@@ -753,7 +793,7 @@ describe('expense route authorization', () => {
     );
 
     // EMPLOYEE lands on the worker dashboard after being redirected from expenses.
-    expect(await screen.findByText(/Welcome,\s*Ali/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Xush kelibsiz,\s*Ali/i)).toBeInTheDocument();
     expect(screen.queryByRole('heading', { level: 2, name: 'Xarajatlar' })).not.toBeInTheDocument();
   });
 });

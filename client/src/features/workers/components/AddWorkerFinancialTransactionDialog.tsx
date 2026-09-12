@@ -136,8 +136,16 @@ export function AddWorkerFinancialTransactionDialog({
           if (detail.field === 'transactionDate') mapped.transactionDate = detail.message;
           if (detail.field === 'description') mapped.description = detail.message;
         }
+        const referenceDetail = error.details.find(
+          (detail) => detail.field === 'referenceId' || detail.field === 'referenceType',
+        );
         if (Object.keys(mapped).length > 0) {
           setFieldErrors(mapped);
+          if (referenceDetail) setFormError(referenceDetail.message);
+          return;
+        }
+        if (referenceDetail) {
+          setFormError(referenceDetail.message);
           return;
         }
       }

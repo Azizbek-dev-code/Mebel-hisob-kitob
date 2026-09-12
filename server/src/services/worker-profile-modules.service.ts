@@ -8,7 +8,6 @@ import {
   FulfilmentStatus,
   SaleStatus,
   UserRole,
-  WorkerCompensationType,
   WorkerFinancialReferenceType,
   WorkerFinancialTransactionType,
   WorkerResponsibility,
@@ -43,10 +42,6 @@ import { assertCanManageWorkers } from './worker.service.js';
 
 function startOfUtcMonth(d = new Date()): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
-}
-
-function startOfUtcDay(d = new Date()): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }
 
 async function storeRange(
@@ -116,12 +111,38 @@ function financeFromSummary(
       totalAdjustments: month.totalAdjustments,
       reversalsByOriginalType: month.reversalsByOriginalType,
     }),
+    monthAdvances: month.totalAdvances - (month.reversalsByOriginalType?.ADVANCE ?? 0),
+    monthOutstanding: month.netFinancialPosition,
     bonuses: all.totalBonuses - (all.reversalsByOriginalType?.BONUS ?? 0),
     advances: all.totalAdvances - (all.reversalsByOriginalType?.ADVANCE ?? 0),
     debt: all.totalDebt - (all.reversalsByOriginalType?.DEBT ?? 0),
     adjustments: all.totalAdjustments - (all.reversalsByOriginalType?.ADJUSTMENT ?? 0),
     reversals: all.totalReversals,
     commissions: all.totalCommissions - (all.reversalsByOriginalType?.COMMISSION ?? 0),
+  };
+}
+
+async function scopedLedgerFinance(
+  storeId: string,
+  workerId: string,
+  responsibility: WorkerResponsibility,
+) {
+  const totals = await workerFinancialRepository.aggregateWorkerTotals({
+    storeId,
+    workerId,
+    responsibility,
+  });
+  return {
+    paid: computeWorkerPaidTotal({
+      totalBonuses: totals.totalBonuses,
+      totalCommissions: totals.totalCommissions,
+      totalAdvances: totals.totalAdvances,
+      totalDebt: totals.totalDebt,
+      totalPayments: totals.totalPayments,
+      totalAdjustments: totals.totalAdjustments,
+      reversalsByOriginalType: totals.reversalsByOriginalType,
+    }),
+    outstanding: totals.netFinancialPosition,
   };
 }
 
@@ -506,7 +527,7 @@ async function buildAssemblerModule(
   }
 
   const earned = await openCommissionAmount(storeId, workerId, WorkerResponsibility.ASSEMBLER);
-  const summary = await workerFinancialRepository.aggregateWorkerTotals({ storeId, workerId });
+  const scoped = await scopedLedgerFinance(storeId, workerId, WorkerResponsibility.ASSEMBLER);
 
   return {
     pending,
@@ -515,8 +536,8 @@ async function buildAssemblerModule(
     cancelled,
     completedThisMonth,
     feeTotal: earned || feeTotal,
-    paid: summary.totalPayments,
-    outstanding: summary.netFinancialPosition,
+    paid: scoped.paid,
+    outstanding: scoped.outstanding,
     tasks: items,
   };
 }
@@ -606,6 +627,7 @@ async function buildDeliveryModule(
       purchaseNumber: true,
       driverFee: true,
       purchaseDate: true,
+      deliveredAt: true,
       status: true,
       supplier: { select: { name: true } },
     },
@@ -616,6 +638,17 @@ async function buildDeliveryModule(
   const purchaseDeliveries = [];
   for (const p of purchases) {
     const fee = fromDbMoney(p.driverFee);
+    const delivered = p.deliveredAt != null;
+    const deliveryStatus: 'PENDING' | 'COMPLETED' | 'CANCELLED' =
+      p.status === 'CANCELLED' && !delivered
+        ? 'CANCELLED'
+        : delivered
+          ? 'COMPLETED'
+          : 'PENDING';
+    if (deliveryStatus === 'PENDING') scheduled += 1;
+    else if (deliveryStatus === 'COMPLETED') completed += 1;
+    else cancelled += 1;
+
     let ledgerStatus: 'PENDING' | 'POSTED' | 'REVERSED' | 'NONE' = 'NONE';
     if (fee > 0) {
       const open = await workerFinancialRepository.findOpenCommissionByRef(
@@ -623,10 +656,23 @@ async function buildDeliveryModule(
         WorkerFinancialReferenceType.PURCHASE,
         `${p.id}:DRIVER_FEE`,
       );
-      ledgerStatus = open ? 'POSTED' : 'REVERSED';
       if (open) {
+        ledgerStatus = 'POSTED';
         feeTotal += fee;
-        if (p.purchaseDate >= monthStart) feeThisMonth += fee;
+        if ((p.deliveredAt ?? p.purchaseDate) >= monthStart) feeThisMonth += fee;
+      } else if (delivered) {
+        const any = await prisma.workerFinancialTransaction.findFirst({
+          where: {
+            storeId,
+            type: WorkerFinancialTransactionType.COMMISSION,
+            referenceType: WorkerFinancialReferenceType.PURCHASE,
+            referenceId: `${p.id}:DRIVER_FEE`,
+          },
+          select: { id: true },
+        });
+        ledgerStatus = any ? 'REVERSED' : 'PENDING';
+      } else {
+        ledgerStatus = 'PENDING';
       }
     }
     purchaseDeliveries.push({
@@ -635,21 +681,24 @@ async function buildDeliveryModule(
       supplierName: p.supplier.name,
       driverFee: fee,
       date: p.purchaseDate.toISOString(),
+      deliveredAt: p.deliveredAt?.toISOString() ?? null,
       status: p.status,
+      deliveryStatus,
       ledgerStatus,
     });
   }
 
-  const summary = await workerFinancialRepository.aggregateWorkerTotals({ storeId, workerId });
+  const scoped = await scopedLedgerFinance(storeId, workerId, WorkerResponsibility.DELIVERY);
+  const earned = await openCommissionAmount(storeId, workerId, WorkerResponsibility.DELIVERY);
   return {
     scheduled,
     inProgress,
     completed,
     cancelled,
-    feeTotal,
+    feeTotal: earned || feeTotal,
     feeThisMonth,
-    paid: summary.totalPayments,
-    outstanding: summary.netFinancialPosition,
+    paid: scoped.paid,
+    outstanding: scoped.outstanding,
     saleDeliveries,
     purchaseDeliveries,
   };
@@ -717,15 +766,16 @@ async function buildInstallerModule(
     });
   }
 
-  const summary = await workerFinancialRepository.aggregateWorkerTotals({ storeId, workerId });
+  const scoped = await scopedLedgerFinance(storeId, workerId, WorkerResponsibility.INSTALLER);
+  const earned = await openCommissionAmount(storeId, workerId, WorkerResponsibility.INSTALLER);
   return {
     scheduled,
     inProgress,
     completed,
     cancelled,
-    feeTotal,
-    paid: summary.totalPayments,
-    outstanding: summary.netFinancialPosition,
+    feeTotal: earned || feeTotal,
+    paid: scoped.paid,
+    outstanding: scoped.outstanding,
     installations,
   };
 }
@@ -736,25 +786,80 @@ async function buildSmmLikeModule(
   responsibility: typeof WorkerResponsibility.SMM | typeof WorkerResponsibility.OTHER,
 ): Promise<WorkerProfileSmmModule> {
   const monthStart = startOfUtcMonth();
-  const [all, month] = await Promise.all([
-    workerFinancialRepository.aggregateWorkerTotals({ storeId, workerId }),
+  const [all, month, taggedRows] = await Promise.all([
+    workerFinancialRepository.aggregateWorkerTotals({
+      storeId,
+      workerId,
+      responsibility,
+    }),
     workerFinancialRepository.aggregateWorkerTotals({
       storeId,
       workerId,
       dateFrom: monthStart,
+      responsibility,
+    }),
+    prisma.workerFinancialTransaction.findMany({
+      where: {
+        storeId,
+        workerId,
+        responsibility,
+        type: {
+          in: [
+            WorkerFinancialTransactionType.COMMISSION,
+            WorkerFinancialTransactionType.BONUS,
+            WorkerFinancialTransactionType.ADJUSTMENT,
+          ],
+        },
+      },
+      select: {
+        id: true,
+        amount: true,
+        description: true,
+        transactionDate: true,
+      },
+      orderBy: { transactionDate: 'desc' },
+      take: 50,
     }),
   ]);
-  // Prefer responsibility-tagged rows when present; fall back to full ledger for SMM/OTHER workers.
-  void responsibility;
+
+  const fees = taggedRows.map((row) => ({
+    id: row.id,
+    amount: fromDbMoney(row.amount),
+    description: row.description,
+    occurredAt: row.transactionDate.toISOString(),
+  }));
+
   return {
-    monthEarned: month.totalBonuses + month.totalCommissions + month.totalAdjustments,
-    paid: all.totalPayments,
+    hasAssignedWork: false,
+    hasAttributedFee: fees.length > 0,
+    emptyWorkMessage: 'Hozircha tayinlangan ish yo‘q',
+    emptyFeeMessage: 'Hozircha haq belgilanmagan',
+    tasks: [],
+    fees,
+    monthEarned: computeWorkerEarnedTotal({
+      totalBonuses: month.totalBonuses,
+      totalCommissions: month.totalCommissions,
+      totalAdvances: month.totalAdvances,
+      totalDebt: month.totalDebt,
+      totalPayments: month.totalPayments,
+      totalAdjustments: month.totalAdjustments,
+      reversalsByOriginalType: month.reversalsByOriginalType,
+    }),
+    paid: computeWorkerPaidTotal({
+      totalBonuses: all.totalBonuses,
+      totalCommissions: all.totalCommissions,
+      totalAdvances: all.totalAdvances,
+      totalDebt: all.totalDebt,
+      totalPayments: all.totalPayments,
+      totalAdjustments: all.totalAdjustments,
+      reversalsByOriginalType: all.reversalsByOriginalType,
+    }),
     outstanding: all.netFinancialPosition,
-    bonuses: all.totalBonuses,
-    advances: all.totalAdvances,
-    debt: all.totalDebt,
-    payments: all.totalPayments,
-    adjustments: all.totalAdjustments,
+    bonuses: all.totalBonuses - (all.reversalsByOriginalType?.BONUS ?? 0),
+    advances: all.totalAdvances - (all.reversalsByOriginalType?.ADVANCE ?? 0),
+    debt: all.totalDebt - (all.reversalsByOriginalType?.DEBT ?? 0),
+    payments: all.totalPayments - (all.reversalsByOriginalType?.PAYMENT ?? 0),
+    adjustments: all.totalAdjustments - (all.reversalsByOriginalType?.ADJUSTMENT ?? 0),
   };
 }
 
@@ -832,9 +937,18 @@ export async function getWorkerProfileModules(
     breakdown.push({
       responsibility: WorkerResponsibility.SMM,
       label: 'SMM',
-      earned: ledgerSummary.totalBonuses + ledgerSummary.totalCommissions,
+      earned: 0,
       count: 0,
-      detail: null,
+      detail: 'Hozircha haq belgilanmagan',
+    });
+  }
+  if (responsibilities.includes(WorkerResponsibility.OTHER)) {
+    breakdown.push({
+      responsibility: WorkerResponsibility.OTHER,
+      label: 'Boshqa',
+      earned: 0,
+      count: 0,
+      detail: 'Hozircha haq belgilanmagan',
     });
   }
 
@@ -865,6 +979,22 @@ export async function getWorkerProfileModules(
       row.earned = seller.earnedTotal;
       row.count = seller.commissions.filter((line) => line.status === 'OPEN').length;
       row.detail = 'Sotuv komissiyasi (ledger)';
+    }
+  }
+  if (smm) {
+    const row = breakdown.find((item) => item.responsibility === WorkerResponsibility.SMM);
+    if (row) {
+      row.earned = smm.fees.reduce((sum, fee) => sum + fee.amount, 0);
+      row.count = smm.fees.length;
+      row.detail = smm.hasAttributedFee ? 'SMM haqlari (ledger)' : smm.emptyFeeMessage;
+    }
+  }
+  if (other) {
+    const row = breakdown.find((item) => item.responsibility === WorkerResponsibility.OTHER);
+    if (row) {
+      row.earned = other.fees.reduce((sum, fee) => sum + fee.amount, 0);
+      row.count = other.fees.length;
+      row.detail = other.hasAttributedFee ? 'Boshqa haqlar (ledger)' : other.emptyFeeMessage;
     }
   }
 

@@ -5,6 +5,7 @@ import type {
   CreateSaleRequest,
   SaleListQuery,
   UpdateAssemblyTaskRequest,
+  UpdatePurchaseDeliveryStatusRequest,
   UpdateSaleDeliveryStatusRequest,
   UpdateSaleRequest,
   WorkerResponsibility,
@@ -205,6 +206,28 @@ export function useUpdateSaleDeliveryStatus() {
         queryClient.invalidateQueries({ queryKey: ['workers'] }),
         queryClient.invalidateQueries({ queryKey: ['me'] }),
         queryClient.invalidateQueries({ queryKey: ['worker-compensation'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+      ]);
+    },
+  });
+}
+
+export function useUpdatePurchaseDeliveryStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      purchaseId,
+      body,
+    }: {
+      purchaseId: string;
+      body: UpdatePurchaseDeliveryStatusRequest;
+    }) => salesService.updatePurchaseDeliveryStatus(purchaseId, body),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['deliveries'] }),
+        queryClient.invalidateQueries({ queryKey: ['purchases'] }),
+        queryClient.invalidateQueries({ queryKey: ['workers'] }),
+        queryClient.invalidateQueries({ queryKey: ['me'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
       ]);
     },

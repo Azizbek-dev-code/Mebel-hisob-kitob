@@ -26,7 +26,9 @@ export const SIGNED_OUT_RESPONSE: MockApiRoute = {
 export function mockApi(routes: MockApiRoutes): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString();
-    const match = Object.entries(routes).find(([path]) => url.includes(path));
+    const match = Object.entries(routes)
+      .filter(([path]) => url.includes(path))
+      .sort((a, b) => b[0].length - a[0].length)[0];
 
     if (!match) {
       return Promise.reject(new Error(`Unhandled request in test: ${url}`));

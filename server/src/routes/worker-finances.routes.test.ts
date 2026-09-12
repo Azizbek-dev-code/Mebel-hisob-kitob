@@ -24,6 +24,11 @@ vi.mock('../lib/prisma.js', () => ({
   disconnectDatabase: vi.fn(),
 }));
 
+vi.mock('../services/entitlement.service.js', () => ({
+  assertCanUseFeature: vi.fn(async () => undefined),
+  assertCanCreateResource: vi.fn(async () => undefined),
+}));
+
 vi.mock('../services/worker-financial.service.js', () => workerFinancialServiceMock);
 
 const app = createApp();
@@ -288,6 +293,51 @@ describe('worker-finances routes', () => {
       expect.anything(),
       expect.objectContaining({ referenceType: 'MANUAL' }),
     );
+  });
+
+  it('accepts COMMISSION without a document reference', async () => {
+    workerFinancialServiceMock.createTransaction.mockResolvedValue({
+      id: 'clyyyyyyyyyyyyyyyyyyyyyyyyy',
+      workerId: WORKER_ID,
+      type: WorkerFinancialTransactionType.COMMISSION,
+      amount: 200_000,
+      transactionDate: '2026-09-12T12:00:00.000Z',
+      description: 'Manual usta haqqi',
+      referenceType: null,
+      referenceId: null,
+      reversesType: null,
+      worker: { id: WORKER_ID, fullName: 'Ali Usta', isActive: true },
+      createdBy: { id: 'user_admin', fullName: 'Store Administrator' },
+      createdAt: '2026-09-12T12:05:00.000Z',
+      updatedAt: '2026-09-12T12:05:00.000Z',
+    });
+
+    const agent = await signedInAs(ADMIN_RECORD);
+    await agent
+      .post('/api/worker-finances/transactions')
+      .send({
+        workerId: WORKER_ID,
+        type: WorkerFinancialTransactionType.COMMISSION,
+        amount: 200_000,
+        transactionDate: '2026-09-12',
+        description: 'Manual usta haqqi',
+        responsibility: 'ASSEMBLER',
+      })
+      .expect(201);
+
+    const body = workerFinancialServiceMock.createTransaction.mock.calls[0]![2] as Record<
+      string,
+      unknown
+    >;
+    expect(body).toMatchObject({
+      workerId: WORKER_ID,
+      type: WorkerFinancialTransactionType.COMMISSION,
+      amount: 200_000,
+      description: 'Manual usta haqqi',
+      responsibility: 'ASSEMBLER',
+    });
+    expect(body).not.toHaveProperty('referenceType');
+    expect(body).not.toHaveProperty('referenceId');
   });
 
   it('still authenticates employees but service receives their role for forbid', async () => {

@@ -12,7 +12,6 @@ import {
 import {
   createWorker,
   getFeeReconciliation,
-  getMyProfileModules,
   getWorker,
   getWorkerProfileModules,
   getWorkerStats,
