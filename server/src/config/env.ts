@@ -7,8 +7,11 @@ import { z } from 'zod';
 // Resolve `.env` relative to this file rather than `process.cwd()`, so the API
 // behaves the same whether it is started from the repo root, the server folder,
 // or from `dist/` after a production build.
+// Skip dotenv loading on Vercel — env vars are injected by the platform.
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
-loadDotenv({ path: path.resolve(currentDir, '../../.env') });
+if (!process.env.VERCEL) {
+  loadDotenv({ path: path.resolve(currentDir, '../../.env') });
+}
 
 const booleanFromString = z.enum(['true', 'false']).transform((value) => value === 'true');
 
@@ -32,7 +35,7 @@ const envSchema = z.object({
 
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
 
-  STORAGE_DRIVER: z.enum(['local', 'cloudinary', 'supabase']).default('local'),
+  STORAGE_DRIVER: z.enum(['local', 'cloudinary', 'supabase', 'vercel-blob']).default('local'),
   STORAGE_LOCAL_DIR: z.string().default('./uploads'),
   STORAGE_PUBLIC_URL: z.string().default('http://localhost:4000/uploads'),
 
@@ -72,7 +75,13 @@ export type Env = z.infer<typeof envSchema> & {
 };
 
 function parseEnv(): Env {
-  const result = envSchema.safeParse(process.env);
+  // Trim trailing newlines/whitespace from all env values — Vercel CLI pipes
+  // can introduce \r\n which breaks strict enum validation.
+  const trimmed: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    trimmed[key] = typeof value === 'string' ? value.trim() : (value ?? '');
+  }
+  const result = envSchema.safeParse(trimmed);
 
   if (!result.success) {
     const issues = result.error.issues
@@ -102,7 +111,7 @@ function parseEnv(): Env {
     throw new Error(
       'Invalid environment configuration:\n' +
         '  - STORAGE_DRIVER=local is not allowed when NODE_ENV=production (ephemeral disks lose uploads).\n' +
-        '  - Set STORAGE_DRIVER=cloudinary and CLOUDINARY_* credentials instead.\n\n' +
+        '  - Set STORAGE_DRIVER=vercel-blob or STORAGE_DRIVER=cloudinary instead.\n\n' +
         'See docs/PRODUCTION.md.',
     );
   }

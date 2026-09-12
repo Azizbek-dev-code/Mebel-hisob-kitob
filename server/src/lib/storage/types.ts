@@ -27,7 +27,7 @@ export interface UploadObjectInput {
 }
 
 export interface StorageDriver {
-  readonly name: 'local' | 'cloudinary' | 'supabase';
+  readonly name: 'local' | 'cloudinary' | 'supabase' | 'vercel-blob';
   upload(input: UploadObjectInput): Promise<StoredObject>;
   delete(key: string): Promise<void>;
 }

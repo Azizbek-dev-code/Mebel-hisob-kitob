@@ -2,6 +2,7 @@ import { env } from '../../config/env.js';
 import { ApiError } from '../../utils/api-error.js';
 import { createCloudinaryStorageDriver } from './cloudinary.driver.js';
 import { createLocalStorageDriver } from './local.driver.js';
+import { createVercelBlobStorageDriver } from './vercel-blob.driver.js';
 import type { StorageDriver } from './types.js';
 
 let cached: StorageDriver | null = null;
@@ -22,6 +23,9 @@ export function getStorageDriver(): StorageDriver {
       break;
     case 'cloudinary':
       cached = createCloudinaryStorageDriver();
+      break;
+    case 'vercel-blob':
+      cached = createVercelBlobStorageDriver();
       break;
     case 'supabase':
       throw ApiError.internal(
