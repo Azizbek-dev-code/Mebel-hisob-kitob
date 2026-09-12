@@ -2,7 +2,6 @@
  * Expense soft-void — PostgreSQL E2E.
  * Marker: EXPENSE_SOFT_VOID_E2E_TEMP
  */
-/* eslint-disable no-console */
 import { PrismaClient, UserRole } from '@prisma/client';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:4000';

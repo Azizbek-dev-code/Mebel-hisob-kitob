@@ -2,7 +2,6 @@
  * Prep a known inventory product for browser E2E (does not cancel/delete sales).
  * Prints INVENTORY_BROWSER_PREP_OK and product details.
  */
-/* eslint-disable no-console */
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();

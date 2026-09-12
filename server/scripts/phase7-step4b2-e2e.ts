@@ -1,7 +1,6 @@
 /**
  * Phase 7 Step 4B-2 — Expense analytics reconciliation vs OpEx KPI.
  */
-/* eslint-disable no-console */
 const API = process.env.PHASE7_API_BASE ?? 'http://localhost:4000/api';
 
 class Session {

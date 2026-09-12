@@ -2,7 +2,6 @@
  * Phase 7 Step 1 — Expense foundation real-DB E2E.
  * Requires API on localhost:4000 and seeded PostgreSQL.
  */
-/* eslint-disable no-console */
 import { PrismaClient } from '@prisma/client';
 
 const API = process.env.PHASE7_API_BASE ?? 'http://localhost:4000/api';

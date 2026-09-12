@@ -1,7 +1,6 @@
 /**
  * Phase 7 Step 4B-1 — Financial trend reconciliation against summary KPIs.
  */
-/* eslint-disable no-console */
 const API = process.env.PHASE7_API_BASE ?? 'http://localhost:4000/api';
 
 class Session {

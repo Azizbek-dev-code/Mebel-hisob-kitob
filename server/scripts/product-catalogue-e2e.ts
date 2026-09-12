@@ -6,7 +6,6 @@
  * SaleItem must stay snapshotted), cancels, archives, then cleans up ONLY
  * the temporary rows created by this script.
  */
-/* eslint-disable no-console */
 import { PrismaClient, UserRole } from '@prisma/client';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:4000';

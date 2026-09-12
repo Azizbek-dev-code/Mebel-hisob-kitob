@@ -2,7 +2,6 @@
  * Financial reports — read-only PostgreSQL integrity E2E.
  * Marker: REPORTS_INTEGRITY_E2E
  */
-/* eslint-disable no-console */
 import { PrismaClient, UserRole } from '@prisma/client';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:4000';

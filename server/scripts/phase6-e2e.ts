@@ -2,7 +2,6 @@
  * Phase 6 real-DB E2E verification script.
  * Uses cookie auth against the running API + Prisma for integrity checks.
  */
-/* eslint-disable no-console */
 import { PrismaClient } from '@prisma/client';
 
 const API = 'http://localhost:4000/api';

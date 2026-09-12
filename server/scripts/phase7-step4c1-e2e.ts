@@ -4,7 +4,6 @@
  * Creates and deletes ONLY a dedicated temporary expense.
  * Must leave permanent August business data at 2,100,000 so'm.
  */
-/* eslint-disable no-console */
 const API = process.env.PHASE7_API_BASE ?? 'http://localhost:4000/api';
 const AUGUST_QS = 'from=2026-08-01&to=2026-08-31';
 

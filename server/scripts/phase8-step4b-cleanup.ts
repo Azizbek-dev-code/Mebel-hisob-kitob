@@ -2,7 +2,6 @@
  * Phase 8 Step 4B — soft-deactivate temporary Ali compensation rules.
  * Marker: PHASE8_STEP4B_TEMP. No hard DELETE.
  */
-/* eslint-disable no-console */
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();

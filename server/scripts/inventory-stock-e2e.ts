@@ -6,7 +6,6 @@
  * Also: multi-product sale, insufficient stock, manual adjustment.
  * Asserts financial August snapshot is unchanged by inventory ops on temp sales.
  */
-/* eslint-disable no-console */
 import { PrismaClient, UserRole } from '@prisma/client';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:4000';

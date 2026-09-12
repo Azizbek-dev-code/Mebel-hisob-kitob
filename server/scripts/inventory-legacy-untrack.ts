@@ -15,7 +15,6 @@ async function main() {
     },
     data: { trackStock: false },
   });
-  // eslint-disable-next-line no-console
   console.log(`INVENTORY_LEGACY_UNTRACKED ${result.count}`);
 }
 

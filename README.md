@@ -218,5 +218,5 @@ startup with Zod and refuses to boot with a clear message if anything is missing
 | `COOKIE_SECRET`                       | Cookie signing key                            |
 | `COOKIE_SECURE`                       | `true` when serving over HTTPS                |
 | `CORS_ORIGIN`                         | Comma-separated allowed browser origins       |
-| `STORAGE_DRIVER`                      | `local`, `cloudinary` or `supabase`           |
+| `STORAGE_DRIVER`                      | `local`, `vercel-blob`, `cloudinary` or `supabase` |
 | `PORT`                                | API port, defaults to 4000                    |

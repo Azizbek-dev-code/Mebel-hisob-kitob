@@ -2,7 +2,6 @@
  * Admin backup create + list smoke against a live API.
  * Marker: BACKUP_MODULE_E2E_OK
  */
-/* eslint-disable no-console */
 const API = process.env.BACKUP_API_BASE ?? 'http://localhost:4000/api';
 
 async function main() {

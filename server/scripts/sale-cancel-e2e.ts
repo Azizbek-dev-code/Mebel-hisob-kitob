@@ -3,7 +3,6 @@
  * Marker: SALE_CANCEL_E2E_TEMP
  * Creates a temp sale, cancels it, verifies accounting exclusions + audit.
  */
-/* eslint-disable no-console */
 import { PrismaClient, UserRole } from '@prisma/client';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:4000';
