@@ -8,6 +8,9 @@ dist/
 build/
 *.tsbuildinfo
 
+# Vercel's buildCommand copies client/dist here as the static output root
+/public/
+
 # Environment
 .env
 .env.local
