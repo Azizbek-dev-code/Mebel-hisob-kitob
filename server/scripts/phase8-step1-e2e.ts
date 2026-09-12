@@ -5,7 +5,6 @@
  * Creates temporary transactions (and optionally a temp worker), then cleans
  * ONLY those rows. Never deletes Ali's real business data.
  */
-/* eslint-disable no-console */
 import { PrismaClient, UserRole } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 

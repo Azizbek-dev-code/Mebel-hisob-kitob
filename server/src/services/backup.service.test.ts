@@ -1,4 +1,5 @@
 import {
+  AuditEventType,
   BACKUP_LOGICAL_FORMAT,
   BACKUP_LOGICAL_VERSION,
   BACKUP_RESTORE_CONFIRMATION,
@@ -10,7 +11,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '../utils/api-error.js';
 
-const { backupRepoMock, storageMock } = vi.hoisted(() => ({
+const { backupRepoMock, storageMock, recordAuditMock } = vi.hoisted(() => ({
+  recordAuditMock: vi.fn(async () => undefined),
   backupRepoMock: {
     createBackupJob: vi.fn(),
     markBackupJobSucceeded: vi.fn(),
@@ -35,6 +37,7 @@ const { backupRepoMock, storageMock } = vi.hoisted(() => ({
 
 vi.mock('../repositories/backup.repository.js', () => backupRepoMock);
 vi.mock('../lib/backup/storage.js', () => storageMock);
+vi.mock('./audit.service.js', () => ({ recordAudit: recordAuditMock }));
 
 const {
   assertCanManageBackups,
@@ -349,6 +352,12 @@ describe('backup.service restore', () => {
     expect(response.totalRestoredRows).toBe(1);
     expect(backupRepoMock.restoreStoreData).toHaveBeenCalledWith(
       expect.objectContaining({ storeId: STORE_ID, actorId: 'user_admin' }),
+    );
+    expect(recordAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: AuditEventType.BACKUP_RESTORED,
+        entityId: 'backup_1',
+      }),
     );
   });
 

@@ -3,7 +3,6 @@
  * Marker: PHASE8_STEP4A_TEMP
  * Does NOT reset the database. Cleans up only temporary rows created here.
  */
-/* eslint-disable no-console */
 import { PrismaClient, UserRole, WorkerCompensationType, WorkerResponsibility } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 

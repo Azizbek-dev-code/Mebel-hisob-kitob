@@ -5,7 +5,6 @@
  * Create supplier → products → purchase (2@5M + 1@3M = 13M) → pay 3M → debt 10M
  * → stock checks → pay 10M → PAID → credit purchase 20M → reports reconcile.
  */
-/* eslint-disable no-console */
 import { PrismaClient, UserRole } from '@prisma/client';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:4000';

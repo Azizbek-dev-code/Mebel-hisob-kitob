@@ -1,7 +1,6 @@
 /**
  * Phase 8 Step 4C integrity snapshot.
  */
-/* eslint-disable no-console */
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();

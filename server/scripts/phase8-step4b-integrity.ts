@@ -2,7 +2,6 @@
  * Phase 8 Step 4B integrity snapshot + temp rule cleanup helper.
  * Marker: PHASE8_STEP4B_TEMP
  */
-/* eslint-disable no-console */
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();

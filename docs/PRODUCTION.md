@@ -1,63 +1,83 @@
 # Production deployment checklist
 
-Target stack: **Vercel** (SPA) + **Render** (API) + **Neon** (Postgres) + **Cloudinary** (images).
+Target stack: **Vercel** (SPA + API as a serverless function) + **Neon** (Postgres) +
+**Vercel Blob** (images).
 
 Do not deploy until every item below is configured. This file is the runbook; it
 does not perform a deploy.
 
-## Required environment variables
+## How the Vercel deployment is wired
 
-### Backend (Render)
+`vercel.json` at the repo root is the source of truth:
+
+- `buildCommand` builds `shared`, generates the Prisma client and compiles `server`,
+  builds `client`, then copies `client/dist` to a root `public/` folder (Vercel's static
+  output). `public/` is gitignored — it only exists during a build.
+- `api/index.js` is a Vercel Node function that lazy-loads `server/dist/app.js` and
+  hands each request to the Express app.
+- `routes` send `/api/*` to that function, serve static files from `public/`, and fall
+  back to `index.html` for client-side routing.
+
+The Vercel project must be **Git-connected** to this repository (Project → Settings →
+Git) for pushes to `main` to deploy automatically.
+
+## Required environment variables (Vercel project → Settings → Environment Variables)
+
+Set these for **Production** (and Preview if you use preview deployments). The API
+skips `.env` loading when `VERCEL` is set, so everything must come from here.
 
 | Variable | Notes |
 |----------|--------|
 | `NODE_ENV` | `production` |
-| `PORT` | Render sets this; do not hardcode |
 | `DATABASE_URL` | Neon connection string with `?sslmode=require` |
 | `JWT_ACCESS_SECRET` | ≥32 chars (unique per environment) |
 | `JWT_REFRESH_SECRET` | ≥32 chars |
 | `JWT_ACCESS_EXPIRES_IN` | Default `15m` |
 | `COOKIE_SECRET` | ≥16 chars |
 | `COOKIE_SECURE` | **`true`** (HTTPS) |
-| `COOKIE_SAME_SITE` | Prefer **`lax`** with Vercel `/api` rewrites; use **`none`** only for cross-origin SPA→API (requires `COOKIE_SECURE=true`) |
-| `CORS_ORIGIN` | Exact Vercel origin(s), comma-separated (e.g. `https://app.vercel.app`) |
-| `STORAGE_DRIVER` | **`cloudinary`** — `local` is rejected when `NODE_ENV=production` |
-| `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Required |
-| `BACKUP_DIR` | Writable temp dir; artefacts are ephemeral — download immediately |
+| `COOKIE_SAME_SITE` | **`lax`** — SPA and API share one origin on Vercel |
+| `CORS_ORIGIN` | The deployment's own origin(s), comma-separated (e.g. `https://app.vercel.app`) |
+| `STORAGE_DRIVER` | **`vercel-blob`** — `local` is rejected when `NODE_ENV=production`; `cloudinary` also works |
+| `BLOB_READ_WRITE_TOKEN` | Injected automatically once a Blob store is linked to the project (Storage tab) |
+| `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Only if `STORAGE_DRIVER=cloudinary` |
+| `BACKUP_DIR` | **`/tmp/backups`** — on Vercel only `/tmp` is writable, and it does not survive between invocations |
 | `BACKUP_MAX_UPLOAD_BYTES` | Default 50MB |
-| `BACKUP_ENABLE_PG_DUMP` | Keep `false` unless `pg_dump` is installed |
+| `BACKUP_ENABLE_PG_DUMP` | Keep `false` — `pg_dump` is not available in the function runtime |
 | `TRIAL_DAYS` | Optional; default `7` |
 | `SEED_*` | Only needed for one-shot `npm run db:seed` — change passwords before seeding prod |
 
+Not needed on Vercel: `PORT` (the function runtime owns the socket) and `VITE_API_URL`
+(the client defaults to `/api`, which is same-origin here).
+
 `STORAGE_DRIVER=supabase` is **not implemented** — do not set it.
 
-### Frontend (Vercel build env)
+## Auth cookies
 
-| Variable | Notes |
-|----------|--------|
-| `VITE_API_URL` | Prefer **`/api`** when using `vercel.json` rewrites (same-origin cookies). Or absolute `https://YOUR_API.onrender.com/api` with `COOKIE_SAME_SITE=none` |
-
-## Auth cookies (Vercel + Render)
-
-**Recommended (same-site):** leave `VITE_API_URL=/api` (or unset — client defaults to `/api`), point `vercel.json` rewrites at the Render host, keep `COOKIE_SAME_SITE=lax` and `COOKIE_SECURE=true`.
-
-**Cross-origin alternative:** set `VITE_API_URL=https://api…/api`, `CORS_ORIGIN` to the Vercel origin, `COOKIE_SAME_SITE=none`, `COOKIE_SECURE=true`.
+The SPA and the API are served from the same Vercel origin, so keep
+`COOKIE_SAME_SITE=lax` and `COOKIE_SECURE=true`. Only if you ever split the API onto a
+different host would you need `VITE_API_URL=https://api…/api`, `CORS_ORIGIN` set to the
+SPA origin, and `COOKIE_SAME_SITE=none`.
 
 ## Storage
 
-- Local disk uploads (`./uploads`) are lost on Render redeploy.
+- The function filesystem is read-only apart from `/tmp`, and `/tmp` is wiped between
+  invocations. Nothing that must persist can live on disk.
 - Production **rejects** `STORAGE_DRIVER=local`.
 - Verify before go-live:
-  1. Set Cloudinary vars.
-  2. Upload a product image; confirm a Cloudinary HTTPS URL.
-  3. Redeploy the API and confirm the image still loads.
-- Backups under `BACKUP_DIR` are ephemeral — **download** each backup after creation.
+  1. Link a Blob store to the project and confirm `BLOB_READ_WRITE_TOKEN` is present.
+  2. Upload a product image; confirm a `*.public.blob.vercel-storage.com` URL.
+  3. Redeploy and confirm the image still loads.
+- Backups are written to `BACKUP_DIR` and may already be gone by the next request —
+  **download** each backup immediately after creating it. The job row survives; the
+  file does not.
 
 ## Database (Neon)
 
 - First empty Neon DB: follow `docs/MIGRATION_BASELINE.md` section **B** (`db push` + resolve + seed).
-- After baseline: `cd server && npx prisma migrate deploy` (or `npm run start:prod`).
-- Seed is **manual** (`npm run db:seed`) — not run on `npm start`.
+- After baseline, apply migrations from your machine before deploying schema changes:
+  `cd server && DATABASE_URL=… npx prisma migrate deploy`. The Vercel build only runs
+  `prisma generate`; it never migrates.
+- Seed is **manual** (`npm run db:seed`) — never runs on deploy.
 - Never `migrate reset` / `db push --force-reset` against live tenant data.
 
 ## Health
@@ -77,15 +97,13 @@ does not perform a deploy.
 # Monorepo (CI / local verify)
 npm run build
 
-# Frontend (Vercel): build command from repo root or client/
-npm run build --workspace client
-# Output: client/dist
+# Exactly what Vercel runs (see vercel.json "buildCommand")
+npm run build --workspace shared && cd server && npx prisma generate && npx tsc -p tsconfig.json && cd .. && npm run build --workspace client && rm -rf public && cp -r client/dist public
 
-# Backend (Render)
+# Self-hosting the API instead (Render, a VPS, …)
 npm run build --workspace shared
 npm run build --workspace server
 cd server && npm run start:prod   # migrate deploy + node dist/server.js
-# or: npx prisma migrate deploy && npm start
 ```
 
 ## Sale worker pay

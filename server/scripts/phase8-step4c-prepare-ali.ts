@@ -2,7 +2,6 @@
  * Ensure Ali has a seller % rule covering August 2026 for Step 4C browser E2E.
  * Uses existing PATCH API (Step 4B) — does not touch finance ledger.
  */
-/* eslint-disable no-console */
 import { PrismaClient } from '@prisma/client';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:4000';

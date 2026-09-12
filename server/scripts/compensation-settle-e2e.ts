@@ -2,7 +2,6 @@
  * Worker compensation settle → COMMISSION ledger — PostgreSQL E2E.
  * Marker: COMP_SETTLE_E2E_TEMP
  */
-/* eslint-disable no-console */
 import {
   PrismaClient,
   UserRole,

@@ -5,7 +5,6 @@
  * Create customer → product → stock-in → sale 10M → pay 3M → debt 7M
  * → pay 2M → debt 5M → match reports → cancel → history kept, debt cleared.
  */
-/* eslint-disable no-console */
 import { PrismaClient, UserRole } from '@prisma/client';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:4000';

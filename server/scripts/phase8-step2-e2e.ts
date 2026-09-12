@@ -5,7 +5,6 @@
  * Creates temporary transactions only; cleans ONLY those rows.
  * Never deletes Ali's existing business ledger data.
  */
-/* eslint-disable no-console */
 import { PrismaClient, UserRole } from '@prisma/client';
 
 const API =

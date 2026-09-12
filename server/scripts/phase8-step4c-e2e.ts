@@ -3,7 +3,6 @@
  * Marker: PHASE8_STEP4C_TEMP
  * Does NOT reset the database. Cleans up only temporary rows created here.
  */
-/* eslint-disable no-console */
 import {
   PrismaClient,
   UserRole,
