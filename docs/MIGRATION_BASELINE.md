@@ -45,6 +45,10 @@ npx prisma migrate resolve --applied 20260822100000_store_creation_requests
 npx prisma migrate resolve --applied 20260822120000_platform_billing
 npx prisma migrate resolve --applied 20260822140000_saas_trial_subscription
 npx prisma migrate resolve --applied 20260822160000_plan_entitlements
+# Only if 20260913120000_account_deletion SQL was already applied (Neon editor /
+# db push). Never resolve it without applying the SQL — login will 500 until
+# users.deletedAt exists.
+# npx prisma migrate resolve --applied 20260913120000_account_deletion
 
 # 3. From now on, use migrate deploy only
 npx prisma migrate deploy

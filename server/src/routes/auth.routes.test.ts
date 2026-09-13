@@ -125,6 +125,8 @@ describe('POST /api/auth/login', () => {
       .expect(200);
 
     const where = prismaMock.user.findFirst.mock.calls[0]?.[0]?.where;
+    expect(where.isActive).toBe(true);
+    expect(where.deletedAt).toBeNull();
     expect(where.OR).toEqual([
       { email: { equals: 'ADMIN@Furniture-ERP.local', mode: 'insensitive' } },
       { username: { equals: 'ADMIN@Furniture-ERP.local', mode: 'insensitive' } },

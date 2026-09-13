@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build --workspace shared && cd server && npx prisma generate && npx tsc -p tsconfig.json && cd .. && npm run build --workspace client && rm -rf public && cp -r client/dist public",
+  "buildCommand": "npm run build --workspace shared && cd server && npx prisma generate && node scripts/migrate-deploy.mjs && npx tsc -p tsconfig.json && cd .. && npm run build --workspace client && rm -rf public && cp -r client/dist public",
   "installCommand": "npm install",
   "routes": [
     {

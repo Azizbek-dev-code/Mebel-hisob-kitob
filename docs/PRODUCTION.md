@@ -10,9 +10,11 @@ does not perform a deploy.
 
 `vercel.json` at the repo root is the source of truth:
 
-- `buildCommand` builds `shared`, generates the Prisma client and compiles `server`,
-  builds `client`, then copies `client/dist` to a root `public/` folder (Vercel's static
-  output). `public/` is gitignored — it only exists during a build.
+- `buildCommand` builds `shared`, generates the Prisma client, **applies pending
+  Prisma migrations** (`node scripts/migrate-deploy.mjs` → `prisma migrate deploy`),
+  compiles `server`, builds `client`, then copies `client/dist` to a root `public/`
+  folder (Vercel's static output). `public/` is gitignored — it only exists during a
+  build.
 - `api/index.js` is a Vercel Node function that lazy-loads `server/dist/app.js` and
   hands each request to the Express app.
 - `routes` send `/api/*` to that function, serve static files from `public/`, and fall
@@ -29,7 +31,8 @@ skips `.env` loading when `VERCEL` is set, so everything must come from here.
 | Variable | Notes |
 |----------|--------|
 | `NODE_ENV` | `production` |
-| `DATABASE_URL` | Neon connection string with `?sslmode=require` |
+| `DATABASE_URL` | Neon connection string with `?sslmode=require`. Must be enabled for **Production** and available at **Build** (Vercel now runs `prisma migrate deploy` during build). Prefer the **direct** host (`*.neon.tech`, not `*-pooler.neon.tech`) so migrations can take an advisory lock. |
+| `DIRECT_URL` | Optional. If `DATABASE_URL` is the pooled URL, set this to the Neon **direct** connection string. `migrate deploy` uses `DIRECT_URL` when present. |
 | `JWT_ACCESS_SECRET` | ≥32 chars (unique per environment) |
 | `JWT_REFRESH_SECRET` | ≥32 chars |
 | `JWT_ACCESS_EXPIRES_IN` | Default `15m` |
@@ -74,11 +77,47 @@ SPA origin, and `COOKIE_SAME_SITE=none`.
 ## Database (Neon)
 
 - First empty Neon DB: follow `docs/MIGRATION_BASELINE.md` section **B** (`db push` + resolve + seed).
-- After baseline, apply migrations from your machine before deploying schema changes:
-  `cd server && DATABASE_URL=… npx prisma migrate deploy`. The Vercel build only runs
-  `prisma generate`; it never migrates.
+- After baseline, **pending migrations apply on every Vercel production build**
+  (`cd server && node scripts/migrate-deploy.mjs`). That is additive
+  (`prisma migrate deploy` only — never reset / never `db push --force-reset`).
 - Seed is **manual** (`npm run db:seed`) — never runs on deploy.
 - Never `migrate reset` / `db push --force-reset` against live tenant data.
+
+### If login 500s with `users.deletedAt does not exist`
+
+The account-deletion migration is already in git:
+`server/prisma/migrations/20260913120000_account_deletion/`.
+Do **not** create another migration. Apply this one to Neon, then redeploy.
+
+**Preferred (from your machine, against Neon, not a local DB):**
+
+```bash
+cd server
+# Use the Vercel Production DATABASE_URL (Neon). Direct host, not -pooler.
+$env:DATABASE_URL="postgresql://…@ep-….neon.tech/neondb?sslmode=require"
+npx prisma migrate status
+npx prisma migrate deploy
+npx prisma migrate status
+```
+
+`migrate deploy` only runs SQL that `_prisma_migrations` has not recorded.
+Existing rows are untouched; `deletedAt` is nullable (NULL = still able to log in).
+
+**If `migrate deploy` errors with P3005** (schema not empty / history never
+baselined): do **not** reset. In the Neon SQL Editor paste the existing file
+`server/prisma/migrations/20260913120000_account_deletion/migration.sql`, run it,
+then mark it applied (still no reset):
+
+```bash
+cd server
+$env:DATABASE_URL="postgresql://…@ep-….neon.tech/neondb?sslmode=require"
+npx prisma migrate resolve --applied 20260913120000_account_deletion
+```
+
+Then **Redeploy** the Vercel production deployment (Deployments → … → Redeploy)
+so the next build sees a matching schema. Login should already work as soon as
+the column exists, even before that redeploy, because production code already
+queries `deletedAt`.
 
 ## Health
 
@@ -98,7 +137,7 @@ SPA origin, and `COOKIE_SAME_SITE=none`.
 npm run build
 
 # Exactly what Vercel runs (see vercel.json "buildCommand")
-npm run build --workspace shared && cd server && npx prisma generate && npx tsc -p tsconfig.json && cd .. && npm run build --workspace client && rm -rf public && cp -r client/dist public
+npm run build --workspace shared && cd server && npx prisma generate && node scripts/migrate-deploy.mjs && npx tsc -p tsconfig.json && cd .. && npm run build --workspace client && rm -rf public && cp -r client/dist public
 
 # Self-hosting the API instead (Render, a VPS, …)
 npm run build --workspace shared

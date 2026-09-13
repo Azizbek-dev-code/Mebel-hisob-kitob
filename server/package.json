@@ -14,7 +14,7 @@
     "test:watch": "vitest",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:deploy": "prisma migrate deploy",
+    "db:deploy": "node scripts/migrate-deploy.mjs",
     "db:push": "prisma db push",
     "db:reset": "prisma migrate reset --force",
     "db:seed": "tsx prisma/seed.ts",
