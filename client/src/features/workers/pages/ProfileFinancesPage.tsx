@@ -35,6 +35,7 @@ import {
   workerFinanceTypeDisplayLabel,
   WORKER_FINANCE_SOURCE_FILTER_OPTIONS,
   WORKER_FINANCE_TYPE_FILTER_OPTIONS,
+  WORKER_FINANCE_TYPE_LABELS,
 } from '@/features/workers/utils/finance-labels';
 import {
   periodContextLabel,
@@ -187,9 +188,9 @@ export function ProfileFinancesPage() {
           ← Profil
         </Link>
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-ink">Mening moliyaviy hisobim</h2>
+          <h2 className="text-2xl font-semibold tracking-tight text-ink">Mening moliyam</h2>
           <p className="mt-1 text-sm text-ink-muted">
-            Faqat o‘qish uchun — o‘z daftaringizdagi yozuvlar.
+            Kirim, chiqim va balans — o‘z daftaringizdagi yozuvlar (PostgreSQL).
           </p>
         </div>
       </div>
@@ -208,34 +209,58 @@ export function ProfileFinancesPage() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-3">
           <KpiCard
-            title="Hisoblangan"
+            title="Kirim"
             context={periodLabel}
             value={formatMoney(earned)}
             icon={Wallet}
             tone="success"
             isLoading={summary.isLoading && !summary.data}
             isEmpty={earned === 0}
+            footnote="Bonus + komissiya + tuzatish"
           />
           <KpiCard
-            title="To‘langan"
+            title="Chiqim"
             context={periodLabel}
             value={formatMoney(paid)}
             icon={Banknote}
             tone="brand"
             isLoading={summary.isLoading && !summary.data}
             isEmpty={paid === 0}
+            footnote="To‘lovlar (reversal minus)"
           />
           <KpiCard
-            title="Qolgan"
+            title="Balans"
             context={periodLabel}
             value={formatMoney(outstanding)}
             icon={Wallet}
             tone={outstanding < 0 ? 'danger' : 'info'}
             isLoading={summary.isLoading && !summary.data}
-            footnote="Bu ish haqi emas — faqat daftar yig‘indisi."
+            footnote="Kirim − chiqim − avans − qarz"
           />
         </div>
       )}
+
+      {summary.data ? (
+        <SectionCard title="Kategoriyalar" description="Tanlangan davrdagi daftar turlari">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {(
+              [
+                [WorkerFinancialTransactionType.BONUS, summary.data.totalBonuses],
+                [WorkerFinancialTransactionType.COMMISSION, summary.data.totalCommissions],
+                [WorkerFinancialTransactionType.ADJUSTMENT, summary.data.totalAdjustments],
+                [WorkerFinancialTransactionType.PAYMENT, summary.data.totalPayments],
+                [WorkerFinancialTransactionType.ADVANCE, summary.data.totalAdvances],
+                [WorkerFinancialTransactionType.DEBT, summary.data.totalDebt],
+              ] as const
+            ).map(([type, amount]) => (
+              <div key={type} className="rounded-input border border-line bg-surface-muted px-3 py-2">
+                <p className="text-xs text-ink-muted">{WORKER_FINANCE_TYPE_LABELS[type]}</p>
+                <p className="mt-0.5 text-sm font-semibold tabular-money">{formatMoney(amount)}</p>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      ) : null}
 
       <WorkerAttributedFeesPanel
         fees={attributedFees.data}
@@ -244,7 +269,7 @@ export function ProfileFinancesPage() {
         onRetry={() => void attributedFees.refetch()}
       />
 
-      <SectionCard title="Operatsiyalar">
+      <SectionCard title="Moliyaviy tarix">
         <div className="mb-4 grid gap-3 sm:grid-cols-2">
           <label className="block text-sm">
             <span className="mb-1 block font-medium text-ink-soft">Turi</span>

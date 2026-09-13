@@ -24,6 +24,7 @@ import { ROUTES } from '@/routes/paths';
 import { formatDate, formatDateTime } from '@/utils/format';
 import { storeBillingService } from '@/services/store-billing.service';
 
+import { AccountDeleteSection } from '../components/AccountDeleteSection';
 import { useResetStore, useStoreSettings, useUpdateStoreSettings } from '../hooks/use-settings';
 
 const fieldClass =
@@ -296,6 +297,8 @@ export function SettingsPage() {
       ) : null}
 
       {editable ? <StoreResetSection /> : null}
+
+      <AccountDeleteSection />
     </PageContainer>
   );
 }

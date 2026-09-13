@@ -66,8 +66,16 @@ function mapUniqueViolation(error: unknown, field: 'sku' | 'name'): never {
 async function assertActiveCategoryInStore(
   storeId: string,
   categoryId: string | null | undefined,
+  required: boolean,
 ): Promise<void> {
-  if (categoryId === undefined || categoryId === null) return;
+  if (!categoryId) {
+    if (required) {
+      throw ApiError.validation('Category is required', [
+        { field: 'categoryId', message: 'Category is required' },
+      ]);
+    }
+    return;
+  }
   const category = await catalogueRepository.findCategoryInStore(storeId, categoryId);
   if (!category) {
     throw ApiError.validation('Category not found in this store', [
@@ -110,7 +118,7 @@ export async function createProduct(
   assertCanManageCatalogue(actorRole);
   await assertCanUseFeature(storeId, FeatureKey.PRODUCTS);
   await assertCanCreateResource(storeId, LimitResourceKey.PRODUCTS);
-  await assertActiveCategoryInStore(storeId, input.categoryId);
+  await assertActiveCategoryInStore(storeId, input.categoryId, true);
   try {
     const product = await catalogueRepository.createProduct(storeId, input);
     await recordAudit({
@@ -136,7 +144,7 @@ export async function updateProduct(
   actorUserId?: string | null,
 ): Promise<ProductListItem> {
   assertCanManageCatalogue(actorRole);
-  await assertActiveCategoryInStore(storeId, input.categoryId);
+  await assertActiveCategoryInStore(storeId, input.categoryId, false);
 
   try {
     const updated = await catalogueRepository.updateProduct(storeId, productId, input);

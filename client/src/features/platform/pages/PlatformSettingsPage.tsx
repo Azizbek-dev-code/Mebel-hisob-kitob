@@ -8,6 +8,8 @@ import { SectionCard } from '@/components/ui/SectionCard';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ApiClientError } from '@/lib/api-client';
 
+import { AccountDeleteSection } from '@/features/settings/components/AccountDeleteSection';
+
 import { usePlatformSettings, useUpdatePlatformSettings } from '../hooks/use-platform-billing';
 
 const fieldClass =
@@ -142,6 +144,8 @@ export function PlatformSettingsPage() {
           </form>
         </SectionCard>
       )}
+
+      <AccountDeleteSection />
     </PageContainer>
   );
 }

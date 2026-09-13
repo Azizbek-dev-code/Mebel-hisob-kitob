@@ -5,6 +5,7 @@ import { PageContainer } from '@/components/layout/PageContainer';
 import { Badge } from '@/components/ui/Badge';
 import { SectionCard } from '@/components/ui/SectionCard';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { AccountDeleteSection } from '@/features/settings/components/AccountDeleteSection';
 import { ResponsibilityBadges } from '@/features/workers/components/ResponsibilityBadges';
 import { WorkerAttributedFeesPanel } from '@/features/workers/components/WorkerAttributedFeesPanel';
 import { WorkerProfileModulesPanel } from '@/features/workers/components/WorkerProfileModulesPanel';
@@ -86,6 +87,8 @@ export function ProfilePage() {
         onRetry={() => void feesQuery.refetch()}
         linkReferences
       />
+
+      <AccountDeleteSection />
     </PageContainer>
   );
 }

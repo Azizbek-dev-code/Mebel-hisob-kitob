@@ -588,6 +588,23 @@ describe('worker-financial.service list + summary', () => {
     );
   });
 
+  it('allows a store admin to read their own summary', async () => {
+    prismaMock.user.findFirst.mockResolvedValue({
+      id: ADMIN_ID,
+      storeId: STORE_ID,
+      role: UserRole.ADMIN,
+      isActive: true,
+      fullName: 'Store Administrator',
+      responsibilities: [],
+    });
+    prismaMock.workerFinancialTransaction.groupBy.mockResolvedValue([]);
+
+    const summary = await getWorkerSummary(STORE_ID, { id: ADMIN_ID, role: UserRole.ADMIN }, ADMIN_ID);
+
+    expect(summary.workerId).toBe(ADMIN_ID);
+    expect(summary.transactionCount).toBe(0);
+  });
+
   it('filters list and summary by store-timezone inclusive date range', async () => {
     prismaMock.user.findFirst.mockResolvedValue(ACTIVE_WORKER);
     prismaMock.workerFinancialTransaction.findMany.mockResolvedValue([]);

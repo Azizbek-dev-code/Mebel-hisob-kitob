@@ -162,6 +162,7 @@ describe('navItemsForUser', () => {
       'platform-pnl',
       'platform-analytics',
       'platform-settings',
+      'platform-account-deletions',
     ]);
     expect(keys).not.toContain('sales');
     expect(keys).not.toContain('workers');

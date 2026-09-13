@@ -27,6 +27,7 @@ import {
 } from '@/features/platform/pages/PlatformPaymentsPages';
 import { PlatformPlansPage } from '@/features/platform/pages/PlatformPlansPage';
 import { PlatformPnlPage } from '@/features/platform/pages/PlatformPnlPage';
+import { PlatformAccountDeletionsPage } from '@/features/platform/pages/PlatformAccountDeletionsPage';
 import { PlatformSettingsPage } from '@/features/platform/pages/PlatformSettingsPage';
 import { PlatformShopDetailPage } from '@/features/platform/pages/PlatformShopDetailPage';
 import { PlatformShopsPage } from '@/features/platform/pages/PlatformShopsPage';
@@ -250,6 +251,10 @@ export const routes: RouteObject[] = [
             element: platformOnly(<PlatformAnalyticsProfitPage />),
           },
           { path: ROUTES.platformSettings, element: platformOnly(<PlatformSettingsPage />) },
+          {
+            path: ROUTES.platformAccountDeletions,
+            element: platformOnly(<PlatformAccountDeletionsPage />),
+          },
           { path: ROUTES.sales, element: <SalesPage /> },
           { path: ROUTES.saleNew, element: <NewSalePage /> },
           { path: '/sales/:id/edit', element: <EditSalePage /> },

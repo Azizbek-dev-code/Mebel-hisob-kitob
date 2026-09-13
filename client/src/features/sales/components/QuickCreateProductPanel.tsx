@@ -63,6 +63,10 @@ export function QuickCreateProductPanel({ onCreated, onCancel }: QuickCreateProd
       setError(t('products.nameRequiredError'));
       return;
     }
+    if (!categoryId) {
+      setError(t('products.categoryRequiredError'));
+      return;
+    }
     if (!(salePrice > 0)) {
       setError(t('products.salePriceMustBePositive'));
       return;
@@ -89,7 +93,7 @@ export function QuickCreateProductPanel({ onCreated, onCancel }: QuickCreateProd
         costPrice,
         defaultSalePrice: salePrice,
         sku: null,
-        categoryId: categoryId || null,
+        categoryId,
         description: descriptionParts.length > 0 ? descriptionParts.join('\n') : null,
         minStockQty: 0,
         trackStock,
@@ -150,9 +154,10 @@ export function QuickCreateProductPanel({ onCreated, onCancel }: QuickCreateProd
           className={fieldClass}
           value={categoryId}
           onChange={(event) => setCategoryId(event.target.value)}
+          required
           data-testid="sale-quick-product-category"
         >
-          <option value="">{t('products.categoryOptional')}</option>
+          <option value="">{t('products.categorySelect')}</option>
           {(categories.data ?? []).map((category) => (
             <option key={category.id} value={category.id}>
               {category.name}

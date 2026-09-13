@@ -132,6 +132,10 @@ export function ProductFormDialog({
       setFormError(t('products.nameRequiredError'));
       return;
     }
+    if (mode === 'create' && !categoryId) {
+      setFormError(t('products.categoryRequiredError'));
+      return;
+    }
     if (sale === null || sale < 0) {
       setFormError(t('products.salePriceInvalid'));
       return;
@@ -151,7 +155,7 @@ export function ProductFormDialog({
           costPrice: cost,
           // Server assigns MB-0001… when omitted.
           sku: null,
-          categoryId: categoryId || null,
+          categoryId,
           description: description.trim() || null,
           minStockQty: minQty,
           trackStock,
@@ -250,13 +254,18 @@ export function ProductFormDialog({
                 )}
 
                 <label className="block text-sm">
-                  <span className="mb-1 block text-ink-soft">{t('products.category')}</span>
-                  <select
-                    className={fieldClass}
-                    value={categoryId}
-                    onChange={(e) => setCategoryId(e.target.value)}
-                  >
-                    <option value="">—</option>
+                    <span className="mb-1 block text-ink-soft">
+                      {t('products.categoryRequired')}
+                    </span>
+                    <select
+                      className={fieldClass}
+                      value={categoryId}
+                      onChange={(e) => setCategoryId(e.target.value)}
+                      required={mode === 'create'}
+                    >
+                      <option value="">
+                        {mode === 'create' ? t('products.categorySelect') : '—'}
+                      </option>
                     {(categories.data ?? []).map((cat) => (
                       <option key={cat.id} value={cat.id}>
                         {cat.name}

@@ -25,6 +25,7 @@ import { prisma } from '../lib/prisma.js';
 import * as workerRepository from '../repositories/worker.repository.js';
 import { ApiError } from '../utils/api-error.js';
 import { recordAudit } from './audit.service.js';
+import { assertAccountNotDeleted } from './account-deletion.service.js';
 import { assertCanCreateResource, assertCanUseFeature } from './entitlement.service.js';
 import * as sellerCommissionService from './seller-commission.service.js';
 
@@ -200,6 +201,10 @@ export async function updateWorker(
 
   if (input.isActive === false && workerId === actor.id) {
     throw ApiError.badRequest('You cannot deactivate your own account');
+  }
+
+  if (input.isActive === true) {
+    await assertAccountNotDeleted(storeId, workerId);
   }
 
   if (input.responsibilities && input.responsibilities.length === 0) {

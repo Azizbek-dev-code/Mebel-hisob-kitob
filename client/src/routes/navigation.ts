@@ -23,6 +23,7 @@ import {
   Tags,
   Truck,
   UserRound,
+  UserX,
   Users,
   Wallet,
   Wrench,
@@ -140,6 +141,12 @@ export const PLATFORM_NAV_ITEMS: readonly NavItem[] = [
     labelKey: 'nav.settings',
     to: ROUTES.platformSettings,
     icon: Settings,
+  },
+  {
+    key: 'platform-account-deletions',
+    labelKey: 'nav.accountDeletions',
+    to: ROUTES.platformAccountDeletions,
+    icon: UserX,
   },
 ];
 

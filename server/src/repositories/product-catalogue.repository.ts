@@ -17,6 +17,7 @@ import {
   type UpdateProductCategoryRequest,
   type UpdateProductRequest,
 } from '@furniture-erp/shared';
+import { DEFAULT_PRODUCT_CATEGORIES } from '@furniture-erp/shared';
 import type { Prisma, Product, ProductCategory, ProductStatus } from '@prisma/client';
 
 import { fromDbMoney, toDbMoney } from '../lib/money-mapper.js';
@@ -427,6 +428,7 @@ export async function listProductCategories(
   storeId: string,
   options?: { includeInactive?: boolean },
 ): Promise<ProductCategoryItem[]> {
+  await ensureDefaultProductCategories(storeId);
   const rows = await prisma.productCategory.findMany({
     where: {
       storeId,
@@ -436,6 +438,24 @@ export async function listProductCategories(
     orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
   });
   return rows.map(toCategoryItem);
+}
+
+export async function ensureDefaultProductCategories(storeId: string): Promise<void> {
+  const existing = await prisma.productCategory.findMany({
+    where: { storeId },
+    select: { name: true },
+  });
+  const have = new Set(existing.map((row) => row.name));
+  const missing = DEFAULT_PRODUCT_CATEGORIES.filter((category) => !have.has(category.name));
+  if (missing.length === 0) return;
+  await prisma.productCategory.createMany({
+    data: missing.map((category) => ({
+      storeId,
+      name: category.name,
+      sortOrder: category.sortOrder,
+    })),
+    skipDuplicates: true,
+  });
 }
 
 export async function findCategoryInStore(

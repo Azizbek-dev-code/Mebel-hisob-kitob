@@ -440,6 +440,7 @@ describe('NewSalePage', () => {
 
     await user.click(screen.getByTestId('sale-quick-product-toggle'));
     await user.type(screen.getByTestId('sale-quick-product-name'), 'Dup Sofa');
+    await user.selectOptions(screen.getByTestId('sale-quick-product-category'), 'cat_1');
     const quickForm = await screen.findByTestId('sale-quick-product-form');
     const salePriceLabel = within(quickForm).getByText('Sotuv narxi *');
     const salePriceInput = salePriceLabel.parentElement?.querySelector('input');

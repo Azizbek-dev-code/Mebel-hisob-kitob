@@ -29,4 +29,11 @@ export const DEFAULT_PRODUCT_CATEGORIES: readonly DefaultProductCategory[] = [
   { key: 'OUTDOOR', name: "Balkon / Bog' mebeli", sortOrder: 16 },
   { key: 'ACCESSORIES', name: 'Aksessuarlar', sortOrder: 17 },
   { key: 'OTHER', name: 'Boshqa', sortOrder: 18 },
+  { key: 'DIVAN', name: 'Divan', sortOrder: 19 },
+  { key: 'KROVAT', name: 'Krovat', sortOrder: 20 },
+  { key: 'SHKAF', name: 'Shkaf', sortOrder: 21 },
+  { key: 'STOL', name: 'Stol', sortOrder: 22 },
+  { key: 'STUL', name: 'Stul', sortOrder: 23 },
+  { key: 'KITCHEN_FURNITURE', name: 'Oshxona mebeli', sortOrder: 24 },
+  { key: 'OFFICE_FURNITURE', name: 'Ofis mebeli', sortOrder: 25 },
 ] as const;

@@ -49,6 +49,7 @@ describe('SettingsPage', () => {
     expect(await screen.findByRole('heading', { level: 2, name: 'Sozlamalar' })).toBeInTheDocument();
     expect(screen.getByLabelText('Do‘kon nomi')).toHaveValue('Mebel Savdo');
     expect(screen.getByRole('button', { name: 'Saqlash' })).toBeInTheDocument();
+    expect(screen.getAllByText('Akkauntni o‘chirish').length).toBeGreaterThan(0);
   });
 
   it('renders read-only store settings for non-admin', async () => {

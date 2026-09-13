@@ -7,6 +7,7 @@ import { BACKUP_DELETE_ORDER, BACKUP_MODELS } from './models.js';
 const INTENTIONALLY_EXCLUDED = new Set([
   'BackupJob',
   'AuditLog',
+  'AccountDeletion',
   'StoreSubscription',
   'PlatformInvoice',
   'SubscriptionRequest',

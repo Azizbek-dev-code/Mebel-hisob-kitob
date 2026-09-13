@@ -22,6 +22,7 @@ import {
   postRejectPayment,
   postRejectSubscriptionRequest,
 } from '../controllers/platform-billing.controller.js';
+import { listAccountDeletions } from '../controllers/account-deletion.controller.js';
 import { requireAuth } from '../middleware/require-auth.js';
 import { requirePlatformAdmin } from '../middleware/require-platform-admin.js';
 import { validate } from '../middleware/validate.js';
@@ -103,3 +104,4 @@ platformBillingRouter.patch('/settings', validate({ body: updateSettingsBodySche
 platformBillingRouter.get('/pnl', validate({ query: pnlQuerySchema }), getPnl);
 platformBillingRouter.get('/analytics', validate({ query: pnlQuerySchema }), getAnalytics);
 platformBillingRouter.get('/dashboard', getDashboard);
+platformBillingRouter.get('/account-deletions', listAccountDeletions);

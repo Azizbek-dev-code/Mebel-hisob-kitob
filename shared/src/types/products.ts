@@ -96,7 +96,8 @@ export interface CreateProductRequest {
   defaultSalePrice: Money;
   /** Optional — server assigns a unique store SKU when omitted. */
   sku?: string | null;
-  categoryId?: string | null;
+  /** Required on create. Legacy catalogue rows may still have a null category. */
+  categoryId: string;
   description?: string | null;
   minStockQty?: number;
   trackStock?: boolean;

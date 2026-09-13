@@ -70,7 +70,7 @@ export type AuthUserRecord = Prisma.UserGetPayload<{ select: typeof authUserSele
  * separate gate after authentication so a blocked owner can reach the payment
  * screen instead of looking like a missing account.
  */
-const signInScope = { isActive: true } satisfies Prisma.UserWhereInput;
+const signInScope = { isActive: true, deletedAt: null } satisfies Prisma.UserWhereInput;
 
 function toSubscriptionSnapshot(record: AuthUserRecord): AuthSubscriptionSnapshot | null {
   if (record.role === 'PLATFORM_ADMIN') return null;

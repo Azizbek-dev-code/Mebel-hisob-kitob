@@ -360,6 +360,7 @@ model Store {
   subscriptions               StoreSubscription[]
   platformInvoices            PlatformInvoice[]
   subscriptionRequests        SubscriptionRequest[]
+  accountDeletions            AccountDeletion[]
 
   @@index([isActive])
   @@index([accessStatus])
@@ -379,6 +380,8 @@ model User {
   notes        String?
   role         UserRole  @default(CASHIER)
   isActive     Boolean   @default(true)
+  /// Set when the user completes self-service account deletion. Login stays blocked.
+  deletedAt    DateTime?
   lastLoginAt  DateTime?
 
   createdAt DateTime @default(now())
@@ -419,12 +422,14 @@ model User {
   platformExpensesCreated       PlatformExpense[]        @relation("PlatformExpenseCreatedBy")
   platformExpensesCancelled     PlatformExpense[]        @relation("PlatformExpenseCancelledBy")
   reviewedSubscriptionRequests  SubscriptionRequest[]    @relation("SubscriptionRequestReviewedBy")
+  accountDeletions              AccountDeletion[]
 
   // Unique per store, not globally: two stores may each employ an "admin@".
   @@unique([storeId, email])
   @@unique([storeId, username])
   @@index([storeId, isActive])
   @@index([storeId, role])
+  @@index([storeId, deletedAt])
   @@map("users")
 }
 
@@ -1304,6 +1309,29 @@ model AuditLog {
   @@index([storeId, entityType, entityId])
   @@index([storeId, actorUserId, createdAt])
   @@map("audit_logs")
+}
+
+/// Why a user deleted their own account. Survives the user row being anonymised.
+/// Not part of store backup/restore — same class of record as AuditLog.
+model AccountDeletion {
+  id               String   @id @default(cuid())
+  storeId          String?
+  userId           String?
+  emailSnapshot    String
+  usernameSnapshot String?
+  fullNameSnapshot String
+  role             String
+  reasonCode       String
+  reasonDetail     String?
+  createdAt        DateTime @default(now())
+
+  store Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  user  User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([storeId, createdAt])
+  @@index([reasonCode])
+  @@map("account_deletions")
 }
 
 // ---------------------------------------------------------------------------

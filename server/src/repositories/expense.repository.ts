@@ -8,6 +8,7 @@ import {
   type ExpenseListQuery,
   type PaginatedResult,
 } from '@furniture-erp/shared';
+import { DEFAULT_EXPENSE_CATEGORIES } from '@furniture-erp/shared';
 import type { Expense, ExpenseCategory, Prisma, User } from '@prisma/client';
 
 import { parseFlexibleDate } from '../lib/date-input.js';
@@ -88,6 +89,7 @@ export async function listCategories(
   storeId: string,
   options?: { includeInactive?: boolean },
 ): Promise<ExpenseCategoryItem[]> {
+  await ensureDefaultExpenseCategories(storeId);
   const rows = await prisma.expenseCategory.findMany({
     where: {
       storeId,
@@ -110,6 +112,29 @@ export async function listCategories(
     sortOrder: row.sortOrder,
     isActive: row.isActive,
   }));
+}
+
+export async function ensureDefaultExpenseCategories(storeId: string): Promise<void> {
+  const existing = await prisma.expenseCategory.findMany({
+    where: { storeId },
+    select: { name: true, key: true },
+  });
+  const names = new Set(existing.map((row) => row.name));
+  const keys = new Set(existing.map((row) => row.key).filter((key): key is string => Boolean(key)));
+  const missing = DEFAULT_EXPENSE_CATEGORIES.filter(
+    (category) => !names.has(category.name) && !keys.has(category.key),
+  );
+  if (missing.length === 0) return;
+  await prisma.expenseCategory.createMany({
+    data: missing.map((category, index) => ({
+      storeId,
+      key: category.key,
+      name: category.name,
+      color: category.color,
+      sortOrder: 100 + index,
+    })),
+    skipDuplicates: true,
+  });
 }
 
 export async function createCategory(input: {

@@ -47,6 +47,7 @@ const {
 const STORE = 'store_1';
 const ADMIN = UserRole.ADMIN;
 const EMPLOYEE = UserRole.EMPLOYEE;
+const CATEGORY_ID = 'cat_1';
 
 const PRODUCT = {
   id: 'prod_1',
@@ -69,7 +70,10 @@ const PRODUCT = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  catalogueRepoMock.findCategoryInStore.mockResolvedValue(null);
+  catalogueRepoMock.findCategoryInStore.mockResolvedValue({
+    id: CATEGORY_ID,
+    isActive: true,
+  });
 });
 
 describe('product-catalogue.service permissions', () => {
@@ -94,6 +98,7 @@ describe('product-catalogue.service create/update', () => {
       costPrice: 5_000_000,
       defaultSalePrice: 7_300_000,
       sku: 'DV-01',
+      categoryId: CATEGORY_ID,
     });
     expect(created.sku).toBe('DV-01');
     expect(catalogueRepoMock.createProduct).toHaveBeenCalledWith(
@@ -107,6 +112,7 @@ describe('product-catalogue.service create/update', () => {
     const created = await createProduct(STORE, ADMIN, {
       name: 'Divan',
       defaultSalePrice: 7_300_000,
+      categoryId: CATEGORY_ID,
     });
     expect(created.costPrice).toBe(0);
     expect(catalogueRepoMock.createProduct).toHaveBeenCalledWith(
@@ -123,6 +129,7 @@ describe('product-catalogue.service create/update', () => {
         costPrice: 1,
         defaultSalePrice: 2,
         sku: 'DUP',
+        categoryId: CATEGORY_ID,
       }),
     ).rejects.toMatchObject({ statusCode: 422 });
   });
@@ -186,6 +193,18 @@ describe('product-catalogue.service create/update', () => {
     });
     catalogueRepoMock.countProductPurchaseItems.mockResolvedValue(2);
     await expect(deleteProduct(STORE, ADMIN, 'prod_1')).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it('rejects create without a category', async () => {
+    await expect(
+      createProduct(STORE, ADMIN, {
+        name: 'Divan',
+        costPrice: 1,
+        defaultSalePrice: 2,
+        categoryId: '',
+      }),
+    ).rejects.toMatchObject({ statusCode: 422 });
+    expect(catalogueRepoMock.createProduct).not.toHaveBeenCalled();
   });
 
   it('rejects inactive category on create', async () => {

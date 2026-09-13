@@ -1,5 +1,9 @@
+import { ApiErrorCode } from '@furniture-erp/shared';
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 
+import { env } from '../config/env.js';
+import { deleteOwnAccount } from '../controllers/account-deletion.controller.js';
 import {
   getMyProfile,
   getMyProfileModules,
@@ -15,6 +19,8 @@ import {
 } from '../controllers/worker-financial.controller.js';
 import { requireAuth } from '../middleware/require-auth.js';
 import { validate } from '../middleware/validate.js';
+import { ApiError } from '../utils/api-error.js';
+import { deleteAccountBodySchema } from '../validators/account-deletion.validators.js';
 import { workerSalesQuerySchema, sellerReportQuerySchema } from '../validators/workers.validators.js';
 import {
   workerFinancialSummaryQuerySchema,
@@ -25,6 +31,23 @@ import {
 export const meRouter = Router();
 
 meRouter.use(requireAuth);
+
+const accountDeleteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skip: () => env.isTest,
+  handler: (_req, _res, next) => {
+    next(
+      new ApiError(
+        429,
+        ApiErrorCode.RATE_LIMITED,
+        'Too many account deletion attempts. Please try again later.',
+      ),
+    );
+  },
+});
 
 meRouter.get('/profile', getMyProfile);
 meRouter.get('/profile-modules', getMyProfileModules);
@@ -52,4 +75,11 @@ meRouter.get(
     req.params = { ...req.params, workerId: req.auth.id };
     return listWorkerFinancialTransactions(req, res, next);
   },
+);
+
+meRouter.delete(
+  '/account',
+  accountDeleteLimiter,
+  validate({ body: deleteAccountBodySchema }),
+  deleteOwnAccount,
 );

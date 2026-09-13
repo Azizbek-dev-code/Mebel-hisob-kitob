@@ -15,6 +15,7 @@ import * as workerService from './worker.service.js';
 const {
   prismaMock,
   hashPasswordMock,
+  assertAccountNotDeletedMock,
   listWorkersRepo,
   findWorkerInStore,
   findWorkerByUsername,
@@ -33,6 +34,7 @@ const {
     user: { update: vi.fn() },
   },
   hashPasswordMock: vi.fn(),
+  assertAccountNotDeletedMock: vi.fn(),
   listWorkersRepo: vi.fn(),
   findWorkerInStore: vi.fn(),
   findWorkerByUsername: vi.fn(),
@@ -53,6 +55,10 @@ vi.mock('../lib/prisma.js', () => ({
 
 vi.mock('../lib/password.js', () => ({
   hashPassword: hashPasswordMock,
+}));
+
+vi.mock('./account-deletion.service.js', () => ({
+  assertAccountNotDeleted: (...args: unknown[]) => assertAccountNotDeletedMock(...args),
 }));
 
 vi.mock('./entitlement.service.js', () => ({
@@ -132,6 +138,7 @@ function workerRecord(overrides: Partial<{
 beforeEach(() => {
   vi.clearAllMocks();
   hashPasswordMock.mockResolvedValue('hashed');
+  assertAccountNotDeletedMock.mockResolvedValue(undefined);
   computeWorkerStats.mockResolvedValue(EMPTY_STATS);
   recordActivity.mockResolvedValue(undefined);
   prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn({}));

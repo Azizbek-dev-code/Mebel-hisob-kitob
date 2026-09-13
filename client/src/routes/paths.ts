@@ -23,6 +23,7 @@ export const ROUTES = {
   platformAnalyticsExpenses: '/platform/analytics/expenses',
   platformAnalyticsProfit: '/platform/analytics/profit',
   platformSettings: '/platform/settings',
+  platformAccountDeletions: '/platform/account-deletions',
   billing: '/billing',
   /** Compatibility aliases requested as /admin/... — same pages as /platform/... */
   adminStores: '/admin/stores',

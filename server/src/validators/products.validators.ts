@@ -26,7 +26,7 @@ export const createProductBodySchema = z.object({
   costPrice: moneySchema.optional(),
   defaultSalePrice: moneySchema,
   sku: z.string().trim().min(1).max(80).nullable().optional(),
-  categoryId: cuidSchema.nullable().optional(),
+  categoryId: cuidSchema,
   description: z.string().trim().max(2000).nullable().optional(),
   minStockQty: z.number().int().min(0).max(1_000_000).optional(),
   trackStock: z.boolean().optional(),

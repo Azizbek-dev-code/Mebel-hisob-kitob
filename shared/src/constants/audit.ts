@@ -21,6 +21,7 @@ export const AuditEventType = {
   USER_UPDATED: 'USER_UPDATED',
   USER_ROLE_CHANGED: 'USER_ROLE_CHANGED',
   USER_DISABLED: 'USER_DISABLED',
+  ACCOUNT_DELETED: 'ACCOUNT_DELETED',
 
   // --- Customers -----------------------------------------------------------
   CUSTOMER_CREATED: 'CUSTOMER_CREATED',
@@ -111,6 +112,7 @@ export const AUDIT_EVENT_TYPES = Object.values(AuditEventType);
 export const AuditEntityType = {
   SESSION: 'SESSION',
   USER: 'USER',
+  ACCOUNT_DELETION: 'ACCOUNT_DELETION',
   CUSTOMER: 'CUSTOMER',
   PRODUCT: 'PRODUCT',
   STOCK: 'STOCK',

@@ -66,6 +66,11 @@ export function periodToInclusiveRange(
     case DateRangePreset.TODAY:
       return { from: toIsoDate(today), to: toIsoDate(today) };
 
+    case DateRangePreset.YESTERDAY: {
+      const yesterday = addCalendarDays(today, -1);
+      return { from: toIsoDate(yesterday), to: toIsoDate(yesterday) };
+    }
+
     case DateRangePreset.THIS_WEEK: {
       // Monday-start week (same convention as server date-range).
       const utcWeekday = new Date(Date.UTC(today.year, today.month - 1, today.day)).getUTCDay();
@@ -83,6 +88,15 @@ export function periodToInclusiveRange(
         day: daysInMonth(today.year, today.month),
       };
       return { from: toIsoDate(from), to: toIsoDate(to) };
+    }
+
+    case DateRangePreset.LAST_MONTH: {
+      const month = today.month === 1 ? 12 : today.month - 1;
+      const year = today.month === 1 ? today.year - 1 : today.year;
+      return {
+        from: toIsoDate({ year, month, day: 1 }),
+        to: toIsoDate({ year, month, day: daysInMonth(year, month) }),
+      };
     }
 
     case DateRangePreset.THIS_YEAR:
@@ -108,10 +122,14 @@ export function periodContextLabel(period: DashboardPeriod): string {
   switch (period.preset) {
     case DateRangePreset.TODAY:
       return 'Bugun';
+    case DateRangePreset.YESTERDAY:
+      return 'Kecha';
     case DateRangePreset.THIS_WEEK:
       return 'Shu hafta';
     case DateRangePreset.THIS_MONTH:
       return 'Shu oy';
+    case DateRangePreset.LAST_MONTH:
+      return "O'tgan oy";
     case DateRangePreset.THIS_YEAR:
       return 'Shu yil';
     case DateRangePreset.CUSTOM:

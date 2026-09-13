@@ -1,3 +1,4 @@
+export * from './account-deletion.js';
 export * from './audit.js';
 export * from './currency.js';
 export * from './enums.js';

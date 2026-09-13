@@ -78,9 +78,19 @@ async function assertWorkerForCreate(storeId: string, workerId: string): Promise
   return worker.id;
 }
 
-async function assertWorkerReadable(storeId: string, workerId: string): Promise<void> {
+async function assertWorkerReadable(
+  storeId: string,
+  workerId: string,
+  actorId: string,
+): Promise<void> {
   const worker = await workerFinancialRepository.findWorkerUserInStore(storeId, workerId);
-  if (!worker || !isWorkforceLedgerRole(worker.role)) {
+  if (!worker) {
+    throw ApiError.notFound('Worker not found');
+  }
+  // Self-service `/me/finances` must work for any signed-in store user,
+  // including ADMIN. Cross-user reads stay limited to workforce roles.
+  if (actorId === workerId) return;
+  if (!isWorkforceLedgerRole(worker.role)) {
     throw ApiError.notFound('Worker not found');
   }
 }
@@ -232,7 +242,7 @@ export async function listWorkerTransactions(options: {
   if (options.actor.id !== options.workerId) {
     assertCanManageWorkerFinances(options.actor.role);
   }
-  await assertWorkerReadable(options.storeId, options.workerId);
+  await assertWorkerReadable(options.storeId, options.workerId, options.actor.id);
 
   const period = await resolveOptionalPeriod(options.storeId, options.from, options.to);
 
@@ -258,7 +268,7 @@ export async function getWorkerSummary(
   if (actor.id !== workerId) {
     assertCanManageWorkerFinances(actor.role);
   }
-  await assertWorkerReadable(storeId, workerId);
+  await assertWorkerReadable(storeId, workerId, actor.id);
 
   const period = await resolveOptionalPeriod(storeId, query?.from, query?.to);
 

@@ -75,6 +75,8 @@ const EMPLOYEE_RECORD = {
   responsibilities: [{ responsibility: WorkerResponsibility.ASSEMBLER }],
 };
 
+const CATEGORY_ID = 'clxxxxxxxxxxxxxxxxxxxxxxxxx';
+
 const PRODUCT = {
   id: 'clxxxxxxxxxxxxxxxxxxxxxxxx1',
   name: 'Divan',
@@ -166,9 +168,22 @@ describe('products catalogue routes', () => {
       costPrice: 5_000_000,
       defaultSalePrice: 7_300_000,
       sku: 'DV-01',
+      categoryId: CATEGORY_ID,
     });
     expect(res.status).toBe(201);
     expect(res.body.data.product.name).toBe('Divan');
+    expect(catalogueServiceMock.createProduct).toHaveBeenCalled();
+  });
+
+  it('rejects create without categoryId', async () => {
+    const agent = await signedInAs(ADMIN_RECORD);
+    const res = await agent.post('/api/products').send({
+      name: 'Divan',
+      costPrice: 5_000_000,
+      defaultSalePrice: 7_300_000,
+    });
+    expect(res.status).toBe(422);
+    expect(catalogueServiceMock.createProduct).not.toHaveBeenCalled();
   });
 
   it('rejects create with negative price', async () => {
