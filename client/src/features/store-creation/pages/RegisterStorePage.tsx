@@ -1,19 +1,27 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   UZBEKISTAN_REGIONS,
+  isPlatformAdminAuth,
+  parseBusinessType,
+  validateAuthenticatedBusinessRequestDraft,
   validateStoreCreationDraft,
+  type CreateAuthenticatedBusinessRequestBody,
   type CreateStoreRequestBody,
 } from '@furniture-erp/shared';
 import { AlertCircle, Loader2, Store } from 'lucide-react';
-import { useForm } from 'react-hook-form';
-import { Link, useNavigate } from 'react-router-dom';
+import { useForm, type FieldErrors, type UseFormRegister } from 'react-hook-form';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
 
+import { useCurrentUser } from '@/features/auth/hooks/use-auth';
 import { ApiClientError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { ROUTES } from '@/routes/paths';
 
-import { useCreateStoreRequest } from '../hooks/use-store-creation';
+import {
+  useCreateAuthenticatedBusinessRequest,
+  useCreateStoreRequest,
+} from '../hooks/use-store-creation';
 
 const registerStoreSchema = z
   .object({
@@ -35,7 +43,26 @@ const registerStoreSchema = z
     }
   });
 
+const existingIdentitySchema = z
+  .object({
+    phone: z.string(),
+    storeName: z.string(),
+    region: z.string(),
+    district: z.string(),
+    address: z.string(),
+  })
+  .superRefine((value, ctx) => {
+    for (const error of validateAuthenticatedBusinessRequestDraft({
+      ...value,
+      businessType: 'FURNITURE',
+    })) {
+      if (error.field === 'businessType') continue;
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [error.field], message: error.message });
+    }
+  });
+
 type RegisterStoreValues = z.infer<typeof registerStoreSchema>;
+type ExistingIdentityValues = z.infer<typeof existingIdentitySchema>;
 
 const fieldClass = (hasError: boolean) =>
   cn(
@@ -45,6 +72,31 @@ const fieldClass = (hasError: boolean) =>
   );
 
 export function RegisterStorePage() {
+  const { data: user, isPending } = useCurrentUser();
+  const [params] = useSearchParams();
+  const businessType = parseBusinessType(params.get('businessType'));
+
+  if (isPending) {
+    return (
+      <main className="min-h-screen overflow-x-hidden bg-canvas px-4 py-10 sm:px-6">
+        <p className="flex items-center justify-center gap-2 text-sm text-ink-muted">
+          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          Yuklanmoqda…
+        </p>
+      </main>
+    );
+  }
+
+  const existingIdentity = Boolean(user) && !isPlatformAdminAuth(user);
+
+  return existingIdentity ? (
+    <ExistingIdentityForm businessType={businessType} />
+  ) : (
+    <GuestForm businessType={businessType} />
+  );
+}
+
+function GuestForm({ businessType }: { businessType: CreateStoreRequestBody['businessType'] }) {
   const navigate = useNavigate();
   const createRequest = useCreateStoreRequest();
 
@@ -74,7 +126,7 @@ export function RegisterStorePage() {
   const submitError = createRequest.error ? describeFailure(createRequest.error) : null;
 
   const onSubmit = handleSubmit((values) => {
-    const body: CreateStoreRequestBody = values;
+    const body: CreateStoreRequestBody = { ...values, businessType };
     createRequest.mutate(body, {
       onSuccess: ({ request }) => {
         navigate(ROUTES.registerStoreStatus(request.id), { replace: true });
@@ -93,6 +145,248 @@ export function RegisterStorePage() {
   });
 
   return (
+    <Shell
+      subtitle="Ariza Platform Admin tomonidan ko'rib chiqiladi. Do'kon darhol ochilmaydi."
+      submitError={submitError}
+      footer
+    >
+      <form onSubmit={onSubmit} noValidate className="space-y-6">
+        <fieldset className="space-y-4">
+          <legend className="text-sm font-semibold text-ink">Ariza beruvchi</legend>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field id="applicantFirstName" label="Ism" error={errors.applicantFirstName?.message}>
+              <input
+                {...register('applicantFirstName')}
+                id="applicantFirstName"
+                disabled={isSubmitting}
+                autoComplete="given-name"
+                className={fieldClass(Boolean(errors.applicantFirstName))}
+              />
+            </Field>
+            <Field id="applicantLastName" label="Familiya" error={errors.applicantLastName?.message}>
+              <input
+                {...register('applicantLastName')}
+                id="applicantLastName"
+                disabled={isSubmitting}
+                autoComplete="family-name"
+                className={fieldClass(Boolean(errors.applicantLastName))}
+              />
+            </Field>
+            <Field id="phone" label="Telefon raqami" error={errors.phone?.message}>
+              <input
+                {...register('phone')}
+                id="phone"
+                type="tel"
+                disabled={isSubmitting}
+                autoComplete="tel"
+                placeholder="+998 XX XXX XX XX"
+                className={fieldClass(Boolean(errors.phone))}
+              />
+            </Field>
+            <Field id="email" label="Email" error={errors.email?.message}>
+              <input
+                {...register('email')}
+                id="email"
+                type="email"
+                disabled={isSubmitting}
+                autoComplete="email"
+                className={fieldClass(Boolean(errors.email))}
+              />
+            </Field>
+          </div>
+        </fieldset>
+
+        <StoreFields
+          register={register as unknown as UseFormRegister<ExistingIdentityValues>}
+          errors={errors as FieldErrors<ExistingIdentityValues>}
+          isSubmitting={isSubmitting}
+        />
+
+        <fieldset className="space-y-4">
+          <legend className="text-sm font-semibold text-ink">Account</legend>
+          <Field id="username" label="Login" error={errors.username?.message}>
+            <input
+              {...register('username')}
+              id="username"
+              disabled={isSubmitting}
+              autoComplete="username"
+              className={fieldClass(Boolean(errors.username))}
+            />
+          </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field id="password" label="Password" error={errors.password?.message}>
+              <input
+                {...register('password')}
+                id="password"
+                type="password"
+                disabled={isSubmitting}
+                autoComplete="new-password"
+                className={fieldClass(Boolean(errors.password))}
+              />
+            </Field>
+            <Field
+              id="passwordConfirmation"
+              label="Password confirmation"
+              error={errors.passwordConfirmation?.message}
+            >
+              <input
+                {...register('passwordConfirmation')}
+                id="passwordConfirmation"
+                type="password"
+                disabled={isSubmitting}
+                autoComplete="new-password"
+                className={fieldClass(Boolean(errors.passwordConfirmation))}
+              />
+            </Field>
+          </div>
+        </fieldset>
+
+        <SubmitButton isSubmitting={isSubmitting} />
+      </form>
+    </Shell>
+  );
+}
+
+function ExistingIdentityForm({
+  businessType,
+}: {
+  businessType: CreateAuthenticatedBusinessRequestBody['businessType'];
+}) {
+  const navigate = useNavigate();
+  const createRequest = useCreateAuthenticatedBusinessRequest();
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    setError,
+  } = useForm<ExistingIdentityValues>({
+    resolver: zodResolver(existingIdentitySchema),
+    defaultValues: {
+      phone: '',
+      storeName: '',
+      region: '',
+      district: '',
+      address: '',
+    },
+  });
+
+  const isSubmitting = createRequest.isPending;
+  const submitError = createRequest.error ? describeFailure(createRequest.error) : null;
+
+  const onSubmit = handleSubmit((values) => {
+    const body: CreateAuthenticatedBusinessRequestBody = { ...values, businessType };
+    createRequest.mutate(body, {
+      onSuccess: ({ request }) => {
+        navigate(ROUTES.registerStoreStatus(request.id), { replace: true });
+      },
+      onError: (error) => {
+        if (error instanceof ApiClientError && error.details?.length) {
+          for (const detail of error.details) {
+            const field = detail.field as keyof ExistingIdentityValues;
+            if (field in values) {
+              setError(field, { message: detail.message });
+            }
+          }
+        }
+      },
+    });
+  });
+
+  return (
+    <Shell
+      subtitle="Shaxsiy ma’lumotlaringiz qayta so‘ralmaydi. Faqat yangi biznes uchun maydonlarni to‘ldiring. Ariza Platform Admin tomonidan ko‘rib chiqiladi."
+      submitError={submitError}
+    >
+      <form onSubmit={onSubmit} noValidate className="space-y-6">
+        <Field id="phone" label="Telefon raqami" error={errors.phone?.message}>
+          <input
+            {...register('phone')}
+            id="phone"
+            type="tel"
+            disabled={isSubmitting}
+            autoComplete="tel"
+            placeholder="+998 XX XXX XX XX"
+            className={fieldClass(Boolean(errors.phone))}
+          />
+        </Field>
+        <StoreFields register={register} errors={errors} isSubmitting={isSubmitting} />
+        <SubmitButton isSubmitting={isSubmitting} />
+      </form>
+    </Shell>
+  );
+}
+
+function StoreFields({
+  register,
+  errors,
+  isSubmitting,
+}: {
+  register: UseFormRegister<ExistingIdentityValues>;
+  errors: FieldErrors<ExistingIdentityValues>;
+  isSubmitting: boolean;
+}) {
+  return (
+    <fieldset className="space-y-4">
+      <legend className="text-sm font-semibold text-ink">Do&apos;kon</legend>
+      <Field id="storeName" label="Do'kon nomi" error={errors.storeName?.message}>
+        <input
+          {...register('storeName')}
+          id="storeName"
+          disabled={isSubmitting}
+          className={fieldClass(Boolean(errors.storeName))}
+        />
+      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field id="region" label="Viloyat" error={errors.region?.message}>
+          <select
+            {...register('region')}
+            id="region"
+            disabled={isSubmitting}
+            className={fieldClass(Boolean(errors.region))}
+          >
+            <option value="">Tanlang</option>
+            {UZBEKISTAN_REGIONS.map((region) => (
+              <option key={region} value={region}>
+                {region}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field id="district" label="Tuman/shahar" error={errors.district?.message}>
+          <input
+            {...register('district')}
+            id="district"
+            disabled={isSubmitting}
+            className={fieldClass(Boolean(errors.district))}
+          />
+        </Field>
+      </div>
+      <Field id="address" label="Manzil" error={errors.address?.message}>
+        <input
+          {...register('address')}
+          id="address"
+          disabled={isSubmitting}
+          autoComplete="street-address"
+          className={fieldClass(Boolean(errors.address))}
+        />
+      </Field>
+    </fieldset>
+  );
+}
+
+function Shell({
+  subtitle,
+  submitError,
+  footer = false,
+  children,
+}: {
+  subtitle: string;
+  submitError: string | null;
+  footer?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
     <main className="min-h-screen overflow-x-hidden bg-canvas px-4 py-10 sm:px-6">
       <div className="mx-auto w-full max-w-2xl">
         <div className="flex flex-col items-center gap-3 text-center">
@@ -101,9 +395,7 @@ export function RegisterStorePage() {
           </div>
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-ink">Yangi do&apos;kon ochish</h1>
-            <p className="mt-1 text-sm text-ink-muted">
-              Ariza Platform Admin tomonidan ko&apos;rib chiqiladi. Do&apos;kon darhol ochilmaydi.
-            </p>
+            <p className="mt-1 text-sm text-ink-muted">{subtitle}</p>
           </div>
         </div>
 
@@ -117,157 +409,32 @@ export function RegisterStorePage() {
               <p className="text-sm text-danger-700">{submitError}</p>
             </div>
           ) : null}
-
-          <form onSubmit={onSubmit} noValidate className="space-y-6">
-            <fieldset className="space-y-4">
-              <legend className="text-sm font-semibold text-ink">Ariza beruvchi</legend>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field id="applicantFirstName" label="Ism" error={errors.applicantFirstName?.message}>
-                  <input
-                    {...register('applicantFirstName')}
-                    id="applicantFirstName"
-                    disabled={isSubmitting}
-                    autoComplete="given-name"
-                    className={fieldClass(Boolean(errors.applicantFirstName))}
-                  />
-                </Field>
-                <Field id="applicantLastName" label="Familiya" error={errors.applicantLastName?.message}>
-                  <input
-                    {...register('applicantLastName')}
-                    id="applicantLastName"
-                    disabled={isSubmitting}
-                    autoComplete="family-name"
-                    className={fieldClass(Boolean(errors.applicantLastName))}
-                  />
-                </Field>
-                <Field id="phone" label="Telefon raqami" error={errors.phone?.message}>
-                  <input
-                    {...register('phone')}
-                    id="phone"
-                    type="tel"
-                    disabled={isSubmitting}
-                    autoComplete="tel"
-                    placeholder="+998 XX XXX XX XX"
-                    className={fieldClass(Boolean(errors.phone))}
-                  />
-                </Field>
-                <Field id="email" label="Email" error={errors.email?.message}>
-                  <input
-                    {...register('email')}
-                    id="email"
-                    type="email"
-                    disabled={isSubmitting}
-                    autoComplete="email"
-                    className={fieldClass(Boolean(errors.email))}
-                  />
-                </Field>
-              </div>
-            </fieldset>
-
-            <fieldset className="space-y-4">
-              <legend className="text-sm font-semibold text-ink">Do&apos;kon</legend>
-              <Field id="storeName" label="Do'kon nomi" error={errors.storeName?.message}>
-                <input
-                  {...register('storeName')}
-                  id="storeName"
-                  disabled={isSubmitting}
-                  className={fieldClass(Boolean(errors.storeName))}
-                />
-              </Field>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field id="region" label="Viloyat" error={errors.region?.message}>
-                  <select
-                    {...register('region')}
-                    id="region"
-                    disabled={isSubmitting}
-                    className={fieldClass(Boolean(errors.region))}
-                  >
-                    <option value="">Tanlang</option>
-                    {UZBEKISTAN_REGIONS.map((region) => (
-                      <option key={region} value={region}>
-                        {region}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field id="district" label="Tuman/shahar" error={errors.district?.message}>
-                  <input
-                    {...register('district')}
-                    id="district"
-                    disabled={isSubmitting}
-                    className={fieldClass(Boolean(errors.district))}
-                  />
-                </Field>
-              </div>
-              <Field id="address" label="Manzil" error={errors.address?.message}>
-                <input
-                  {...register('address')}
-                  id="address"
-                  disabled={isSubmitting}
-                  autoComplete="street-address"
-                  className={fieldClass(Boolean(errors.address))}
-                />
-              </Field>
-            </fieldset>
-
-            <fieldset className="space-y-4">
-              <legend className="text-sm font-semibold text-ink">Account</legend>
-              <Field id="username" label="Login" error={errors.username?.message}>
-                <input
-                  {...register('username')}
-                  id="username"
-                  disabled={isSubmitting}
-                  autoComplete="username"
-                  className={fieldClass(Boolean(errors.username))}
-                />
-              </Field>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field id="password" label="Password" error={errors.password?.message}>
-                  <input
-                    {...register('password')}
-                    id="password"
-                    type="password"
-                    disabled={isSubmitting}
-                    autoComplete="new-password"
-                    className={fieldClass(Boolean(errors.password))}
-                  />
-                </Field>
-                <Field
-                  id="passwordConfirmation"
-                  label="Password confirmation"
-                  error={errors.passwordConfirmation?.message}
-                >
-                  <input
-                    {...register('passwordConfirmation')}
-                    id="passwordConfirmation"
-                    type="password"
-                    disabled={isSubmitting}
-                    autoComplete="new-password"
-                    className={fieldClass(Boolean(errors.passwordConfirmation))}
-                  />
-                </Field>
-              </div>
-            </fieldset>
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-input bg-brand-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isSubmitting ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
-              {isSubmitting ? 'Yuborilmoqda…' : "Do'kon ochish uchun ariza yuborish"}
-            </button>
-          </form>
+          {children}
         </div>
 
-        <p className="mt-6 text-center text-sm text-ink-muted">
-          Allaqachon hisobingiz bormi?{' '}
-          <Link to={ROUTES.login} className="font-medium text-brand-700 hover:underline">
-            Kirish
-          </Link>
-        </p>
+        {footer ? (
+          <p className="mt-6 text-center text-sm text-ink-muted">
+            Allaqachon hisobingiz bormi?{' '}
+            <Link to={ROUTES.login} className="font-medium text-brand-700 hover:underline">
+              Kirish
+            </Link>
+          </p>
+        ) : null}
       </div>
     </main>
+  );
+}
+
+function SubmitButton({ isSubmitting }: { isSubmitting: boolean }) {
+  return (
+    <button
+      type="submit"
+      disabled={isSubmitting}
+      className="inline-flex w-full items-center justify-center gap-2 rounded-input bg-brand-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {isSubmitting ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
+      {isSubmitting ? 'Yuborilmoqda…' : "Do'kon ochish uchun ariza yuborish"}
+    </button>
   );
 }
 

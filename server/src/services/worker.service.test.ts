@@ -28,6 +28,7 @@ const {
   listWorkerTasks,
   listWorkerActivity,
   findActiveWorkerWithResponsibility,
+  tryEnsureUserOnBusinessWorkspace,
 } = vi.hoisted(() => ({
   prismaMock: {
     $transaction: vi.fn(),
@@ -47,6 +48,7 @@ const {
   listWorkerTasks: vi.fn(),
   listWorkerActivity: vi.fn(),
   findActiveWorkerWithResponsibility: vi.fn(),
+  tryEnsureUserOnBusinessWorkspace: vi.fn(),
 }));
 
 vi.mock('../lib/prisma.js', () => ({
@@ -64,6 +66,10 @@ vi.mock('./account-deletion.service.js', () => ({
 vi.mock('./entitlement.service.js', () => ({
   assertCanUseFeature: vi.fn(),
   assertCanCreateResource: vi.fn(),
+}));
+
+vi.mock('../modules/accounts/account-layer.service.js', () => ({
+  tryEnsureUserOnBusinessWorkspace,
 }));
 
 vi.mock('./seller-commission.service.js', () => ({
@@ -141,6 +147,7 @@ beforeEach(() => {
   assertAccountNotDeletedMock.mockResolvedValue(undefined);
   computeWorkerStats.mockResolvedValue(EMPTY_STATS);
   recordActivity.mockResolvedValue(undefined);
+  tryEnsureUserOnBusinessWorkspace.mockResolvedValue(undefined);
   prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn({}));
 });
 
@@ -181,6 +188,7 @@ describe('worker.service', () => {
       expect.objectContaining({ type: WorkerActivityType.WORKER_CREATED, storeId: 'store_1' }),
       expect.anything(),
     );
+    expect(tryEnsureUserOnBusinessWorkspace).toHaveBeenCalledWith('user_ali');
   });
 
   it('rejects worker management for non-admin roles', async () => {

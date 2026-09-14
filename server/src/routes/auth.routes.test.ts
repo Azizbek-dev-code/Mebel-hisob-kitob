@@ -1,4 +1,11 @@
-import { UserRole } from '@furniture-erp/shared';
+import {
+  PERSONAL_PLAN_KEY,
+  SubscriptionStatus,
+  UserRole,
+  WorkspaceMembershipRole,
+  WorkspaceStatus,
+  WorkspaceType,
+} from '@furniture-erp/shared';
 import bcrypt from 'bcryptjs';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,6 +20,20 @@ const { prismaMock } = vi.hoisted(() => ({
     user: {
       findFirst: vi.fn(),
       update: vi.fn(),
+    },
+    identity: {
+      findFirst: vi.fn(),
+    },
+    workspaceMembership: {
+      findUnique: vi.fn(),
+    },
+    personalSubscription: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+    },
+    subscriptionRequest: {
+      findFirst: vi.fn(),
     },
   },
 }));
@@ -44,6 +65,37 @@ const ADMIN_RECORD = {
   responsibilities: [],
 };
 
+const PERSONAL_SUBSCRIPTION = {
+  status: SubscriptionStatus.TRIAL,
+  planKey: PERSONAL_PLAN_KEY.TRIAL,
+  trialEndsAt: new Date('2026-09-20T00:00:00.000Z'),
+  currentPeriodEnd: new Date('2026-09-20T00:00:00.000Z'),
+  trialWelcomeSeenAt: new Date('2026-09-13T00:00:00.000Z'),
+};
+
+function mockPersonalIdentity() {
+  prismaMock.user.findFirst.mockResolvedValue(null);
+  prismaMock.identity.findFirst.mockResolvedValue({
+    id: 'idn_1',
+    email: 'navphase2@example.com',
+    fullName: 'Nav Test',
+    passwordHash: PASSWORD_HASH,
+    memberships: [{ workspaceId: 'ws_1', role: WorkspaceMembershipRole.OWNER }],
+  });
+  prismaMock.workspaceMembership.findUnique.mockResolvedValue({
+    role: WorkspaceMembershipRole.OWNER,
+    identity: { id: 'idn_1', email: 'navphase2@example.com', fullName: 'Nav Test' },
+    workspace: {
+      id: 'ws_1',
+      type: WorkspaceType.PERSONAL,
+      name: 'Nav Test shaxsiy',
+      status: WorkspaceStatus.ACTIVE,
+      storeId: null,
+    },
+  });
+  prismaMock.personalSubscription.findUnique.mockResolvedValue(PERSONAL_SUBSCRIPTION);
+}
+
 function setCookieHeader(response: request.Response): string[] {
   const header = response.headers['set-cookie'];
   if (!header) return [];
@@ -57,8 +109,16 @@ function authCookie(response: request.Response): string | undefined {
 beforeEach(() => {
   prismaMock.user.findFirst.mockReset();
   prismaMock.user.update.mockReset();
+  prismaMock.identity.findFirst.mockReset();
+  prismaMock.workspaceMembership.findUnique.mockReset();
+  prismaMock.personalSubscription.findUnique.mockReset();
+  prismaMock.personalSubscription.create.mockReset();
+  prismaMock.personalSubscription.update.mockReset();
+  prismaMock.subscriptionRequest.findFirst.mockReset();
   prismaMock.user.findFirst.mockResolvedValue(ADMIN_RECORD);
   prismaMock.user.update.mockResolvedValue(ADMIN_RECORD);
+  prismaMock.identity.findFirst.mockResolvedValue(null);
+  prismaMock.subscriptionRequest.findFirst.mockResolvedValue(null);
 });
 
 describe('POST /api/auth/login', () => {
@@ -274,5 +334,35 @@ describe('POST /api/auth/logout', () => {
 
   it('succeeds for a caller who was never signed in', async () => {
     await request(app).post('/api/auth/logout').expect(204);
+  });
+});
+
+describe('store vs personal session isolation', () => {
+  it('blocks a personal session from store ERP routes', async () => {
+    mockPersonalIdentity();
+    const agent = request.agent(app);
+    const login = await agent
+      .post('/api/auth/login')
+      .send({ identifier: 'navphase2@example.com', password: PASSWORD })
+      .expect(200);
+
+    expect(login.body.data.user.kind).toBe('PERSONAL');
+    expect(login.body.data.user.storeId).toBeNull();
+
+    const sales = await agent.get('/api/sales').expect(403);
+    expect(sales.body.error.code).toBe('FORBIDDEN');
+    expect(sales.body.error.message).toContain('do‘kon ERP');
+
+    const expenses = await agent.get('/api/expenses').expect(403);
+    expect(expenses.body.error.code).toBe('FORBIDDEN');
+  });
+
+  it('blocks a store session from personal finance routes', async () => {
+    const agent = request.agent(app);
+    await agent.post('/api/auth/login').send({ identifier: 'admin', password: PASSWORD }).expect(200);
+
+    const summary = await agent.get('/api/personal/summary').expect(403);
+    expect(summary.body.error.code).toBe('FORBIDDEN');
+    expect(summary.body.error.message).toContain('shaxsiy moliya');
   });
 });

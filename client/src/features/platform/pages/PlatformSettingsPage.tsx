@@ -25,6 +25,9 @@ export function PlatformSettingsPage() {
   const [billingCycle, setBillingCycle] = useState(PlatformBillingCycle.MONTHLY);
   const [paymentRemindersEnabled, setPaymentRemindersEnabled] = useState(false);
   const [reminderDaysBeforeDue, setReminderDaysBeforeDue] = useState(3);
+  const [paymentCardNumber, setPaymentCardNumber] = useState('');
+  const [paymentAccountNumber, setPaymentAccountNumber] = useState('');
+  const [paymentInstructions, setPaymentInstructions] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -36,6 +39,9 @@ export function PlatformSettingsPage() {
     setBillingCycle(settings.billingCycle);
     setPaymentRemindersEnabled(settings.paymentRemindersEnabled);
     setReminderDaysBeforeDue(settings.reminderDaysBeforeDue);
+    setPaymentCardNumber(settings.paymentCardNumber ?? '');
+    setPaymentAccountNumber(settings.paymentAccountNumber ?? '');
+    setPaymentInstructions(settings.paymentInstructions ?? '');
   }, [settings]);
 
   async function onSubmit(event: FormEvent) {
@@ -50,6 +56,9 @@ export function PlatformSettingsPage() {
         billingCycle,
         paymentRemindersEnabled,
         reminderDaysBeforeDue,
+        paymentCardNumber,
+        paymentAccountNumber,
+        paymentInstructions,
       });
       setSaved(true);
     } catch (caught) {
@@ -121,6 +130,31 @@ export function PlatformSettingsPage() {
                 className={fieldClass}
                 value={reminderDaysBeforeDue}
                 onChange={(event) => setReminderDaysBeforeDue(Number(event.target.value))}
+              />
+            </label>
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium">To‘lov kartasi</span>
+              <input
+                className={fieldClass}
+                value={paymentCardNumber}
+                onChange={(event) => setPaymentCardNumber(event.target.value)}
+              />
+            </label>
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium">To‘lov hisob raqami</span>
+              <input
+                className={fieldClass}
+                value={paymentAccountNumber}
+                onChange={(event) => setPaymentAccountNumber(event.target.value)}
+              />
+            </label>
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium">To‘lov izohi (foydalanuvchiga)</span>
+              <textarea
+                className={fieldClass}
+                rows={3}
+                value={paymentInstructions}
+                onChange={(event) => setPaymentInstructions(event.target.value)}
               />
             </label>
             {error ? (

@@ -7,6 +7,7 @@ import {
   UserRole,
   canWriteWithSubscription,
   effectiveSubscriptionStatus,
+  persistedExpiredStatus,
   isUnsafeFreePlanFeatureSet,
   isWithinLimit,
   limitByKey,
@@ -125,6 +126,8 @@ export function toPlanDto(plan: PlanWithEntitlements): SubscriptionPlanDto {
     trialDays: plan.trialDays,
     isActive: plan.isActive,
     isDefaultTrial: plan.isDefaultTrial,
+    rank: plan.rank ?? 0,
+    audience: plan.audience ?? 'STORE',
     features: (plan.features ?? {}) as SubscriptionPlanFeatures,
     featureKeys: resolved.featureKeys,
     featuresRestricted: resolved.featuresRestricted,
@@ -289,11 +292,19 @@ const currentSubInclude = {
   pendingPlan: { select: { name: true } },
 } satisfies Prisma.StoreSubscriptionInclude;
 
-export async function getCurrentSubscription(storeId: string) {
-  return prisma.storeSubscription.findFirst({
+export async function getCurrentSubscription(storeId: string, now = new Date()) {
+  const sub = await prisma.storeSubscription.findFirst({
     where: { storeId, isCurrent: true },
     include: currentSubInclude,
   });
+  if (!sub) return null;
+  const nextStatus = persistedExpiredStatus(sub.status, effectiveSubscriptionStatus(sub, now));
+  if (!nextStatus) return sub;
+  await prisma.storeSubscription.update({
+    where: { id: sub.id },
+    data: { status: nextStatus },
+  });
+  return { ...sub, status: nextStatus };
 }
 
 export async function getCurrentPlan(storeId: string): Promise<PlanWithEntitlements | null> {
@@ -302,7 +313,7 @@ export async function getCurrentPlan(storeId: string): Promise<PlanWithEntitleme
 }
 
 export async function getSubscriptionStatus(storeId: string, now = new Date()) {
-  const sub = await getCurrentSubscription(storeId);
+  const sub = await getCurrentSubscription(storeId, now);
   return effectiveSubscriptionStatus(sub, now);
 }
 
@@ -311,7 +322,7 @@ export function isSubscriptionActive(storeIdStatus: string): boolean {
 }
 
 export async function hasFeature(storeId: string, featureKey: string, now = new Date()): Promise<boolean> {
-  const sub = await getCurrentSubscription(storeId);
+  const sub = await getCurrentSubscription(storeId, now);
   if (!sub) return false;
   if (!canWriteWithSubscription(effectiveSubscriptionStatus(sub, now))) return false;
   return planAllowsFeature(enabledFeatureKeys(sub.plan), featureKey, planFeaturesRestricted(sub.plan));
@@ -372,7 +383,7 @@ export async function getResourceUsage(storeId: string): Promise<ResourceUsageDt
 }
 
 export async function assertCanUseFeature(storeId: string, featureKey: string, now = new Date()): Promise<void> {
-  const sub = await getCurrentSubscription(storeId);
+  const sub = await getCurrentSubscription(storeId, now);
   const status = effectiveSubscriptionStatus(sub, now);
   if (!canWriteWithSubscription(status)) {
     throw ApiError.subscriptionRequired();

@@ -1,5 +1,17 @@
 import { Router } from 'express';
 
+import { accountsRouter } from '../modules/accounts/accounts.routes.js';
+import { onboardingRouter, platformOnboardingRouter } from '../modules/personal-finance/onboarding/onboarding.routes.js';
+import { personalBillingRouter } from '../modules/personal-finance/billing/personal-billing.routes.js';
+import { personalLedgerRouter } from '../modules/personal-finance/ledger/personal-ledger.routes.js';
+import { personalPlanningRouter } from '../modules/personal-finance/planning/personal-planning.routes.js';
+import { personalAnalyticsRouter } from '../modules/personal-finance/analytics/personal-analytics.routes.js';
+import { personalDebtsRouter } from '../modules/personal-finance/debts/personal-debts.routes.js';
+import { personalNotificationsRouter } from '../modules/personal-finance/notifications/personal-notifications.routes.js';
+import { personalRecurringRouter } from '../modules/personal-finance/recurring/personal-recurring.routes.js';
+import { platformPersonalRouter } from '../modules/personal-finance/stats/personal-stats.routes.js';
+import { platformAccountsRouter } from '../modules/platform-accounts/platform-accounts.routes.js';
+import { platformReferralsRouter, referralsRouter } from '../modules/referrals/referrals.routes.js';
 import { analyticsRouter } from './analytics.routes.js';
 import { auditRouter } from './audit.routes.js';
 import { authRouter } from './auth.routes.js';
@@ -32,6 +44,20 @@ export const apiRouter = Router();
 
 apiRouter.use('/health', healthRouter);
 apiRouter.use('/auth', authRouter);
+apiRouter.use('/accounts', accountsRouter);
+apiRouter.use('/onboarding', onboardingRouter);
+apiRouter.use('/personal', personalBillingRouter);
+apiRouter.use('/personal', personalLedgerRouter);
+apiRouter.use('/personal', personalPlanningRouter);
+apiRouter.use('/personal', personalAnalyticsRouter);
+apiRouter.use('/personal', personalRecurringRouter);
+apiRouter.use('/personal', personalDebtsRouter);
+apiRouter.use('/personal', personalNotificationsRouter);
+apiRouter.use('/referrals', referralsRouter);
+apiRouter.use('/platform/referrals', platformReferralsRouter);
+apiRouter.use('/platform/personal', platformPersonalRouter);
+apiRouter.use('/platform/accounts', platformAccountsRouter);
+apiRouter.use('/platform/onboarding', platformOnboardingRouter);
 apiRouter.use('/store-requests', storeRequestsRouter);
 apiRouter.use('/platform/store-requests', platformStoreRequestsRouter);
 apiRouter.use('/platform/shops', platformShopsRouter);

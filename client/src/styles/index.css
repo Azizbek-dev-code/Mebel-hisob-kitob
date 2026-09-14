@@ -134,3 +134,34 @@
     background-color: var(--color-ink-subtle);
   }
 }
+
+/* Personal Finance shell — scoped so Mebel ERP screens keep indigo tokens. */
+.pf-shell {
+  --color-canvas: #f3f6f4;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f7faf8;
+  --color-surface-hover: #eef4f1;
+  --color-line: #e4ece8;
+  --color-line-strong: #cfdcd6;
+  --color-brand-50: #ecf8f4;
+  --color-brand-100: #d7f0e8;
+  --color-brand-500: #0f766e;
+  --color-brand-600: #0d5f59;
+  --color-brand-700: #115e59;
+  --color-brand-800: #134e4a;
+  --pf-income: #0f766e;
+  --pf-expense: #dc2626;
+  --pf-negative: #b42318;
+}
+
+.pf-amount-income {
+  color: var(--pf-income);
+}
+
+.pf-amount-expense {
+  color: var(--pf-expense);
+}
+
+.pf-amount-negative {
+  color: var(--pf-negative);
+}

@@ -1,9 +1,12 @@
 import {
   UserRole,
   WorkerResponsibility,
+  BusinessType,
+  WorkspaceType,
   featureForNavKey,
+  isPersonalAuth,
   planAllowsFeature,
-  type AuthUser,
+  type AuthPrincipal,
 } from '@furniture-erp/shared';
 import {
   BarChart3,
@@ -11,19 +14,21 @@ import {
   CircleDollarSign,
   ClipboardList,
   CreditCard,
+  Gift,
+  Gauge,
   HardHat,
-  Inbox,
   LayoutDashboard,
   LineChart,
   PackagePlus,
+  Receipt,
+  Rocket,
   Settings,
   ShoppingCart,
   Sofa,
-  Store,
   Tags,
+  Target,
   Truck,
   UserRound,
-  UserX,
   Users,
   Wallet,
   Wrench,
@@ -49,6 +54,7 @@ export interface NavItem {
 export const NAV_ITEMS: readonly NavItem[] = [
   { key: 'dashboard', labelKey: 'nav.dashboard', to: ROUTES.dashboard, icon: LayoutDashboard },
   { key: 'billing', labelKey: 'nav.billing', to: ROUTES.billing, icon: Tags },
+  { key: 'referral', labelKey: 'nav.referral', to: ROUTES.storeReferral, icon: Gift },
   { key: 'sales', labelKey: 'nav.sales', to: ROUTES.sales, icon: ShoppingCart },
   { key: 'my-sales', labelKey: 'nav.mySales', to: ROUTES.mySales, icon: ShoppingCart },
   { key: 'my-reports', labelKey: 'nav.myReports', to: ROUTES.myReports, icon: BarChart3 },
@@ -85,51 +91,58 @@ export const NAV_ITEMS: readonly NavItem[] = [
 export const PLATFORM_NAV_ITEMS: readonly NavItem[] = [
   { key: 'platform-dashboard', labelKey: 'nav.dashboard', to: ROUTES.dashboard, icon: LayoutDashboard },
   {
-    key: 'store-requests',
-    labelKey: 'nav.storeRequests',
-    to: ROUTES.platformStoreRequests,
-    icon: Inbox,
-  },
-  {
-    key: 'platform-shops',
-    labelKey: 'nav.shops',
-    to: ROUTES.platformShops,
-    icon: Store,
+    key: 'platform-accounts',
+    labelKey: 'nav.accounts',
+    to: ROUTES.platformAccounts,
+    icon: Users,
     matchingPaths: [
+      ROUTES.platformAccountsPersonal,
+      ROUTES.platformAccountsBusiness,
+      ROUTES.platformStoreRequests,
+      ROUTES.platformShops,
       ROUTES.platformShopsActive,
       ROUTES.platformShopsPendingPayment,
       ROUTES.platformShopsBlocked,
       ROUTES.adminStores,
+      ROUTES.platformPersonal,
     ],
   },
   {
-    key: 'subscription-requests',
-    labelKey: 'nav.subscriptionRequests',
-    to: ROUTES.platformSubscriptionRequests,
-    icon: Inbox,
-    matchingPaths: [ROUTES.adminSubscriptionRequests],
-  },
-  {
-    key: 'platform-payments',
-    labelKey: 'nav.payments',
-    to: ROUTES.platformPayments,
+    key: 'platform-subscriptions',
+    labelKey: 'nav.subscriptions',
+    to: ROUTES.platformSubscriptions,
     icon: CreditCard,
-    matchingPaths: [ROUTES.platformPaymentsPending, ROUTES.platformPaymentsOverdue],
-  },
-  { key: 'platform-plans', labelKey: 'nav.plans', to: ROUTES.platformPlans, icon: Tags },
-  {
-    key: 'platform-expenses',
-    labelKey: 'nav.platformExpenses',
-    to: ROUTES.platformExpenses,
-    icon: Wallet,
-  },
-  { key: 'platform-pnl', labelKey: 'nav.pnl', to: ROUTES.platformPnl, icon: LineChart },
-  {
-    key: 'platform-analytics',
-    labelKey: 'nav.analytics',
-    to: ROUTES.platformAnalytics,
-    icon: BarChart3,
     matchingPaths: [
+      ROUTES.platformSubscriptionRequests,
+      ROUTES.adminSubscriptionRequests,
+      ROUTES.platformPayments,
+      ROUTES.platformPaymentsPending,
+      ROUTES.platformPaymentsOverdue,
+      ROUTES.platformPlans,
+    ],
+  },
+  {
+    key: 'platform-onboarding',
+    labelKey: 'nav.onboarding',
+    to: ROUTES.platformOnboarding,
+    icon: Rocket,
+    matchingPaths: [
+      ROUTES.platformOnboardingQuestions,
+      ROUTES.platformOnboardingAnswers,
+      ROUTES.platformOnboardingNeeds,
+      ROUTES.platformOnboardingSolutions,
+    ],
+  },
+  {
+    key: 'platform-finance',
+    labelKey: 'nav.finance',
+    to: ROUTES.platformFinance,
+    icon: LineChart,
+    matchingPaths: [
+      ROUTES.platformFinanceIncome,
+      ROUTES.platformExpenses,
+      ROUTES.platformPnl,
+      ROUTES.platformAnalytics,
       ROUTES.platformAnalyticsStores,
       ROUTES.platformAnalyticsRevenue,
       ROUTES.platformAnalyticsExpenses,
@@ -137,16 +150,66 @@ export const PLATFORM_NAV_ITEMS: readonly NavItem[] = [
     ],
   },
   {
+    key: 'platform-referral',
+    labelKey: 'nav.referral',
+    to: ROUTES.platformReferral,
+    icon: Gift,
+    matchingPaths: [
+      ROUTES.platformReferralUsers,
+      ROUTES.platformReferralWithdrawals,
+      ROUTES.platformReferralSettings,
+    ],
+  },
+  {
     key: 'platform-settings',
     labelKey: 'nav.settings',
     to: ROUTES.platformSettings,
     icon: Settings,
+    matchingPaths: [ROUTES.platformAccountDeletions],
+  },
+];
+
+export const PERSONAL_NAV_ITEMS: readonly NavItem[] = [
+  {
+    key: 'personal-home',
+    labelKey: 'personal.home',
+    to: ROUTES.personalDashboard,
+    icon: LayoutDashboard,
   },
   {
-    key: 'platform-account-deletions',
-    labelKey: 'nav.accountDeletions',
-    to: ROUTES.platformAccountDeletions,
-    icon: UserX,
+    key: 'personal-history',
+    labelKey: 'personal.history',
+    to: ROUTES.personalHistory,
+    icon: Receipt,
+    matchingPaths: [ROUTES.personalIncome, ROUTES.personalExpenses],
+  },
+  {
+    key: 'personal-budgets',
+    labelKey: 'personal.navBudget',
+    to: ROUTES.personalBudgets,
+    icon: Gauge,
+  },
+  {
+    key: 'personal-goals',
+    labelKey: 'personal.goals',
+    to: ROUTES.personalGoals,
+    icon: Target,
+  },
+  {
+    key: 'personal-settings',
+    labelKey: 'personal.settings',
+    to: ROUTES.personalSettings,
+    icon: Settings,
+    matchingPaths: [
+      ROUTES.personalAccounts,
+      ROUTES.personalCategories,
+      ROUTES.personalAnalytics,
+      ROUTES.personalBilling,
+      ROUTES.personalRecurring,
+      ROUTES.personalDebts,
+      ROUTES.personalNotifications,
+      ROUTES.personalReferral,
+    ],
   },
 ];
 
@@ -180,22 +243,41 @@ function longestMatchLength(item: NavItem, pathname: string): number {
 }
 
 function hasResponsibility(
-  user: AuthUser,
+  user: AuthPrincipal,
   responsibility: WorkerResponsibility,
 ): boolean {
+  if (isPersonalAuth(user)) return false;
   return user.responsibilities.includes(responsibility);
 }
 
-function isStoreManager(user: AuthUser): boolean {
+function isStoreManager(user: AuthPrincipal): boolean {
+  if (isPersonalAuth(user)) return false;
   return user.role === UserRole.ADMIN || user.role === UserRole.PLATFORM_ADMIN;
 }
 
-function allowedByPlan(user: AuthUser, item: NavItem): boolean {
+function allowedByPlan(user: AuthPrincipal, item: NavItem): boolean {
+  if (isPersonalAuth(user)) return true;
   if (user.role === UserRole.PLATFORM_ADMIN) return true;
   const feature = featureForNavKey(item.key);
   if (!feature) return true;
   if (!user.subscription) return true;
   return planAllowsFeature(user.subscription.featureKeys, feature, user.subscription.featuresRestricted);
+}
+
+/**
+ * ERP modules for a BUSINESS workspace. Every current vertical shares the
+ * furniture catalog; add a case here when a dedicated vertical ships.
+ */
+export function businessNavItems(_businessType: BusinessType = BusinessType.FURNITURE): readonly NavItem[] {
+  return NAV_ITEMS;
+}
+
+export function navItemsForAccountType(
+  type: WorkspaceType,
+  businessType: BusinessType = BusinessType.FURNITURE,
+): readonly NavItem[] {
+  if (type === WorkspaceType.PERSONAL) return PERSONAL_NAV_ITEMS;
+  return businessNavItems(businessType);
 }
 
 /**
@@ -205,17 +287,20 @@ function allowedByPlan(user: AuthUser, item: NavItem): boolean {
  * A worker with multiple responsibilities sees the union of those modules.
  * Plan features then hide modules the current tariff does not include.
  */
-export function navItemsForUser(user: AuthUser | null | undefined): NavItem[] {
+export function navItemsForUser(user: AuthPrincipal | null | undefined): NavItem[] {
   if (!user) return [];
+  if (isPersonalAuth(user)) return [...navItemsForAccountType(WorkspaceType.PERSONAL)];
+
+  const erpNav = businessNavItems(user.businessType ?? BusinessType.FURNITURE);
 
   let items: NavItem[];
 
   if (user.role === UserRole.PLATFORM_ADMIN) {
     items = [...PLATFORM_NAV_ITEMS];
   } else if (isStoreManager(user)) {
-    items = NAV_ITEMS.filter((item) => item.key !== 'my-sales' && item.key !== 'my-reports' && item.key !== 'profile');
+    items = erpNav.filter((item) => item.key !== 'my-sales' && item.key !== 'my-reports' && item.key !== 'profile');
   } else if (user.role === UserRole.CASHIER) {
-    items = NAV_ITEMS.filter((item) =>
+    items = erpNav.filter((item) =>
       [
         'dashboard',
         'sales',
@@ -249,54 +334,54 @@ export function navItemsForUser(user: AuthUser | null | undefined): NavItem[] {
       keys.add('assembly');
     }
 
-    items = NAV_ITEMS.filter((item) => keys.has(item.key));
+    items = erpNav.filter((item) => keys.has(item.key));
   }
 
   return items.filter((item) => allowedByPlan(user, item));
 }
 
-export function canManageWorkers(user: AuthUser | null | undefined): boolean {
+export function canManageWorkers(user: AuthPrincipal | null | undefined): boolean {
   return Boolean(user && isStoreManager(user));
 }
 
 /** Same store-admin gate used by sale cancellation (ADMIN / PLATFORM_ADMIN). */
-export function canCancelSale(user: AuthUser | null | undefined): boolean {
+export function canCancelSale(user: AuthPrincipal | null | undefined): boolean {
   return Boolean(user && isStoreManager(user));
 }
 
 /** Same store-admin gate used by the expenses API (ADMIN / PLATFORM_ADMIN). */
-export function canManageExpenses(user: AuthUser | null | undefined): boolean {
+export function canManageExpenses(user: AuthPrincipal | null | undefined): boolean {
   return Boolean(user && isStoreManager(user));
 }
 
 /** Inventory mutations and /inventory module — ADMIN / PLATFORM_ADMIN. */
-export function canManageInventory(user: AuthUser | null | undefined): boolean {
+export function canManageInventory(user: AuthPrincipal | null | undefined): boolean {
   return Boolean(user && isStoreManager(user));
 }
 
 /** Supplier purchases / payables — same store-admin gate as inventory. */
-export function canManagePurchasing(user: AuthUser | null | undefined): boolean {
+export function canManagePurchasing(user: AuthPrincipal | null | undefined): boolean {
   return canManageInventory(user);
 }
 
 /** Store profile settings — ADMIN / PLATFORM_ADMIN. */
-export function canManageStoreSettings(user: AuthUser | null | undefined): boolean {
+export function canManageStoreSettings(user: AuthPrincipal | null | undefined): boolean {
   return Boolean(user && isStoreManager(user));
 }
 
 /** Store audit trail — same admin gate as store settings. */
-export function canReadAuditLog(user: AuthUser | null | undefined): boolean {
+export function canReadAuditLog(user: AuthPrincipal | null | undefined): boolean {
   return canManageStoreSettings(user);
 }
 
 /** Logical backup / restore — same admin gate as store settings. */
-export function canManageBackups(user: AuthUser | null | undefined): boolean {
+export function canManageBackups(user: AuthPrincipal | null | undefined): boolean {
   return canManageStoreSettings(user);
 }
 
 /** Store-creation inbox — PLATFORM_ADMIN only. Store ADMIN is 403. */
-export function canReviewStoreCreationRequests(user: AuthUser | null | undefined): boolean {
-  return Boolean(user && user.role === UserRole.PLATFORM_ADMIN);
+export function canReviewStoreCreationRequests(user: AuthPrincipal | null | undefined): boolean {
+  return Boolean(user && !isPersonalAuth(user) && user.role === UserRole.PLATFORM_ADMIN);
 }
 
 /**
@@ -307,7 +392,7 @@ export function canReviewStoreCreationRequests(user: AuthUser | null | undefined
  */
 export function navItemForPath(
   pathname: string,
-  items: readonly NavItem[] = [...NAV_ITEMS, ...PLATFORM_NAV_ITEMS],
+  items: readonly NavItem[] = [...NAV_ITEMS, ...PLATFORM_NAV_ITEMS, ...PERSONAL_NAV_ITEMS],
 ): NavItem | undefined {
   const matches = items.filter((item) => itemMatchesPath(item, pathname));
   if (matches.length === 0) return undefined;

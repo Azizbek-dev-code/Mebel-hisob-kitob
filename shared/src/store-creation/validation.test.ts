@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  BusinessType,
   StoreCreationRequestStatus,
   STORE_CREATION_STATUS_LABELS,
 } from '../constants/enums.js';
@@ -12,6 +13,7 @@ import {
   normalizeEmail,
   normalizeStoreName,
   normalizeUsername,
+  validateAuthenticatedBusinessRequestDraft,
   validateStoreCreationDraft,
   type StoreCreationDraft,
 } from './validation.js';
@@ -32,6 +34,19 @@ function validDraft(overrides: Partial<StoreCreationDraft> = {}): StoreCreationD
     ...overrides,
   };
 }
+
+describe('BusinessType catalog', () => {
+  it('keeps furniture plus the additive verticals without inventing extra members', () => {
+    expect(BusinessType.FURNITURE).toBe('FURNITURE');
+    expect(Object.values(BusinessType)).toEqual([
+      'FURNITURE',
+      'CARPET',
+      'CLOTHING',
+      'ELECTRONICS',
+      'OTHER',
+    ]);
+  });
+});
 
 describe('StoreCreationRequestStatus', () => {
   it('has exactly the three platform-review states', () => {
@@ -175,5 +190,34 @@ describe('UZBEKISTAN_REGIONS', () => {
 describe('formatStoreCreationDate', () => {
   it('formats as dd.MM.yyyy in Tashkent time', () => {
     expect(formatStoreCreationDate('2026-08-21T12:00:00.000Z')).toBe('21.08.2026');
+  });
+});
+
+describe('validateAuthenticatedBusinessRequestDraft', () => {
+  it('accepts store fields without identity credentials', () => {
+    expect(
+      validateAuthenticatedBusinessRequestDraft({
+        phone: '+998901112233',
+        storeName: 'Fayz Gilam',
+        region: 'Samarqand',
+        district: 'Urgut',
+        address: "Bog' ko'chasi 1",
+        businessType: 'CARPET',
+      }),
+    ).toEqual([]);
+  });
+
+  it('rejects a missing business type and store name', () => {
+    const errors = validateAuthenticatedBusinessRequestDraft({
+      phone: '',
+      storeName: '',
+      region: '',
+      district: '',
+      address: '',
+      businessType: 'UNKNOWN',
+    });
+    expect(errors.map((item) => item.field)).toEqual(
+      expect.arrayContaining(['phone', 'storeName', 'region', 'district', 'address', 'businessType']),
+    );
   });
 });

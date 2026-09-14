@@ -7,7 +7,9 @@ import { useLogout } from '@/features/auth/hooks/use-auth';
 import { mockApi, SIGNED_OUT_RESPONSE } from '@/test/mock-api';
 import { renderWithProviders, screen } from '@/test/test-utils';
 
-import { ProtectedRoute, PublicOnlyRoute } from './guards';
+import { TEST_PERSONAL } from '@/test/auth-fixtures';
+
+import { PersonalProtectedRoute, ProtectedRoute, PublicOnlyRoute } from './guards';
 
 const ADMIN: AuthUser = {
   id: 'user_admin',
@@ -22,6 +24,7 @@ const ADMIN: AuthUser = {
 };
 
 const SIGNED_IN_RESPONSE = { status: 200, body: { success: true, data: { user: ADMIN } } };
+const SIGNED_IN_PERSONAL = { status: 200, body: { success: true, data: { user: TEST_PERSONAL } } };
 
 function Workspace() {
   const logout = useLogout();
@@ -45,6 +48,10 @@ function renderRoutes(initialPath: string) {
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<Workspace />} />
           <Route path="/reports" element={<p>Reports</p>} />
+          <Route path="/sales" element={<p>ERP sales</p>} />
+        </Route>
+        <Route element={<PersonalProtectedRoute />}>
+          <Route path="/personal/dashboard" element={<p>Personal dashboard</p>} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -123,5 +130,40 @@ describe('PublicOnlyRoute', () => {
 
     expect(await screen.findByText('Workspace')).toBeInTheDocument();
     expect(screen.queryByText('Login form')).not.toBeInTheDocument();
+  });
+
+  it('sends a personal session to the personal home instead of the store dashboard', async () => {
+    mockApi({ '/auth/me': SIGNED_IN_PERSONAL });
+    renderRoutes('/login');
+
+    expect(await screen.findByText('Personal dashboard')).toBeInTheDocument();
+    expect(screen.queryByText('Login form')).not.toBeInTheDocument();
+    expect(screen.queryByText('Workspace')).not.toBeInTheDocument();
+  });
+});
+
+describe('session isolation', () => {
+  it('keeps a personal session off store ERP pages', async () => {
+    mockApi({ '/auth/me': SIGNED_IN_PERSONAL });
+    renderRoutes('/sales');
+
+    expect(await screen.findByText('Personal dashboard')).toBeInTheDocument();
+    expect(screen.queryByText('ERP sales')).not.toBeInTheDocument();
+  });
+
+  it('keeps a store session off personal finance pages', async () => {
+    mockApi({ '/auth/me': SIGNED_IN_RESPONSE });
+    renderRoutes('/personal/dashboard');
+
+    expect(await screen.findByText('Workspace')).toBeInTheDocument();
+    expect(screen.queryByText('Personal dashboard')).not.toBeInTheDocument();
+  });
+
+  it('keeps personal pages behind the login form', async () => {
+    mockApi({ '/auth/me': SIGNED_OUT_RESPONSE });
+    renderRoutes('/personal/dashboard');
+
+    expect(await screen.findByText('Login form')).toBeInTheDocument();
+    expect(screen.queryByText('Personal dashboard')).not.toBeInTheDocument();
   });
 });

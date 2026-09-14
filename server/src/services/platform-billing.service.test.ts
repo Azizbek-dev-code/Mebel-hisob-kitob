@@ -10,7 +10,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '../utils/api-error.js';
 
-const { prismaMock, recordAuditMock } = vi.hoisted(() => ({
+const { prismaMock, recordAuditMock, grantFirstPaymentCommission, countPendingReferralWithdrawals, countReferralSignups } =
+  vi.hoisted(() => ({
   prismaMock: {
     $transaction: vi.fn(),
     feature: {
@@ -53,6 +54,7 @@ const { prismaMock, recordAuditMock } = vi.hoisted(() => ({
       create: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
+      count: vi.fn(),
     },
     platformInvoice: {
       findMany: vi.fn(),
@@ -72,17 +74,27 @@ const { prismaMock, recordAuditMock } = vi.hoisted(() => ({
     platformSettings: { upsert: vi.fn(), update: vi.fn() },
     store: { findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
     storeCreationRequest: { count: vi.fn(), findMany: vi.fn() },
+    workspace: { findMany: vi.fn(), groupBy: vi.fn(), count: vi.fn() },
     user: { count: vi.fn() },
     customer: { count: vi.fn() },
     product: { count: vi.fn() },
     supplier: { count: vi.fn() },
     sale: { count: vi.fn() },
+    personalSubscription: { update: vi.fn(), findUnique: vi.fn(), findMany: vi.fn() },
   },
   recordAuditMock: vi.fn(),
+  grantFirstPaymentCommission: vi.fn(),
+  countPendingReferralWithdrawals: vi.fn(),
+  countReferralSignups: vi.fn(),
 }));
 
 vi.mock('../lib/prisma.js', () => ({ prisma: prismaMock }));
 vi.mock('./audit.service.js', () => ({ recordAudit: recordAuditMock }));
+vi.mock('../modules/referrals/referral.service.js', () => ({
+  grantFirstPaymentCommission,
+  countPendingReferralWithdrawals,
+  countReferralSignups,
+}));
 
 const {
   assignPlan,
@@ -90,6 +102,7 @@ const {
   createExpense,
   createPlan,
   getPnl,
+  getDashboard,
   listPlans,
   provisionStoreSubscription,
   recordPayment,
@@ -107,6 +120,8 @@ const PLAN = {
   trialDays: 0,
   isActive: true,
   isDefaultTrial: false,
+  rank: 1,
+  audience: 'STORE',
   features: {},
   planFeatures: [],
   limits: [],
@@ -116,6 +131,9 @@ const PLAN = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  grantFirstPaymentCommission.mockResolvedValue(undefined);
+  countPendingReferralWithdrawals.mockResolvedValue(0);
+  countReferralSignups.mockResolvedValue(0);
   prismaMock.$transaction.mockImplementation(async (fn: (tx: typeof prismaMock) => Promise<unknown>) =>
     fn(prismaMock),
   );
@@ -127,6 +145,9 @@ beforeEach(() => {
     billingCycle: 'MONTHLY',
     paymentRemindersEnabled: false,
     reminderDaysBeforeDue: 3,
+    paymentCardNumber: '',
+    paymentAccountNumber: '',
+    paymentInstructions: '',
   });
   prismaMock.feature.upsert.mockResolvedValue({});
   prismaMock.feature.findMany.mockResolvedValue([]);
@@ -264,6 +285,15 @@ describe('payments and blocking', () => {
       paymentMethod: PlatformPaymentMethod.CASH,
     });
     expect(paid.status).toBe(PlatformBillingStatus.PAID);
+    expect(grantFirstPaymentCommission).toHaveBeenCalledWith(
+      expect.objectContaining({
+        storeId: 'store_1',
+        sourceType: 'PLATFORM_INVOICE',
+        sourceId: 'inv_1',
+        sourceAmountSom: 200000n,
+        paid: true,
+      }),
+    );
     expect(prismaMock.store.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: { accessStatus: StoreAccessStatus.ACTIVE, isActive: true },
@@ -428,6 +458,77 @@ describe('expenses and P&L', () => {
     expect(pnl.expenses).toBe(50000);
     expect(pnl.netProfit).toBe(150000);
   });
+
+  it('aggregates the dashboard without a second P&L/analytics pass', async () => {
+    prismaMock.platformInvoice.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { amount: 200000n, paidAt: new Date('2026-08-10'), dueDate: new Date('2026-08-22') },
+      ]);
+    prismaMock.storeSubscription.findMany.mockResolvedValue([]);
+    prismaMock.platformExpense.findMany.mockResolvedValue([
+      { amount: 50000n, date: new Date('2026-08-05') },
+    ]);
+    prismaMock.store.findMany.mockResolvedValue([
+      {
+        accessStatus: StoreAccessStatus.ACTIVE,
+        subscriptions: [
+          {
+            status: SubscriptionStatus.ACTIVE,
+            trialEndsAt: null,
+            currentPeriodEnd: new Date('2099-01-01'),
+            plan: { name: 'PRO' },
+          },
+        ],
+      },
+    ]);
+    prismaMock.storeCreationRequest.count.mockResolvedValue(2);
+    prismaMock.subscriptionRequest.count.mockResolvedValueOnce(3).mockResolvedValueOnce(1);
+    prismaMock.platformInvoice.aggregate.mockResolvedValue({
+      _sum: { amount: 0n },
+      _count: { _all: 0 },
+    });
+    prismaMock.personalSubscription.findMany.mockResolvedValue([
+      {
+        planKey: 'PERSONAL_TRIAL',
+        status: SubscriptionStatus.TRIAL,
+        trialEndsAt: new Date('2099-01-01'),
+        currentPeriodEnd: new Date('2099-01-01'),
+      },
+    ]);
+    prismaMock.workspace.findMany.mockResolvedValue([
+      { type: 'PERSONAL', createdAt: new Date('2026-08-10') },
+      { type: 'BUSINESS', createdAt: new Date('2026-08-12') },
+    ]);
+    prismaMock.workspace.groupBy.mockResolvedValue([
+      { type: 'PERSONAL', _count: { _all: 1 } },
+      { type: 'BUSINESS', _count: { _all: 1 } },
+    ]);
+
+    const dashboard = await getDashboard(
+      UserRole.PLATFORM_ADMIN,
+      new Date('2026-08-01'),
+      new Date('2026-08-31'),
+      'Shu oy',
+    );
+
+    expect(dashboard.monthRevenue).toBe(200000);
+    expect(dashboard.monthExpenses).toBe(50000);
+    expect(dashboard.monthNetProfit).toBe(150000);
+    expect(dashboard.personalWorkspaces).toBe(1);
+    expect(dashboard.totalStores).toBe(1);
+    expect(dashboard.personalTrial).toBe(1);
+    expect(dashboard.pendingPersonalSubscriptionRequests).toBe(1);
+    expect(dashboard.pendingBusinessSubscriptionRequests).toBe(2);
+    expect(dashboard.otherRevenue).toBe(0);
+    expect(dashboard.pendingWithdrawals).toBe(0);
+    expect(dashboard.referralSignups).toBe(0);
+    expect(dashboard.accountGrowth).toEqual([
+      { month: '2026-08', personal: 1, business: 1 },
+    ]);
+    expect(prismaMock.storeCreationRequest.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.sale.count).not.toHaveBeenCalled();
+  });
 });
 
 describe('subscription requests', () => {
@@ -506,8 +607,8 @@ describe('subscription requests', () => {
     });
 
     expect(result.request.status).toBe('APPROVED');
-    expect(result.invoice.amount).toBe(200000);
-    expect(result.invoice.planName).toBe('BUSINESS');
+    expect(result.invoice?.amount).toBe(200000);
+    expect(result.invoice?.planName).toBe('BUSINESS');
     expect(prismaMock.storeSubscription.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'sub_old' },
@@ -591,8 +692,8 @@ describe('subscription requests', () => {
       endDate: '2026-09-21T00:00:00.000Z',
       paymentMethod: PlatformPaymentMethod.OTHER,
     });
-    expect(result.invoice.amount).toBe(200000);
-    expect(result.invoice.amount).not.toBe(250000);
+    expect(result.invoice?.amount).toBe(200000);
+    expect(result.invoice?.amount).not.toBe(250000);
   });
 
   it('rejects a second Accept and does not mint another payment', async () => {
@@ -625,5 +726,70 @@ describe('subscription requests', () => {
       }),
     ).rejects.toBeInstanceOf(ApiError);
     expect(prismaMock.platformInvoice.create).not.toHaveBeenCalled();
+  });
+
+  it('activates a personal workspace subscription without a store invoice', async () => {
+    prismaMock.subscriptionRequest.findUnique.mockResolvedValue({
+      id: 'req_p',
+      status: 'PENDING',
+    });
+    prismaMock.subscriptionRequest.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.subscriptionRequest.findUniqueOrThrow.mockResolvedValue({
+      id: 'req_p',
+      storeId: null,
+      workspaceId: 'ws_1',
+      planId: 'plan_personal_paid',
+      requestedPriceSnapshot: 49000n,
+      currency: 'UZS',
+      note: null,
+      plan: { id: 'plan_personal_paid', name: 'PERSONAL_PAID' },
+      store: null,
+    });
+    prismaMock.personalSubscription.update.mockResolvedValue({ id: 'psub_1', workspaceId: 'ws_1' });
+    prismaMock.subscriptionRequest.update.mockResolvedValue({
+      id: 'req_p',
+      storeId: null,
+      workspaceId: 'ws_1',
+      planId: 'plan_personal_paid',
+      requestedPriceSnapshot: 49000n,
+      currency: 'UZS',
+      status: 'APPROVED',
+      requestedAt: new Date('2026-09-14'),
+      reviewedAt: new Date('2026-09-14'),
+      rejectionReason: null,
+      note: null,
+      paymentMethod: 'CARD',
+      payerReference: null,
+      proofUrl: 'https://cdn.example/p.jpg',
+      createdInvoiceId: null,
+      createdSubscriptionId: 'psub_1',
+      store: null,
+      workspace: {
+        id: 'ws_1',
+        name: 'Aziz',
+        type: 'PERSONAL',
+        personalSubscription: null,
+        memberships: [],
+      },
+      plan: { id: 'plan_personal_paid', name: 'PERSONAL_PAID' },
+      reviewedBy: { fullName: 'Platform Administrator' },
+    });
+
+    const result = await approveSubscriptionRequest(PLATFORM, 'req_p', {
+      paymentMethod: PlatformPaymentMethod.CARD,
+    });
+    expect(result.request.workspaceId).toBe('ws_1');
+    expect(result.invoice).toBeNull();
+    expect(prismaMock.platformInvoice.create).not.toHaveBeenCalled();
+    expect(prismaMock.personalSubscription.update).toHaveBeenCalled();
+    expect(grantFirstPaymentCommission).toHaveBeenCalledWith(
+      expect.objectContaining({
+        referredWorkspaceId: 'ws_1',
+        sourceType: 'SUBSCRIPTION_REQUEST',
+        sourceId: 'req_p',
+        sourceAmountSom: 49000n,
+        paid: true,
+      }),
+    );
   });
 });

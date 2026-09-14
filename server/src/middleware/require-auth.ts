@@ -1,4 +1,4 @@
-import { UserRole, isStoreAccessRestricted } from '@furniture-erp/shared';
+import { AuthSessionKind, UserRole, isStoreAccessRestricted } from '@furniture-erp/shared';
 import type { Request, RequestHandler } from 'express';
 
 import { clearAuthCookie, readAuthCookie, setAuthCookie } from '../lib/auth-cookie.js';
@@ -18,7 +18,10 @@ function allowedWhileStoreBlocked(req: Request): boolean {
     path === '/api/auth/me' ||
     path === '/api/auth/logout' ||
     path === '/api/store-access' ||
-    path.startsWith('/api/store-access/')
+    path.startsWith('/api/store-access/') ||
+    path.startsWith('/api/accounts') ||
+    path.startsWith('/api/onboarding') ||
+    path.startsWith('/api/referrals')
   );
 }
 
@@ -30,18 +33,43 @@ function allowedWithoutActiveSubscription(req: Request): boolean {
   const path = requestPath(req);
   return (
     path.startsWith('/api/auth') ||
+    path.startsWith('/api/accounts') ||
+    path.startsWith('/api/onboarding') ||
     path.startsWith('/api/billing') ||
     path.startsWith('/api/store-access') ||
     path.startsWith('/api/platform') ||
-    path.startsWith('/api/health')
+    path.startsWith('/api/health') ||
+    path.startsWith('/api/referrals')
+  );
+}
+
+function allowedForPersonalSession(req: Request): boolean {
+  const path = requestPath(req);
+  return (
+    path.startsWith('/api/auth') ||
+    path.startsWith('/api/accounts') ||
+    path.startsWith('/api/onboarding') ||
+    path.startsWith('/api/personal') ||
+    path.startsWith('/api/referrals')
+  );
+}
+
+function allowedPersonalWithoutSubscription(req: Request): boolean {
+  const path = requestPath(req);
+  return (
+    path.startsWith('/api/auth') ||
+    path.startsWith('/api/accounts') ||
+    path.startsWith('/api/personal/billing') ||
+    path.startsWith('/api/onboarding') ||
+    path.startsWith('/api/referrals')
   );
 }
 
 /**
  * Gate for every route that needs a signed-in user.
  *
- * The browser router also hides protected screens, but that is only a courtesy
- * to the user: it is trivially bypassed, so the API never assumes it ran.
+ * Store sessions keep the existing ERP gates. Personal sessions cannot reach
+ * store ERP routes; store `canWrite` is never applied to `/api/personal`.
  */
 export const requireAuth: RequestHandler = asyncHandler(async (req, res, next) => {
   const token = readAuthCookie(req);
@@ -54,19 +82,34 @@ export const requireAuth: RequestHandler = asyncHandler(async (req, res, next) =
   try {
     session = await authenticate(token);
   } catch (error) {
-    // Drop the cookie so the browser stops replaying a token that can only fail.
     if (error instanceof ApiError && error.statusCode === 401) {
       clearAuthCookie(res);
     }
     throw error;
   }
 
-  req.auth = session.user;
-
   if (isDueForRenewal(session.claims)) {
     const renewed = renewSession(session.user);
     setAuthCookie(res, renewed.token, renewed.expiresAt);
   }
+
+  if (session.kind === AuthSessionKind.PERSONAL) {
+    req.personalAuth = session.user;
+    if (!allowedForPersonalSession(req)) {
+      throw ApiError.forbidden('Shaxsiy sessiya do‘kon ERP marshrutlariga kira olmaydi.');
+    }
+    if (
+      isMutating(req) &&
+      !allowedPersonalWithoutSubscription(req) &&
+      !session.user.subscription.canWrite
+    ) {
+      throw ApiError.subscriptionRequired();
+    }
+    next();
+    return;
+  }
+
+  req.auth = session.user;
 
   if (isStoreAccessRestricted(session.user) && !allowedWhileStoreBlocked(req)) {
     throw ApiError.storeBlocked();

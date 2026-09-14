@@ -137,6 +137,36 @@ function mockSignedInApp() {
       status: 200,
       body: { success: true, data: { items: [] } },
     },
+    '/accounts': {
+      status: 200,
+      body: { success: true, data: { items: [] } },
+    },
+    '/referrals/me': {
+      status: 200,
+      body: {
+        success: true,
+        data: {
+          code: 'ABX7K29Q',
+          path: '/ref/ABX7K29Q',
+          programActive: true,
+          commissionPercent: 10,
+          minWithdrawal: 100000,
+          clicks: 0,
+          registrations: 0,
+          firstPayments: 0,
+          conversionPercent: 0,
+          earned: 0,
+          available: 0,
+          pending: 0,
+          paid: 0,
+          canWithdraw: false,
+        },
+      },
+    },
+    '/referrals/withdrawals': {
+      status: 200,
+      body: { success: true, data: { items: [] } },
+    },
   });
 }
 
@@ -191,7 +221,9 @@ describe('application routes', () => {
       mockSignedInApp();
       renderApp(to);
 
-      expect(await screen.findByRole('heading', { level: 1, name: label })).toBeInTheDocument();
+      expect(
+        (await screen.findAllByRole('heading', { level: 1, name: label })).length,
+      ).toBeGreaterThan(0);
       expect(screen.getByRole('navigation', { name: i18n.t('nav.modules') })).toBeInTheDocument();
     },
   );

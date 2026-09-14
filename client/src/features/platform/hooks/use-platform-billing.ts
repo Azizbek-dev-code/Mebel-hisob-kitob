@@ -16,9 +16,11 @@ export const platformBillingQueryKeys = {
   invoices: (query: PlatformInvoiceListQuery) => ['platform-invoices', query] as const,
   expenses: ['platform-expenses'] as const,
   settings: ['platform-settings'] as const,
-  pnl: (preset: string) => ['platform-pnl', preset] as const,
-  analytics: (preset: string) => ['platform-analytics', preset] as const,
-  dashboard: ['platform-dashboard'] as const,
+  pnl: (preset: string, from?: string, to?: string) => ['platform-pnl', preset, from, to] as const,
+  analytics: (preset: string, from?: string, to?: string) =>
+    ['platform-analytics', preset, from, to] as const,
+  dashboard: (preset?: string, from?: string, to?: string) =>
+    ['platform-dashboard', preset, from, to] as const,
   shop: (id: string) => ['platform-shop', id] as const,
   storeAccess: ['store-access'] as const,
   features: ['platform-features'] as const,
@@ -57,26 +59,38 @@ export function usePlatformSettings(enabled = true) {
   });
 }
 
-export function usePlatformPnl(preset: string, enabled = true) {
+export function usePlatformPnl(
+  preset: string,
+  enabled = true,
+  range?: { from?: string; to?: string },
+) {
   return useQuery({
-    queryKey: platformBillingQueryKeys.pnl(preset),
-    queryFn: ({ signal }) => platformBillingService.getPnl(preset, signal),
+    queryKey: platformBillingQueryKeys.pnl(preset, range?.from, range?.to),
+    queryFn: ({ signal }) => platformBillingService.getPnl(preset, signal, range),
     enabled,
   });
 }
 
-export function usePlatformAnalytics(preset: string, enabled = true) {
+export function usePlatformAnalytics(
+  preset: string,
+  enabled = true,
+  range?: { from?: string; to?: string },
+) {
   return useQuery({
-    queryKey: platformBillingQueryKeys.analytics(preset),
-    queryFn: ({ signal }) => platformBillingService.getAnalytics(preset, signal),
+    queryKey: platformBillingQueryKeys.analytics(preset, range?.from, range?.to),
+    queryFn: ({ signal }) => platformBillingService.getAnalytics(preset, signal, range),
     enabled,
   });
 }
 
-export function usePlatformDashboard(enabled = true) {
+export function usePlatformDashboard(
+  enabled = true,
+  preset?: string,
+  range?: { from?: string; to?: string },
+) {
   return useQuery({
-    queryKey: platformBillingQueryKeys.dashboard,
-    queryFn: ({ signal }) => platformBillingService.getDashboard(signal),
+    queryKey: platformBillingQueryKeys.dashboard(preset, range?.from, range?.to),
+    queryFn: ({ signal }) => platformBillingService.getDashboard(signal, preset, range),
     enabled,
   });
 }
@@ -142,7 +156,7 @@ export function useRecordPayment() {
     }) => platformBillingService.recordPayment(id, body),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ['platform-invoices'] });
-      void client.invalidateQueries({ queryKey: platformBillingQueryKeys.dashboard });
+      void client.invalidateQueries({ queryKey: ['platform-dashboard'] });
       void client.invalidateQueries({ queryKey: platformShopsQueryKeys.all });
     },
   });
@@ -161,7 +175,7 @@ export function useApproveSubscriptionRequest() {
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ['platform-subscription-requests'] });
       void client.invalidateQueries({ queryKey: ['platform-invoices'] });
-      void client.invalidateQueries({ queryKey: platformBillingQueryKeys.dashboard });
+      void client.invalidateQueries({ queryKey: ['platform-dashboard'] });
       void client.invalidateQueries({ queryKey: platformShopsQueryKeys.all });
       void client.invalidateQueries({ queryKey: ['platform-shop'] });
     },
@@ -180,7 +194,7 @@ export function useRejectSubscriptionRequest() {
     }) => platformBillingService.rejectSubscriptionRequest(id, body),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ['platform-subscription-requests'] });
-      void client.invalidateQueries({ queryKey: platformBillingQueryKeys.dashboard });
+      void client.invalidateQueries({ queryKey: ['platform-dashboard'] });
     },
   });
 }

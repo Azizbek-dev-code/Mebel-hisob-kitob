@@ -12,7 +12,7 @@ afterEach(() => {
 });
 
 describe('PlatformDashboardPage', () => {
-  it('shows billing KPIs and platform modules', async () => {
+  it('shows a compact platform overview without duplicating module cards', async () => {
     mockApi({
       '/auth/me': { status: 200, body: { success: true, data: { user: TEST_PLATFORM_ADMIN } } },
       '/platform/dashboard': {
@@ -28,6 +28,7 @@ describe('PlatformDashboardPage', () => {
             pendingPaymentStores: 4,
             expiredStores: 7,
             pendingStoreRequests: 3,
+            pendingSubscriptionRequests: 2,
             pendingPayments: 2,
             pendingPaymentAmount: 400000,
             overduePayments: 1,
@@ -35,10 +36,22 @@ describe('PlatformDashboardPage', () => {
             monthRevenue: 200000,
             monthExpenses: 50000,
             monthNetProfit: 150000,
+            otherRevenue: 0,
+            personalWorkspaces: 2,
+            personalActive: 1,
+            personalTrial: 1,
+            personalExpired: 0,
+            pendingPersonalSubscriptionRequests: 0,
+            pendingBusinessSubscriptionRequests: 2,
+            pendingWithdrawals: 0,
+            referralSignups: 0,
+            accountGrowth: [],
+            subscriptionByPlan: [],
             pnlSeries: [{ month: '2026-08', revenue: 200000, expenses: 50000, netProfit: 150000 }],
-            storeSeries: [{ month: '2026-08', submitted: 3, approved: 1, rejected: 0, active: 3, blocked: 1 }],
+            storeSeries: [],
             latestPayments: [],
             latestStoreRequests: [],
+            period: { from: '2026-08-16', to: '2026-09-14', label: '30 kun' },
           },
         },
       },
@@ -50,10 +63,14 @@ describe('PlatformDashboardPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("Kutilayotgan do'kon so'rovlari")).toBeInTheDocument();
+    expect(await screen.findByText('Kutilayotgan akkauntlar')).toBeInTheDocument();
     expect((await screen.findAllByText('3')).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('link', { name: /Do'kon so'rovlari/ }).length).toBeGreaterThan(0);
-    expect(screen.getByRole('link', { name: /Platform Settings/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Kutilayotgan akkauntlar/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '7 kun' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '30 kun' })).toBeInTheDocument();
+    expect(screen.queryByText('Platform Settings')).not.toBeInTheDocument();
     expect(screen.queryByText('Sotuvlar')).not.toBeInTheDocument();
+    expect(screen.getByText('Tarkib')).toBeInTheDocument();
+    expect(screen.getByText('Yechish so‘rovlari')).toBeInTheDocument();
   });
 });

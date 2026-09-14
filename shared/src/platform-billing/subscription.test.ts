@@ -8,6 +8,7 @@ import {
   effectiveSubscriptionStatus,
   isUnlimitedLimit,
   isWithinLimit,
+  persistedExpiredStatus,
   planAllowsFeature,
   trialDaysRemaining,
 } from './subscription.js';
@@ -81,6 +82,16 @@ describe('effectiveSubscriptionStatus', () => {
         now,
       ),
     ).toBe(SubscriptionStatus.BLOCKED);
+  });
+
+  it('persists EXPIRED when the stored column still says TRIAL', () => {
+    expect(
+      persistedExpiredStatus(
+        SubscriptionStatus.TRIAL,
+        SubscriptionStatus.EXPIRED,
+      ),
+    ).toBe(SubscriptionStatus.EXPIRED);
+    expect(persistedExpiredStatus(SubscriptionStatus.BLOCKED, SubscriptionStatus.EXPIRED)).toBeNull();
   });
 });
 

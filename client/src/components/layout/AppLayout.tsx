@@ -4,6 +4,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { Header } from './Header';
 import { MobileSidebar } from './MobileSidebar';
 import { Sidebar } from './Sidebar';
+import { PlatformHubChrome } from '@/features/platform/components/PlatformHubChrome';
 import { FeatureLockedPanel } from '@/features/subscription/FeatureLockedPanel';
 import { SubscriptionProvider } from '@/features/subscription/SubscriptionProvider';
 import { useSubscription } from '@/features/subscription/subscription-context';
@@ -55,6 +56,7 @@ export function AppLayout() {
       <div className="flex min-h-screen min-w-0 flex-col overflow-x-hidden">
         <Header onOpenNavigation={() => setNavOpen(true)} />
         <main className="min-w-0 flex-1">
+          <PlatformHubChrome />
           <FeatureGatedOutlet />
         </main>
       </div>

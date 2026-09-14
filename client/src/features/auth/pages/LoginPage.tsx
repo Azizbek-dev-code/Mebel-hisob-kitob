@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 
+import { homePathForAuth, isPersonalAuth } from '@furniture-erp/shared';
 import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
 import { ApiClientError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
@@ -53,8 +54,13 @@ export function LoginPage() {
 
   const onSubmit = handleSubmit((values) => {
     login.mutate(values, {
-      onSuccess: () => {
-        navigate(returnPathFrom(location.state), { replace: true });
+      onSuccess: ({ user }) => {
+        if (isPersonalAuth(user)) {
+          navigate(homePathForAuth(user), { replace: true });
+          return;
+        }
+        const from = returnPathFrom(location.state);
+        navigate(from.startsWith('/personal') ? ROUTES.dashboard : from, { replace: true });
       },
     });
   });
@@ -167,8 +173,8 @@ export function LoginPage() {
         </div>
 
         <p className="mt-6 text-center text-sm text-ink-muted">
-          <Link to={ROUTES.registerStore} className="font-medium text-brand-700 hover:underline">
-            {t('auth.requestStore')}
+          <Link to={ROUTES.onboarding} className="font-medium text-brand-700 hover:underline">
+            {t('auth.createAccount')}
           </Link>
         </p>
       </div>

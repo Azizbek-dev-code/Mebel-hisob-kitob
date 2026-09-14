@@ -1,5 +1,6 @@
 import type { Money, IsoDateString, PaginatedResult, DateRangeQuery } from './api.js';
 import type {
+  PlanAudience,
   PlatformBillingCycle,
   PlatformBillingStatus,
   PlatformExpenseCategory,
@@ -8,6 +9,7 @@ import type {
   StoreAccessStatus,
   SubscriptionRequestStatus,
   SubscriptionStatus,
+  WorkspaceType,
 } from '../constants/enums.js';
 
 export interface SubscriptionPlanFeatures {
@@ -84,6 +86,8 @@ export interface SubscriptionPlanDto {
   trialDays: number;
   isActive: boolean;
   isDefaultTrial: boolean;
+  rank: number;
+  audience: PlanAudience;
   features: SubscriptionPlanFeatures;
   featureKeys: string[];
   featuresRestricted: boolean;
@@ -100,6 +104,7 @@ export interface CreateSubscriptionPlanBody {
   currency?: string;
   trialDays?: number;
   isDefaultTrial?: boolean;
+  rank?: number;
   featureKeys?: string[];
   limits?: PlanLimitInput[];
   features?: SubscriptionPlanFeatures;
@@ -112,6 +117,7 @@ export interface UpdateSubscriptionPlanBody {
   trialDays?: number;
   isActive?: boolean;
   isDefaultTrial?: boolean;
+  rank?: number;
   featureKeys?: string[];
   limits?: PlanLimitInput[];
   features?: SubscriptionPlanFeatures;
@@ -146,6 +152,7 @@ export interface StoreSubscriptionDto {
   enabledFeatures: FeatureDto[];
   limits: PlanLimitDto[];
   usage: ResourceUsageDto[];
+  planRank: number;
 }
 
 export interface StoreEntitlementsDto {
@@ -184,7 +191,9 @@ export interface PlatformInvoiceDto {
 
 export interface SubscriptionRequestDto {
   id: string;
-  storeId: string;
+  storeId: string | null;
+  workspaceId: string | null;
+  accountKind: typeof WorkspaceType.PERSONAL | typeof WorkspaceType.BUSINESS;
   storeName: string;
   ownerName: string | null;
   ownerPhone: string | null;
@@ -201,6 +210,9 @@ export interface SubscriptionRequestDto {
   reviewedByName: string | null;
   rejectionReason: string | null;
   note: string | null;
+  paymentMethod: PlatformPaymentMethod | null;
+  payerReference: string | null;
+  proofUrl: string | null;
   createdInvoiceId: string | null;
   createdSubscriptionId: string | null;
 }
@@ -238,6 +250,30 @@ export interface RejectPlatformPaymentBody {
 export interface RequestStoreSubscriptionBody {
   planId: string;
   note?: string;
+  paymentMethod: PlatformPaymentMethod;
+  payerReference?: string;
+  proofUrl: string;
+  proofKey: string;
+}
+
+export interface RequestPersonalSubscriptionBody {
+  note?: string;
+  paymentMethod: PlatformPaymentMethod;
+  payerReference?: string;
+  proofUrl: string;
+  proofKey: string;
+}
+
+export interface PlatformPaymentInstructionsDto {
+  platformName: string;
+  paymentCardNumber: string;
+  paymentAccountNumber: string;
+  paymentInstructions: string;
+}
+
+export interface BillingProofDto {
+  url: string;
+  key: string;
 }
 
 export interface ManualActivateSubscriptionBody {
@@ -339,6 +375,12 @@ export interface PlatformSettingsDto {
   billingCycle: PlatformBillingCycle;
   paymentRemindersEnabled: boolean;
   reminderDaysBeforeDue: number;
+  paymentCardNumber: string;
+  paymentAccountNumber: string;
+  paymentInstructions: string;
+  referralCommissionPercent: number;
+  referralMinWithdrawalSom: number;
+  referralProgramActive: boolean;
 }
 
 export interface UpdatePlatformSettingsBody {
@@ -348,6 +390,12 @@ export interface UpdatePlatformSettingsBody {
   billingCycle?: PlatformBillingCycle;
   paymentRemindersEnabled?: boolean;
   reminderDaysBeforeDue?: number;
+  paymentCardNumber?: string;
+  paymentAccountNumber?: string;
+  paymentInstructions?: string;
+  referralCommissionPercent?: number;
+  referralMinWithdrawalSom?: number;
+  referralProgramActive?: boolean;
 }
 
 export interface PlatformPnlPoint {
@@ -379,6 +427,12 @@ export interface PlatformPlanMixPoint {
   storeCount: number;
 }
 
+export interface PlatformAccountGrowthPoint {
+  month: string;
+  personal: number;
+  business: number;
+}
+
 export interface PlatformAnalyticsResponse {
   stores: {
     submitted: number;
@@ -391,6 +445,11 @@ export interface PlatformAnalyticsResponse {
     expired: number;
     pendingPayment: number;
     series: PlatformStoreAnalyticsPoint[];
+  };
+  accounts: {
+    personal: number;
+    business: number;
+    growth: PlatformAccountGrowthPoint[];
   };
   finance: PlatformPnlResponse;
   subscriptions: {
@@ -427,6 +486,18 @@ export interface PlatformDashboardResponse {
   monthRevenue: Money;
   monthExpenses: Money;
   monthNetProfit: number;
+  /** Always 0 until a non-subscription platform revenue ledger exists. */
+  otherRevenue: Money;
+  personalWorkspaces: number;
+  personalActive: number;
+  personalTrial: number;
+  personalExpired: number;
+  pendingPersonalSubscriptionRequests: number;
+  pendingBusinessSubscriptionRequests: number;
+  pendingWithdrawals: number;
+  referralSignups: number;
+  accountGrowth: PlatformAccountGrowthPoint[];
+  subscriptionByPlan: PlatformPlanMixPoint[];
   pnlSeries: PlatformPnlPoint[];
   storeSeries: PlatformStoreAnalyticsPoint[];
   latestPayments: PlatformInvoiceDto[];
@@ -436,6 +507,7 @@ export interface PlatformDashboardResponse {
     status: string;
     createdAt: IsoDateString;
   }>;
+  period: { from: IsoDateString; to: IsoDateString; label: string };
 }
 
 export interface StoreAccessStatusResponse {

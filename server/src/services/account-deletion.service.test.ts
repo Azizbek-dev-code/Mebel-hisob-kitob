@@ -11,6 +11,7 @@ import { ApiError } from '../utils/api-error.js';
 const { prismaMock, verifyPasswordMock, hashPasswordMock, recordAuditMock } = vi.hoisted(() => ({
   prismaMock: {
     user: { findFirst: vi.fn(), count: vi.fn(), update: vi.fn() },
+    identity: { update: vi.fn() },
     accountDeletion: { create: vi.fn(), findMany: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -98,6 +99,25 @@ describe('deleteOwnAccount', () => {
       expect.objectContaining({
         actorUserId: USER.id,
         metadata: expect.not.objectContaining({ password: expect.anything() }),
+      }),
+    );
+    expect(prismaMock.identity.update).not.toHaveBeenCalled();
+  });
+
+  it('anonymises a linked Identity so email does not remain on the overlay', async () => {
+    prismaMock.user.findFirst.mockResolvedValue({ ...USER, identityId: 'idn_ali' });
+    prismaMock.identity.update.mockResolvedValue({ id: 'idn_ali' });
+
+    await deleteOwnAccount({ id: USER.id, storeId: USER.storeId, role: USER.role }, BODY);
+
+    expect(prismaMock.identity.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'idn_ali' },
+        data: expect.objectContaining({
+          email: `deleted.${USER.id}@invalid.local`,
+          fullName: 'Deleted user',
+          passwordHash: 'scrambled',
+        }),
       }),
     );
   });

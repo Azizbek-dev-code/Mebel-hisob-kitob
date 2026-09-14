@@ -1,5 +1,6 @@
-import { formatMoney } from '@furniture-erp/shared';
+import { PlatformDatePreset, formatMoney } from '@furniture-erp/shared';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { PageContainer } from '@/components/layout/PageContainer';
@@ -8,13 +9,8 @@ import { SegmentedNav } from '@/components/ui/SegmentedNav';
 import { ROUTES } from '@/routes/paths';
 
 import { PlatformBarChart } from '../components/PlatformBarChart';
+import { PlatformDateFilter } from '../components/PlatformDateFilter';
 import { usePlatformAnalytics } from '../hooks/use-platform-billing';
-
-const PRESETS = [
-  { id: 'THIS_MONTH', label: 'Shu oy' },
-  { id: 'LAST_MONTH', label: "O'tgan oy" },
-  { id: 'THIS_YEAR', label: 'Shu yil' },
-];
 
 export function PlatformAnalyticsPage() {
   return <AnalyticsView />;
@@ -41,71 +37,90 @@ function AnalyticsView({
 }: {
   focus?: 'all' | 'stores' | 'revenue' | 'expenses' | 'profit';
 }) {
-  const [preset, setPreset] = useState('THIS_YEAR');
-  const analytics = usePlatformAnalytics(preset);
+  const { t } = useTranslation();
+  const [preset, setPreset] = useState<string>(PlatformDatePreset.THIS_YEAR);
+  const [custom, setCustom] = useState({ from: '', to: '' });
+  const range = preset === PlatformDatePreset.CUSTOM ? custom : undefined;
+  const analytics = usePlatformAnalytics(preset, true, range);
   const stores = analytics.data?.stores;
   const finance = analytics.data?.finance;
+  const accounts = analytics.data?.accounts;
 
   return (
     <PageContainer className="space-y-6 overflow-x-hidden">
       <div>
-        <h2 className="text-lg font-semibold tracking-tight text-ink">Analytics</h2>
-        <p className="mt-1 text-sm text-ink-muted">
-          Yangi do&apos;konlar, to&apos;langan obuna daromadi, platforma xarajati va sof foyda.
-        </p>
+        <h2 className="text-lg font-semibold tracking-tight text-ink">{t('platformAdmin.hub.analytics')}</h2>
+        <p className="mt-1 text-sm text-ink-muted">{t('platformAdmin.finance.analyticsHint')}</p>
       </div>
       <SegmentedNav
-        ariaLabel="Analytics bo'limlari"
+        ariaLabel={t('platformAdmin.hub.analytics')}
         items={[
-          { to: ROUTES.platformAnalytics, label: 'Barchasi', end: true },
-          { to: ROUTES.platformAnalyticsStores, label: "Yangi do'konlar" },
-          { to: ROUTES.platformAnalyticsRevenue, label: 'Daromad' },
-          { to: ROUTES.platformAnalyticsExpenses, label: 'Xarajat' },
-          { to: ROUTES.platformAnalyticsProfit, label: 'Sof foyda' },
+          { to: ROUTES.platformAnalytics, label: t('platformAdmin.hub.all'), end: true },
+          { to: ROUTES.platformAnalyticsStores, label: t('platformAdmin.dashboard.accountGrowth') },
+          { to: ROUTES.platformAnalyticsRevenue, label: t('platformAdmin.finance.revenue') },
+          { to: ROUTES.platformAnalyticsExpenses, label: t('platformAdmin.finance.expenses') },
+          { to: ROUTES.platformAnalyticsProfit, label: t('platformAdmin.finance.net') },
         ]}
       />
-      <div className="flex flex-wrap gap-1">
-        {PRESETS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setPreset(item.id)}
-            className={`rounded-input px-3 py-1.5 text-sm ${
-              preset === item.id ? 'bg-brand-50 text-brand-700' : 'text-ink-soft hover:bg-surface-hover'
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      <PlatformDateFilter
+        preset={preset}
+        onPresetChange={setPreset}
+        from={custom.from}
+        to={custom.to}
+        onCustomChange={setCustom}
+      />
 
       {analytics.isPending && !analytics.data ? (
         <Skeleton className="h-40 w-full" />
       ) : analytics.isError ? (
         <ErrorState
-          title="Analytics yuklanmadi"
-          message="Qayta urinib ko'ring."
+          title={t('platformAdmin.finance.loadFailed')}
+          message={t('common.retry')}
           onRetry={() => void analytics.refetch()}
         />
       ) : (
         <>
           {focus === 'all' || focus === 'stores' ? (
             <>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-                <Kpi label="Submitted" value={String(stores?.submitted ?? 0)} />
-                <Kpi label="Approved" value={String(stores?.approved ?? 0)} />
-                <Kpi label="Rejected" value={String(stores?.rejected ?? 0)} />
-                <Kpi label="Faol" value={String(stores?.active ?? 0)} />
-                <Kpi label="Bloklangan" value={String(stores?.blocked ?? 0)} />
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <Kpi label={t('platformAdmin.hub.personal')} value={String(accounts?.personal ?? 0)} />
+                <Kpi label={t('platformAdmin.hub.business')} value={String(accounts?.business ?? 0)} />
+                <Kpi label={t('platformAdmin.accounts.active')} value={String(stores?.active ?? 0)} />
+                <Kpi label={t('platformAdmin.accounts.blocked')} value={String(stores?.blocked ?? 0)} />
               </div>
               <PlatformBarChart
-                title="Yangi do'konlar"
-                emptyLabel="Ariza yo'q."
-                series={stores?.series ?? []}
+                title={t('platformAdmin.dashboard.accountGrowth')}
+                emptyLabel={t('platformAdmin.dashboard.chartEmpty')}
+                series={accounts?.growth ?? []}
                 keys={[
-                  { key: 'submitted', label: 'Ariza', className: 'bg-info-500' },
-                  { key: 'approved', label: 'Tasdiq', className: 'bg-success-500' },
-                  { key: 'rejected', label: 'Rad', className: 'bg-danger-400' },
+                  {
+                    key: 'personal',
+                    label: t('platformAdmin.hub.personal'),
+                    className: 'bg-info-500',
+                    format: String,
+                  },
+                  {
+                    key: 'business',
+                    label: t('platformAdmin.hub.business'),
+                    className: 'bg-brand-500',
+                    format: String,
+                  },
+                ]}
+              />
+              <PlatformBarChart
+                title={t('platformAdmin.dashboard.planMix')}
+                emptyLabel={t('platformAdmin.dashboard.chartEmpty')}
+                series={(analytics.data?.subscriptions.byPlan ?? []).map((row) => ({
+                  month: row.planName,
+                  storeCount: row.storeCount,
+                }))}
+                keys={[
+                  {
+                    key: 'storeCount',
+                    label: t('nav.subscriptions'),
+                    className: 'bg-brand-500',
+                    format: String,
+                  },
                 ]}
               />
             </>
@@ -113,18 +128,18 @@ function AnalyticsView({
           {focus === 'all' || focus === 'revenue' || focus === 'expenses' || focus === 'profit' ? (
             <>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <Kpi label="Daromad" value={formatMoney(finance?.revenue ?? 0)} />
-                <Kpi label="Xarajat" value={formatMoney(finance?.expenses ?? 0)} />
-                <Kpi label="Sof foyda" value={formatMoney(finance?.netProfit ?? 0)} />
+                <Kpi label={t('platformAdmin.finance.revenue')} value={formatMoney(finance?.revenue ?? 0)} />
+                <Kpi label={t('platformAdmin.finance.expenses')} value={formatMoney(finance?.expenses ?? 0)} />
+                <Kpi label={t('platformAdmin.finance.net')} value={formatMoney(finance?.netProfit ?? 0)} />
               </div>
               <PlatformBarChart
-                title="Moliyaviy natija"
-                emptyLabel="Ma'lumot yo'q."
+                title={t('platformAdmin.finance.trendTitle')}
+                emptyLabel={t('platformAdmin.finance.trendEmpty')}
                 series={finance?.series ?? []}
                 keys={[
-                  { key: 'revenue', label: 'Daromad', className: 'bg-success-500' },
-                  { key: 'expenses', label: 'Xarajat', className: 'bg-danger-400' },
-                  { key: 'netProfit', label: 'Sof foyda', className: 'bg-brand-500' },
+                  { key: 'revenue', label: t('platformAdmin.finance.revenue'), className: 'bg-success-500' },
+                  { key: 'expenses', label: t('platformAdmin.finance.expenses'), className: 'bg-danger-400' },
+                  { key: 'netProfit', label: t('platformAdmin.finance.net'), className: 'bg-brand-500' },
                 ]}
               />
             </>

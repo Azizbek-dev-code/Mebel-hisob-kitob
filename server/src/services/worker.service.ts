@@ -24,6 +24,7 @@ import { hashPassword } from '../lib/password.js';
 import { prisma } from '../lib/prisma.js';
 import * as workerRepository from '../repositories/worker.repository.js';
 import { ApiError } from '../utils/api-error.js';
+import { tryEnsureUserOnBusinessWorkspace } from '../modules/accounts/account-layer.service.js';
 import { recordAudit } from './audit.service.js';
 import { assertAccountNotDeleted } from './account-deletion.service.js';
 import { assertCanCreateResource, assertCanUseFeature } from './entitlement.service.js';
@@ -182,6 +183,8 @@ export async function createWorker(
     summary: `Worker created: ${detail.fullName}`,
     metadata: { username: detail.username, responsibilities: detail.responsibilities },
   });
+
+  await tryEnsureUserOnBusinessWorkspace(record.id);
 
   return detail;
 }

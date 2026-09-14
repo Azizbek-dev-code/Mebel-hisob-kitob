@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 
 import { cn } from '@/lib/cn';
 
@@ -7,6 +7,8 @@ export interface SegmentedNavItem {
   label: string;
   /** Exact match so a parent path is not active on its child filters. */
   end?: boolean;
+  /** Extra prefixes that should light this tab (aliases and nested records). */
+  matchPrefix?: readonly string[];
 }
 
 /**
@@ -20,6 +22,8 @@ export function SegmentedNav({
   items: readonly SegmentedNavItem[];
   ariaLabel: string;
 }) {
+  const { pathname } = useLocation();
+
   return (
     <nav aria-label={ariaLabel} className="-mx-1 max-w-full overflow-x-auto overflow-y-hidden">
       <div className="flex w-max min-w-full gap-1 rounded-input border border-line bg-surface-muted p-1">
@@ -28,14 +32,19 @@ export function SegmentedNav({
             key={item.to}
             to={item.to}
             end={item.end}
-            className={({ isActive }) =>
-              cn(
+            className={({ isActive }) => {
+              const current = item.matchPrefix?.length
+                ? item.matchPrefix.some(
+                    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+                  )
+                : isActive;
+              return cn(
                 'shrink-0 rounded-[0.4rem] px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors',
-                isActive
+                current
                   ? 'bg-surface text-brand-700 shadow-card'
                   : 'text-ink-soft hover:bg-surface-hover hover:text-ink',
-              )
-            }
+              );
+            }}
           >
             {item.label}
           </NavLink>

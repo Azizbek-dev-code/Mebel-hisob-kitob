@@ -32,6 +32,16 @@
  *
  * StoreSubscription, PlatformInvoice and SubscriptionRequest are SaaS billing
  * history: a store restore must not wipe or rewrite platform billing.
+ *
+ * Workspace is the Identity/account overlay keyed by optional storeId. It is
+ * not ERP catalogue data and must not be wiped by a store restore.
+ *
+ * PersonalSubscription, PersonalWallet, PersonalCategory, PersonalEntry,
+ * PersonalTransfer, PersonalBudget, PersonalSavingGoal, PersonalGoalContribution,
+ * PersonalRecurringRule, PersonalDebt and PersonalDebtPayment have no storeId,
+ * so they are outside this list by construction — a store restore must not
+ * touch personal billing, ledger, budgets, goals, reminders or person-to-person
+ * debts.
  */
 export interface BackupModel {
   /** Collection name inside the export document. */

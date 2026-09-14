@@ -1,6 +1,7 @@
 import {
   AuditEntityType,
   AuditEventType,
+  BusinessType,
   DEFAULT_EXPENSE_CATEGORIES,
   DEFAULT_PRODUCT_CATEGORIES,
   StoreCreationRequestStatus,
@@ -15,14 +16,18 @@ import {
   normalizeStoreName,
   normalizeUsername,
   normalizeUzPhone,
+  parseBusinessType,
+  validateAuthenticatedBusinessRequestDraft,
   validateStoreCreationDraft,
   type ApproveStoreCreationResponse,
+  type CreateAuthenticatedBusinessRequestBody,
   type CreateStoreRequestBody,
   type PaginatedResult,
   type StoreCreationPendingSummary,
   type StoreCreationRequestAdmin,
   type StoreCreationRequestPublic,
 } from '@furniture-erp/shared';
+import { randomBytes } from 'node:crypto';
 
 import { hashPassword } from '../lib/password.js';
 import { prisma } from '../lib/prisma.js';
@@ -33,6 +38,7 @@ import {
   assertCanReviewStoreCreationRequests,
   canReviewStoreCreationRequests,
 } from './platform-authorization.js';
+import { tryEnsureUserOnBusinessWorkspace } from '../modules/accounts/account-layer.service.js';
 import { provisionStoreSubscription } from './platform-billing.service.js';
 
 export { assertCanReviewStoreCreationRequests, canReviewStoreCreationRequests };
@@ -46,6 +52,33 @@ const OWNER_RESPONSIBILITIES: readonly WorkerResponsibility[] = [
 
 function composeStoreAddress(region: string, district: string, address: string): string {
   return `${region}, ${district}, ${address}`;
+}
+
+function splitFullName(fullName: string): { firstName: string; lastName: string } {
+  const parts = normalizePersonName(fullName).split(' ').filter(Boolean);
+  const firstName = parts[0] ?? 'Foydalanuvchi';
+  if (parts.length <= 1) return { firstName, lastName: firstName };
+  return { firstName, lastName: parts.slice(1).join(' ') };
+}
+
+function usernameSeed(email: string, storeName: string): string {
+  const local = email.split('@')[0]?.replace(/[^a-zA-Z0-9._-]/g, '').slice(0, 16) || 'biznes';
+  const slug = storeName.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8);
+  return `${local}${slug ? `.${slug}` : ''}`.slice(0, 32);
+}
+
+async function allocateStoreUsername(email: string, storeName: string): Promise<string> {
+  const base = usernameSeed(email, storeName) || 'biznes';
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    const suffix = attempt === 0 ? '' : String(attempt + 1);
+    const candidate = `${base.slice(0, Math.max(3, 40 - suffix.length))}${suffix}`.slice(0, 40);
+    const [pending, existing] = await Promise.all([
+      storeCreationRepository.findPendingByUsername(candidate),
+      storeCreationRepository.findUserByUsername(candidate),
+    ]);
+    if (!pending && !existing) return candidate;
+  }
+  return `${base.slice(0, 24)}${Date.now().toString(36)}`.slice(0, 40);
 }
 
 export async function createStoreRequest(
@@ -108,6 +141,8 @@ export async function createStoreRequest(
     region,
     district,
     address,
+    businessType: parseBusinessType(input.businessType),
+    identityId: null,
   });
 
   await recordAudit({
@@ -124,6 +159,114 @@ export async function createStoreRequest(
       region,
       district,
       applicant: applicantFullName(applicantFirstName, applicantLastName),
+    },
+  });
+
+  return storeCreationRepository.toPublicView(record);
+}
+
+/**
+ * Signed-in Identity applying for another BUSINESS workspace.
+ * Reuses the person's name/email/password; only the new store fields are required.
+ */
+export async function createAuthenticatedBusinessRequest(
+  identityId: string,
+  input: CreateAuthenticatedBusinessRequestBody,
+  storeUserId?: string,
+): Promise<StoreCreationRequestPublic> {
+  const fieldErrors = validateAuthenticatedBusinessRequestDraft(input);
+  if (fieldErrors.length > 0) {
+    throw ApiError.validation("Arizani to'ldirishda xatolik", fieldErrors);
+  }
+
+  const identity = await prisma.identity.findUnique({
+    where: { id: identityId },
+    select: { id: true, email: true, fullName: true, passwordHash: true },
+  });
+  if (!identity) {
+    throw ApiError.unauthorized();
+  }
+
+  const phone = normalizeUzPhone(input.phone);
+  if (!isNormalizedUzMobile(phone)) {
+    throw ApiError.validation("Arizani to'ldirishda xatolik", [
+      { field: 'phone', message: "O'zbekiston mobil raqamini kiriting (+998 XX XXX XX XX)" },
+    ]);
+  }
+
+  const email = normalizeEmail(identity.email);
+  const storeName = normalizeStoreName(input.storeName);
+  const region = input.region.trim();
+  const district = input.district.trim();
+  const address = input.address.trim();
+  const businessType = parseBusinessType(input.businessType);
+  const { firstName, lastName } = splitFullName(identity.fullName);
+
+  const [pendingPhone, pendingEmail, pendingStoreName, existingEmail] = await Promise.all([
+    storeCreationRepository.findPendingByPhone(phone),
+    storeCreationRepository.findPendingByEmail(email),
+    storeCreationRepository.findPendingByStoreName(storeName),
+    storeCreationRepository.findUserByEmailOutsideIdentity(email, identityId),
+  ]);
+
+  if (pendingPhone && pendingPhone.identityId !== identityId) {
+    throw ApiError.conflict("Bu telefon raqami bilan kutilayotgan ariza allaqachon mavjud");
+  }
+  if (pendingEmail && pendingEmail.identityId !== identityId) {
+    throw ApiError.conflict('Bu email allaqachon ishlatilgan');
+  }
+  if (existingEmail) {
+    throw ApiError.conflict('Bu email allaqachon ishlatilgan');
+  }
+  if (pendingStoreName) {
+    throw ApiError.conflict("Shu nomdagi do'kon uchun kutilayotgan ariza allaqachon mavjud");
+  }
+
+  const username = await allocateStoreUsername(email, storeName);
+
+  let passwordHash = identity.passwordHash;
+  if (!passwordHash && storeUserId) {
+    const storeUser = await prisma.user.findUnique({
+      where: { id: storeUserId },
+      select: { passwordHash: true },
+    });
+    passwordHash = storeUser?.passwordHash ?? null;
+  }
+  if (!passwordHash) {
+    passwordHash = await hashPassword(randomBytes(24).toString('base64url'));
+  }
+
+  const record = await storeCreationRepository.createPendingRequest({
+    applicantFirstName: firstName,
+    applicantLastName: lastName,
+    phone,
+    email,
+    username,
+    passwordHash,
+    storeName,
+    region,
+    district,
+    address,
+    businessType,
+    identityId,
+  });
+
+  await recordAudit({
+    storeId: null,
+    actorUserId: storeUserId ?? null,
+    eventType: AuditEventType.STORE_CREATION_REQUESTED,
+    entityType: AuditEntityType.STORE_CREATION_REQUEST,
+    entityId: record.id,
+    summary: `Store creation requested: ${storeName}`,
+    metadata: {
+      requestId: record.id,
+      storeName,
+      phone,
+      region,
+      district,
+      businessType,
+      identityId,
+      applicant: applicantFullName(firstName, lastName),
     },
   });
 
@@ -204,6 +347,7 @@ export async function approveStoreRequest(
         phone: request.phone,
         address: composeStoreAddress(request.region, request.district, request.address),
         isActive: true,
+        businessType: request.businessType ?? BusinessType.FURNITURE,
       },
       select: { id: true, name: true, isActive: true },
     });
@@ -218,6 +362,7 @@ export async function approveStoreRequest(
         phone: request.phone,
         role: UserRole.ADMIN,
         isActive: true,
+        identityId: request.identityId ?? undefined,
         responsibilities: {
           create: OWNER_RESPONSIBILITIES.map((responsibility) => ({
             storeId: store.id,
@@ -289,6 +434,7 @@ export async function approveStoreRequest(
   });
 
   await provisionStoreSubscription(result.store.id);
+  await tryEnsureUserOnBusinessWorkspace(result.owner.id);
 
   return {
     request: storeCreationRepository.toAdminView({

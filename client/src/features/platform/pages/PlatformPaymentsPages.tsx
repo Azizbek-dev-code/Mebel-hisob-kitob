@@ -9,9 +9,10 @@ import {
   type PlatformInvoiceDto,
   type SubscriptionRequestDto,
 } from '@furniture-erp/shared';
-import { AlertTriangle, Clock, History, Search } from 'lucide-react';
+import { AlertTriangle, Clock, History, Inbox, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { ErrorState } from '@/components/feedback/ErrorState';
@@ -56,6 +57,7 @@ export function PlatformPaymentsOverduePage() {
 }
 
 function PlatformPaymentsPage({ tab }: { tab: PaymentsTab }) {
+  const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [month, setMonth] = useState('');
   const [storeId, setStoreId] = useState('');
@@ -357,6 +359,16 @@ function PlatformPaymentsPage({ tab }: { tab: PaymentsTab }) {
           </div>
         )}
       </SectionCard>
+
+      {tab === 'history' ? (
+        <SectionCard title={t('platformAdmin.subscriptions.personalTitle')}>
+          <EmptyState
+            icon={Inbox}
+            title={t('platformAdmin.subscriptions.personalPaymentsEmpty')}
+            description={t('platformAdmin.subscriptions.personalPaymentsHint')}
+          />
+        </SectionCard>
+      ) : null}
 
       <RecordPaymentDialog invoice={paying} onClose={() => setPaying(null)} />
       <RejectPaymentDialog invoice={rejecting} onClose={() => setRejecting(null)} />

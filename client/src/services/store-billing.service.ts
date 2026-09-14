@@ -1,4 +1,6 @@
 import type {
+  BillingProofDto,
+  PlatformPaymentInstructionsDto,
   RequestStoreSubscriptionBody,
   StoreBillingPaymentsResponse,
   StoreBillingRequestsResponse,
@@ -17,6 +19,17 @@ export const storeBillingService = {
     return apiClient.get<{ subscription: StoreSubscriptionDto | null }>('/billing/subscription', {
       signal,
     });
+  },
+  getPaymentInstructions(signal?: AbortSignal) {
+    return apiClient.get<PlatformPaymentInstructionsDto>('/billing/payment-instructions', { signal });
+  },
+  async uploadProof(file: File) {
+    const form = new FormData();
+    form.append('image', file);
+    const { proof } = await apiClient.post<{ proof: BillingProofDto }>('/billing/payment-proof', {
+      body: form,
+    });
+    return proof;
   },
   markTrialWelcomeSeen() {
     return apiClient.post<{ subscription: StoreSubscriptionDto }>('/billing/trial-welcome-seen');

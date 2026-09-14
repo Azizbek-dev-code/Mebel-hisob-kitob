@@ -6,5 +6,5 @@
     "noEmit": true,
     "rootDir": ".."
   },
-  "include": ["prisma/**/*.ts", "scripts/clean-demo-data.ts", "scripts/store-creation-e2e.ts", "scripts/platform-billing-e2e.ts", "scripts/empty-platform-e2e.ts", "scripts/saas-trial-e2e.ts", "src/**/*.ts"]
+  "include": ["prisma/**/*.ts", "scripts/clean-demo-data.ts", "scripts/store-creation-e2e.ts", "scripts/platform-billing-e2e.ts", "scripts/empty-platform-e2e.ts", "scripts/saas-trial-e2e.ts", "scripts/backfill-account-layer.ts", "src/**/*.ts"]
 }

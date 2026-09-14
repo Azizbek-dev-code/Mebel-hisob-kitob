@@ -1,6 +1,7 @@
 import {
   AuditEntityType,
   AuditEventType,
+  PlanAudience,
   PlatformBillingStatus,
   SubscriptionRequestStatus,
   SubscriptionStatus,
@@ -14,8 +15,10 @@ import {
 } from '@furniture-erp/shared';
 
 import { prisma } from '../lib/prisma.js';
+import { assertScopedBillingProofKey } from '../lib/billing-proof.js';
 import { ApiError } from '../utils/api-error.js';
 import { recordAudit } from './audit.service.js';
+import { assertPaidPlanChange } from './plan-change.js';
 import {
   getCurrentSubscription,
   getResourceUsage,
@@ -37,9 +40,9 @@ function money(value: bigint): number {
 
 export async function listStorePlans(): Promise<{ items: SubscriptionPlanDto[] }> {
   const items = await prisma.subscriptionPlan.findMany({
-    where: { isActive: true, isDefaultTrial: false },
+    where: { isActive: true, isDefaultTrial: false, audience: PlanAudience.STORE },
     include: planEntitlementInclude,
-    orderBy: { monthlyPrice: 'asc' },
+    orderBy: [{ rank: 'asc' }, { monthlyPrice: 'asc' }],
   });
   return { items: items.map(toPlanDto) };
 }
@@ -73,14 +76,34 @@ export async function requestStoreSubscription(
   body: RequestStoreSubscriptionBody,
 ): Promise<SubscriptionRequestDto> {
   const plan = await prisma.subscriptionPlan.findUnique({ where: { id: body.planId } });
-  if (!plan || !plan.isActive) throw ApiError.notFound('Tarif topilmadi yoki faol emas');
+  if (!plan || !plan.isActive || plan.audience !== PlanAudience.STORE) {
+    throw ApiError.notFound('Tarif topilmadi yoki faol emas');
+  }
   if (plan.isDefaultTrial) {
     throw ApiError.badRequest('Sinov tarifiga obuna bo‘lib bo‘lmaydi');
   }
+  if (!body.proofUrl?.trim() || !body.proofKey?.trim()) {
+    throw ApiError.validation('To‘lov chekini yuklang', [
+      { field: 'proofUrl', message: 'Chek majburiy' },
+    ]);
+  }
+  const proofKey = assertScopedBillingProofKey(
+    body.proofKey,
+    `billing-proofs/store/${actor.storeId}`,
+  );
 
   await provisionStoreSubscription(actor.storeId);
   const sub = await getCurrentSubscription(actor.storeId);
   if (!sub) throw ApiError.notFound('Obuna topilmadi');
+
+  assertPaidPlanChange({
+    effectiveStatus: effectiveSubscriptionStatus(sub),
+    currentPlanId: sub.planId,
+    currentRank: sub.plan.rank ?? 0,
+    targetPlanId: plan.id,
+    targetRank: plan.rank ?? 0,
+    targetIsTrial: plan.isDefaultTrial,
+  });
 
   const pending = await prisma.subscriptionRequest.findFirst({
     where: { storeId: actor.storeId, status: SubscriptionRequestStatus.PENDING },
@@ -94,6 +117,7 @@ export async function requestStoreSubscription(
     created = await prisma.subscriptionRequest.create({
       data: {
         storeId: actor.storeId,
+        workspaceId: null,
         planId: plan.id,
         fromPlanId: sub.planId,
         fromPlanName: sub.plan.name,
@@ -101,6 +125,10 @@ export async function requestStoreSubscription(
         currency: plan.currency,
         status: SubscriptionRequestStatus.PENDING,
         note: body.note?.trim() || null,
+        paymentMethod: body.paymentMethod,
+        payerReference: body.payerReference?.trim() || null,
+        proofUrl: body.proofUrl.trim(),
+        proofKey,
       },
       include: requestInclude,
     });

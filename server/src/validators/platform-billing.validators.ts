@@ -1,6 +1,7 @@
 import {
   PlatformBillingCycle,
   PlatformBillingStatus,
+  PlatformDatePreset,
   PlatformExpenseCategory,
   PlatformPaymentMethod,
 } from '@furniture-erp/shared';
@@ -15,6 +16,7 @@ export const createPlanBodySchema = z.object({
   currency: z.string().trim().min(3).max(8).optional(),
   trialDays: z.number().int().min(0).max(90).optional(),
   isDefaultTrial: z.boolean().optional(),
+  rank: z.number().int().min(0).max(100).optional(),
   featureKeys: z.array(z.string().trim().min(1).max(40)).max(40).optional(),
   limits: z
     .array(
@@ -42,6 +44,7 @@ export const updatePlanBodySchema = z.object({
   trialDays: z.number().int().min(0).max(90).optional(),
   isActive: z.boolean().optional(),
   isDefaultTrial: z.boolean().optional(),
+  rank: z.number().int().min(0).max(100).optional(),
   featureKeys: z.array(z.string().trim().min(1).max(40)).max(40).optional(),
   limits: z
     .array(
@@ -103,12 +106,18 @@ export const updateSettingsBodySchema = z.object({
   billingCycle: z.nativeEnum(PlatformBillingCycle).optional(),
   paymentRemindersEnabled: z.boolean().optional(),
   reminderDaysBeforeDue: z.number().int().min(0).max(30).optional(),
+  paymentCardNumber: z.string().trim().max(80).optional(),
+  paymentAccountNumber: z.string().trim().max(80).optional(),
+  paymentInstructions: z.string().trim().max(1000).optional(),
+  referralCommissionPercent: z.number().int().min(0).max(100).optional(),
+  referralMinWithdrawalSom: z.number().int().min(0).max(999_999_999_999).optional(),
+  referralProgramActive: z.boolean().optional(),
 });
 
 export const pnlQuerySchema = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
-  preset: z.enum(['THIS_MONTH', 'LAST_MONTH', 'THIS_YEAR', 'CUSTOM']).optional(),
+  preset: z.nativeEnum(PlatformDatePreset).optional(),
 });
 
 export const rejectPaymentBodySchema = z.object({
@@ -118,6 +127,18 @@ export const rejectPaymentBodySchema = z.object({
 export const requestStoreSubscriptionBodySchema = z.object({
   planId: z.string().cuid(),
   note: z.string().trim().max(500).optional(),
+  paymentMethod: z.nativeEnum(PlatformPaymentMethod),
+  payerReference: z.string().trim().max(120).optional(),
+  proofUrl: z.string().trim().min(8).max(2000),
+  proofKey: z.string().trim().min(1).max(500),
+});
+
+export const requestPersonalSubscriptionBodySchema = z.object({
+  note: z.string().trim().max(500).optional(),
+  paymentMethod: z.nativeEnum(PlatformPaymentMethod),
+  payerReference: z.string().trim().max(120).optional(),
+  proofUrl: z.string().trim().min(8).max(2000),
+  proofKey: z.string().trim().min(1).max(500),
 });
 
 export const approveSubscriptionRequestBodySchema = z.object({

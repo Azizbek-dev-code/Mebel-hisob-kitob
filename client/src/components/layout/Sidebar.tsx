@@ -31,7 +31,7 @@ function pathIsActive(pathname: string, to: string, end: boolean): boolean {
 
 function groupIsActive(pathname: string, item: NavItem): boolean {
   if (pathIsActive(pathname, item.to, false)) return true;
-  if (item.matchingPaths?.some((path) => pathIsActive(pathname, path, true))) return true;
+  if (item.matchingPaths?.some((path) => pathIsActive(pathname, path, false))) return true;
   return Boolean(item.children?.some((child) => pathIsActive(pathname, child.to, true)));
 }
 
@@ -93,10 +93,11 @@ export function Sidebar({ onNavigate, onRequestClose }: SidebarProps) {
                     icon={item.icon}
                     onNavigate={onNavigate}
                     end
+                    isCurrent={groupIsActive(pathname, item)}
                     badge={
-                      item.key === 'store-requests'
+                      item.key === 'platform-accounts'
                         ? pendingCount
-                        : item.key === 'subscription-requests'
+                        : item.key === 'platform-subscriptions'
                           ? tariffPending
                           : undefined
                     }
@@ -123,10 +124,11 @@ export function Sidebar({ onNavigate, onRequestClose }: SidebarProps) {
                   icon={item.icon}
                   onNavigate={onNavigate}
                   end={item.to === '/dashboard'}
+                  isCurrent={groupIsActive(pathname, item)}
                   badge={
-                    item.key === 'store-requests'
+                    item.key === 'platform-accounts'
                       ? pendingCount
-                      : item.key === 'subscription-requests'
+                      : item.key === 'platform-subscriptions'
                         ? tariffPending
                         : undefined
                   }

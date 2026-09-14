@@ -1,7 +1,7 @@
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { mockApi } from '@/test/mock-api';
+import { mockApi, SIGNED_OUT_RESPONSE } from '@/test/mock-api';
 import { renderWithProviders, screen } from '@/test/test-utils';
 
 import { RegisterStorePage } from './RegisterStorePage';
@@ -12,8 +12,8 @@ afterEach(() => {
 });
 
 describe('store creation browser flow', () => {
-  it('keeps the public form from overflowing at 390px-class layouts', () => {
-    mockApi({});
+  it('keeps the public form from overflowing at 390px-class layouts', async () => {
+    mockApi({ '/auth/me': SIGNED_OUT_RESPONSE });
     const { container } = renderWithProviders(
       <MemoryRouter>
         <RegisterStorePage />
@@ -21,7 +21,7 @@ describe('store creation browser flow', () => {
     );
 
     expect(container.querySelector('main')).toHaveClass('overflow-x-hidden');
-    expect(screen.getByRole('heading', { name: "Yangi do'kon ochish" })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: "Yangi do'kon ochish" })).toBeInTheDocument();
   });
 
   it('shows the pending screen copy after a successful submit payload', async () => {

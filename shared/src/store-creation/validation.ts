@@ -1,5 +1,6 @@
 import { isNormalizedUzMobile, normalizeUzPhone } from '../utils/phone.js';
 import { isUzbekistanRegion } from '../constants/regions.js';
+import { isBusinessType } from '../constants/enums.js';
 
 /** Matches the worker-account password policy already used by the API. */
 export const STORE_CREATION_PASSWORD_MIN = 8;
@@ -24,6 +25,15 @@ export interface StoreCreationDraft {
   region: string;
   district: string;
   address: string;
+}
+
+export interface AuthenticatedBusinessRequestDraft {
+  phone: string;
+  storeName: string;
+  region: string;
+  district: string;
+  address: string;
+  businessType: string;
 }
 
 export function normalizePersonName(value: string): string {
@@ -118,6 +128,19 @@ export function validateStoreCreationDraft(input: StoreCreationDraft): StoreCrea
     errors.push({ field: 'passwordConfirmation', message: 'Parollar mos kelmadi' });
   }
 
+  errors.push(...validateStoreLocationFields(input));
+
+  return errors;
+}
+
+function validateStoreLocationFields(input: {
+  storeName: string;
+  region: string;
+  district: string;
+  address: string;
+}): StoreCreationFieldError[] {
+  const errors: StoreCreationFieldError[] = [];
+
   const storeName = normalizeStoreName(input.storeName);
   if (!storeName) {
     errors.push({ field: 'storeName', message: "Do'kon nomini kiriting" });
@@ -146,6 +169,37 @@ export function validateStoreCreationDraft(input: StoreCreationDraft): StoreCrea
     errors.push({ field: 'address', message: 'Manzil juda uzun' });
   }
 
+  return errors;
+}
+
+function validatePhoneField(phoneRaw: string): StoreCreationFieldError[] {
+  const errors: StoreCreationFieldError[] = [];
+  const phone = normalizeUzPhone(phoneRaw);
+  if (!phoneRaw.trim()) {
+    errors.push({ field: 'phone', message: 'Telefon raqamini kiriting' });
+  } else if (!isNormalizedUzMobile(phone)) {
+    errors.push({
+      field: 'phone',
+      message: "O'zbekiston mobil raqamini kiriting (+998 XX XXX XX XX)",
+    });
+  }
+  return errors;
+}
+
+/**
+ * Store fields for a signed-in Identity. Name, email and password are taken from
+ * the existing person record — they must not be collected again.
+ */
+export function validateAuthenticatedBusinessRequestDraft(
+  input: AuthenticatedBusinessRequestDraft,
+): StoreCreationFieldError[] {
+  const errors: StoreCreationFieldError[] = [
+    ...validatePhoneField(input.phone),
+    ...validateStoreLocationFields(input),
+  ];
+  if (!isBusinessType(input.businessType)) {
+    errors.push({ field: 'businessType', message: 'Biznes turini tanlang' });
+  }
   return errors;
 }
 

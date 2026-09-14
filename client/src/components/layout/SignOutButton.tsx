@@ -36,7 +36,7 @@ export function SignOutButton({ className, onSignedOut }: SignOutButtonProps) {
       ) : (
         <LogOut className="size-4 shrink-0" aria-hidden="true" />
       )}
-      {t('auth.logout')}
+      <span>{t('auth.logout')}</span>
     </button>
   );
 }

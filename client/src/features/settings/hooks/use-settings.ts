@@ -1,4 +1,9 @@
-import type { AuthUser, ResetStoreRequest, UpdateStoreProfileRequest } from '@furniture-erp/shared';
+import {
+  isPersonalAuth,
+  type AuthPrincipal,
+  type ResetStoreRequest,
+  type UpdateStoreProfileRequest,
+} from '@furniture-erp/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { authQueryKeys } from '@/features/auth/hooks/use-auth';
@@ -25,8 +30,10 @@ export function useUpdateStoreSettings() {
     onSuccess: (store) => {
       queryClient.setQueryData(settingsKeys.store(), store);
 
-      queryClient.setQueryData<AuthUser | null>(authQueryKeys.currentUser, (prev) => {
-        if (!prev || prev.storeId !== store.id || prev.storeName === store.name) return prev;
+      queryClient.setQueryData<AuthPrincipal | null>(authQueryKeys.currentUser, (prev) => {
+        if (!prev || isPersonalAuth(prev) || prev.storeId !== store.id || prev.storeName === store.name) {
+          return prev;
+        }
         return { ...prev, storeName: store.name };
       });
     },

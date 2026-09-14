@@ -13,7 +13,7 @@ const { prismaMock } = vi.hoisted(() => ({
     feature: { upsert: vi.fn(), findMany: vi.fn() },
     planFeature: { deleteMany: vi.fn(), createMany: vi.fn(), count: vi.fn(), findMany: vi.fn() },
     planLimit: { deleteMany: vi.fn(), createMany: vi.fn() },
-    storeSubscription: { findFirst: vi.fn() },
+    storeSubscription: { findFirst: vi.fn(), update: vi.fn() },
     user: { count: vi.fn() },
     customer: { count: vi.fn() },
     product: { count: vi.fn() },

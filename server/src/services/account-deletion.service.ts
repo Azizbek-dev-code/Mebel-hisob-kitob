@@ -82,6 +82,7 @@ export async function deleteOwnAccount(
       passwordHash: true,
       isActive: true,
       deletedAt: true,
+      identityId: true,
     },
   });
 
@@ -152,6 +153,17 @@ export async function deleteOwnAccount(
         username: anonymisedUsername,
       },
     });
+
+    if (user.identityId) {
+      await tx.identity.update({
+        where: { id: user.identityId },
+        data: {
+          email: anonymisedEmail,
+          fullName: 'Deleted user',
+          passwordHash: scrambledHash,
+        },
+      });
+    }
   });
 
   await recordAudit({

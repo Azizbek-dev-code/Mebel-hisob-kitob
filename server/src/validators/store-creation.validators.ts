@@ -1,4 +1,5 @@
 import {
+  BusinessType,
   StoreCreationRequestStatus,
   validateStoreCreationDraft,
   type StoreCreationRequestAdmin,
@@ -20,6 +21,7 @@ const draftShape = {
   region: z.string(),
   district: z.string(),
   address: z.string(),
+  businessType: z.nativeEnum(BusinessType).optional(),
 };
 
 export const createStoreRequestBodySchema = z.object(draftShape).superRefine((value, ctx) => {

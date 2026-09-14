@@ -1,4 +1,4 @@
-import type { AuthUser } from '@furniture-erp/shared';
+import type { AuthUser, PersonalAuthUser } from '@furniture-erp/shared';
 import { UserRole, WorkerResponsibility } from '@furniture-erp/shared';
 
 /** Shared signed-in fixtures for client tests. */
@@ -52,4 +52,34 @@ export const TEST_EMPLOYEE: AuthUser = {
   responsibilities: [WorkerResponsibility.ASSEMBLER, WorkerResponsibility.SELLER],
   storeId: 'store_1',
   storeName: 'Mebel Savdo',
+};
+
+export const TEST_PERSONAL: PersonalAuthUser = {
+  kind: 'PERSONAL',
+  id: 'idn_1',
+  email: 'aziz@example.com',
+  username: null,
+  fullName: 'Aziz Karimov',
+  phone: null,
+  role: 'PERSONAL',
+  responsibilities: [],
+  storeId: null,
+  storeName: 'Azizning shaxsiy moliyasi',
+  workspaceId: 'ws_1',
+  identityId: 'idn_1',
+  membershipRole: 'OWNER',
+  subscription: {
+    status: 'TRIAL',
+    storedStatus: 'TRIAL',
+    planId: 'PERSONAL_TRIAL',
+    planName: 'Sinov',
+    trialEndsAt: '2026-09-20T00:00:00.000Z',
+    currentPeriodEnd: '2026-09-20T00:00:00.000Z',
+    trialWelcomeSeenAt: null,
+    daysRemaining: 7,
+    canWrite: true,
+    hasPendingPaymentRequest: false,
+    featureKeys: [],
+    featuresRestricted: false,
+  },
 };

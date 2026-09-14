@@ -347,6 +347,32 @@ export const DateRangePreset = {
 } as const;
 export type DateRangePreset = (typeof DateRangePreset)[keyof typeof DateRangePreset];
 
+/** Platform admin P&L / dashboard only. Store ERP `DateRangePreset` stays unchanged. */
+export const PlatformDatePreset = {
+  LAST_7_DAYS: 'LAST_7_DAYS',
+  LAST_30_DAYS: 'LAST_30_DAYS',
+  LAST_3_MONTHS: 'LAST_3_MONTHS',
+  LAST_6_MONTHS: 'LAST_6_MONTHS',
+  LAST_YEAR: 'LAST_YEAR',
+  THIS_MONTH: 'THIS_MONTH',
+  LAST_MONTH: 'LAST_MONTH',
+  THIS_YEAR: 'THIS_YEAR',
+  CUSTOM: 'CUSTOM',
+} as const;
+export type PlatformDatePreset = (typeof PlatformDatePreset)[keyof typeof PlatformDatePreset];
+
+export const PLATFORM_DATE_PRESETS = [
+  PlatformDatePreset.LAST_7_DAYS,
+  PlatformDatePreset.LAST_30_DAYS,
+  PlatformDatePreset.LAST_3_MONTHS,
+  PlatformDatePreset.LAST_6_MONTHS,
+  PlatformDatePreset.LAST_YEAR,
+  PlatformDatePreset.THIS_MONTH,
+  PlatformDatePreset.LAST_MONTH,
+  PlatformDatePreset.THIS_YEAR,
+  PlatformDatePreset.CUSTOM,
+] as const;
+
 /**
  * Lifecycle of a public "open a store" application.
  * A request stays PENDING until a PLATFORM_ADMIN approves or rejects it.
@@ -456,6 +482,7 @@ export const PlatformExpenseCategory = {
   ADVERTISING: 'ADVERTISING',
   MARKETING: 'MARKETING',
   DEVELOPMENT: 'DEVELOPMENT',
+  SALARY: 'SALARY',
   OTHER: 'OTHER',
 } as const;
 export type PlatformExpenseCategory =
@@ -473,6 +500,7 @@ export const PLATFORM_EXPENSE_CATEGORY_LABELS = {
   ADVERTISING: "Reklama",
   MARKETING: 'Marketing',
   DEVELOPMENT: 'Dasturlash',
+  SALARY: 'Maosh',
   OTHER: 'Boshqa',
 } as const satisfies Record<PlatformExpenseCategory, string>;
 
@@ -506,3 +534,290 @@ export const SUBSCRIPTION_REQUEST_STATUS_LABELS = {
   REJECTED: 'RAD ETILDI',
   CANCELLED: 'BEKOR',
 } as const satisfies Record<SubscriptionRequestStatus, string>;
+
+/**
+ * Who a `SubscriptionPlan` row is for. Store ERP tariffs stay STORE.
+ * PERSONAL_PAID is seeded as PERSONAL so it never appears in the shop catalogue.
+ */
+export const PlanAudience = {
+  STORE: 'STORE',
+  PERSONAL: 'PERSONAL',
+} as const;
+export type PlanAudience = (typeof PlanAudience)[keyof typeof PlanAudience];
+
+export const PLAN_AUDIENCES = Object.values(PlanAudience);
+
+export const PLAN_AUDIENCE_LABELS = {
+  STORE: 'Biznes',
+  PERSONAL: 'Shaxsiy',
+} as const satisfies Record<PlanAudience, string>;
+
+/** Overlay workspace kind. BUSINESS maps 1:1 onto an existing Store. */
+export const WorkspaceType = {
+  PERSONAL: 'PERSONAL',
+  BUSINESS: 'BUSINESS',
+} as const;
+
+/**
+ * Store vertical. Only values that exist in the database should appear in admin
+ * filters — do not render unused members as if they had accounts.
+ */
+export const BusinessType = {
+  FURNITURE: 'FURNITURE',
+  CARPET: 'CARPET',
+  CLOTHING: 'CLOTHING',
+  ELECTRONICS: 'ELECTRONICS',
+  OTHER: 'OTHER',
+} as const;
+export type BusinessType = (typeof BusinessType)[keyof typeof BusinessType];
+
+export const BUSINESS_TYPES = Object.values(BusinessType);
+
+export const BUSINESS_TYPE_LABELS = {
+  FURNITURE: 'Mebel',
+  CARPET: 'Gilam',
+  CLOTHING: 'Kiyim',
+  ELECTRONICS: 'Telefon/Elektronika',
+  OTHER: 'Boshqa',
+} as const satisfies Record<BusinessType, string>;
+
+export function isBusinessType(value: unknown): value is BusinessType {
+  return typeof value === 'string' && (BUSINESS_TYPES as readonly string[]).includes(value);
+}
+
+/** Unknown / missing values fall back to furniture so legacy clients keep working. */
+export function parseBusinessType(value: unknown): BusinessType {
+  return isBusinessType(value) ? value : BusinessType.FURNITURE;
+}
+
+/**
+ * Admin-facing account row status. Derived from Workspace / Store access /
+ * SubscriptionStatus / StoreCreationRequest — not a Prisma enum.
+ */
+export const PlatformAccountDisplayStatus = {
+  PENDING: 'PENDING',
+  ACTIVE: 'ACTIVE',
+  TRIAL: 'TRIAL',
+  EXPIRED: 'EXPIRED',
+  BLOCKED: 'BLOCKED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type PlatformAccountDisplayStatus =
+  (typeof PlatformAccountDisplayStatus)[keyof typeof PlatformAccountDisplayStatus];
+
+export const PLATFORM_ACCOUNT_DISPLAY_STATUSES = Object.values(PlatformAccountDisplayStatus);
+
+export const PLATFORM_ACCOUNT_DISPLAY_STATUS_LABELS = {
+  PENDING: 'Kutilmoqda',
+  ACTIVE: 'Faol',
+  TRIAL: 'Sinov',
+  EXPIRED: 'Muddati o‘tgan',
+  BLOCKED: 'Bloklangan',
+  CANCELLED: 'Bekor',
+} as const satisfies Record<PlatformAccountDisplayStatus, string>;
+
+export const PlatformAccountSource = {
+  WORKSPACE: 'WORKSPACE',
+  PENDING_REQUEST: 'PENDING_REQUEST',
+} as const;
+export type PlatformAccountSource =
+  (typeof PlatformAccountSource)[keyof typeof PlatformAccountSource];
+export type WorkspaceType = (typeof WorkspaceType)[keyof typeof WorkspaceType];
+
+export const WorkspaceStatus = {
+  ACTIVE: 'ACTIVE',
+  ARCHIVED: 'ARCHIVED',
+} as const;
+export type WorkspaceStatus = (typeof WorkspaceStatus)[keyof typeof WorkspaceStatus];
+
+export const WorkspaceMembershipRole = {
+  OWNER: 'OWNER',
+  MEMBER: 'MEMBER',
+} as const;
+export type WorkspaceMembershipRole =
+  (typeof WorkspaceMembershipRole)[keyof typeof WorkspaceMembershipRole];
+
+export const OnboardingSubmissionStatus = {
+  IN_PROGRESS: 'IN_PROGRESS',
+  COMPLETED: 'COMPLETED',
+  ABANDONED: 'ABANDONED',
+} as const;
+export type OnboardingSubmissionStatus =
+  (typeof OnboardingSubmissionStatus)[keyof typeof OnboardingSubmissionStatus];
+
+export const OnboardingAudience = {
+  PERSONAL: 'PERSONAL',
+  BUSINESS: 'BUSINESS',
+} as const;
+export type OnboardingAudience = (typeof OnboardingAudience)[keyof typeof OnboardingAudience];
+
+export const OnboardingAnswerType = {
+  SINGLE: 'SINGLE',
+  MULTI: 'MULTI',
+  TEXT: 'TEXT',
+} as const;
+export type OnboardingAnswerType =
+  (typeof OnboardingAnswerType)[keyof typeof OnboardingAnswerType];
+
+/** Personal cash/card/bank wallets. Independent of store PaymentMethod. */
+export const PersonalWalletKind = {
+  CASH: 'CASH',
+  CARD: 'CARD',
+  BANK: 'BANK',
+  OTHER: 'OTHER',
+  UZCARD: 'UZCARD',
+  HUMO: 'HUMO',
+  PAYME: 'PAYME',
+  CLICK: 'CLICK',
+  SAVINGS: 'SAVINGS',
+} as const;
+export type PersonalWalletKind = (typeof PersonalWalletKind)[keyof typeof PersonalWalletKind];
+
+export const PersonalCategoryKind = {
+  INCOME: 'INCOME',
+  EXPENSE: 'EXPENSE',
+} as const;
+export type PersonalCategoryKind =
+  (typeof PersonalCategoryKind)[keyof typeof PersonalCategoryKind];
+
+export const PersonalEntryType = {
+  INCOME: 'INCOME',
+  EXPENSE: 'EXPENSE',
+} as const;
+export type PersonalEntryType = (typeof PersonalEntryType)[keyof typeof PersonalEntryType];
+
+/** History list filter. TRANSFER is not an entry type. */
+export const PersonalHistoryKind = {
+  ALL: 'ALL',
+  INCOME: 'INCOME',
+  EXPENSE: 'EXPENSE',
+  TRANSFER: 'TRANSFER',
+} as const;
+export type PersonalHistoryKind = (typeof PersonalHistoryKind)[keyof typeof PersonalHistoryKind];
+
+/** Monthly spend cap. TOTAL covers every expense category. */
+export const PersonalBudgetKind = {
+  TOTAL: 'TOTAL',
+  CATEGORY: 'CATEGORY',
+} as const;
+export type PersonalBudgetKind = (typeof PersonalBudgetKind)[keyof typeof PersonalBudgetKind];
+
+/**
+ * Derived month-to-date budget state. Not stored; spend vs limit only.
+ * NEAR = at least 80%, LIMIT = exactly 100%, OVER = above the cap.
+ */
+export const BudgetWarningLevel = {
+  NONE: 'NONE',
+  NEAR: 'NEAR',
+  LIMIT: 'LIMIT',
+  OVER: 'OVER',
+} as const;
+export type BudgetWarningLevel = (typeof BudgetWarningLevel)[keyof typeof BudgetWarningLevel];
+
+/** Savings target. Independent of onboarding `PersonalGoal` preference tags. */
+export const PersonalSavingGoalStatus = {
+  ACTIVE: 'ACTIVE',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type PersonalSavingGoalStatus =
+  (typeof PersonalSavingGoalStatus)[keyof typeof PersonalSavingGoalStatus];
+
+/**
+ * How estimatedReachAt was chosen. Not stored.
+ * MONTHLY beats TARGET_DATE; HISTORY only after a month of contributions.
+ */
+export const GoalEtaKind = {
+  MET: 'MET',
+  MONTHLY: 'MONTHLY',
+  TARGET_DATE: 'TARGET_DATE',
+  HISTORY: 'HISTORY',
+} as const;
+export type GoalEtaKind = (typeof GoalEtaKind)[keyof typeof GoalEtaKind];
+
+/** Recurring reminder cadence. Does not auto-post a ledger entry. */
+export const PersonalRecurringFrequency = {
+  DAILY: 'DAILY',
+  WEEKLY: 'WEEKLY',
+  MONTHLY: 'MONTHLY',
+  YEARLY: 'YEARLY',
+  CUSTOM: 'CUSTOM',
+} as const;
+export type PersonalRecurringFrequency =
+  (typeof PersonalRecurringFrequency)[keyof typeof PersonalRecurringFrequency];
+
+/** Whether the next occurrence is overdue, inside the upcoming window, or later. */
+export const PersonalRecurringDueState = {
+  OVERDUE: 'OVERDUE',
+  DUE: 'DUE',
+  LATER: 'LATER',
+} as const;
+export type PersonalRecurringDueState =
+  (typeof PersonalRecurringDueState)[keyof typeof PersonalRecurringDueState];
+
+/** Lent = I gave money; borrowed = I owe someone. Not store customer debt. */
+export const PersonalDebtDirection = {
+  LENT: 'LENT',
+  BORROWED: 'BORROWED',
+} as const;
+export type PersonalDebtDirection =
+  (typeof PersonalDebtDirection)[keyof typeof PersonalDebtDirection];
+
+/** Derived from principal, payments and due date. Not stored. */
+export const PersonalDebtStatus = {
+  ACTIVE: 'ACTIVE',
+  PARTIALLY_PAID: 'PARTIALLY_PAID',
+  PAID: 'PAID',
+  OVERDUE: 'OVERDUE',
+} as const;
+export type PersonalDebtStatus = (typeof PersonalDebtStatus)[keyof typeof PersonalDebtStatus];
+
+export const PersonalNotificationKind = {
+  BUDGET_NEAR: 'BUDGET_NEAR',
+  BUDGET_OVER: 'BUDGET_OVER',
+  RECURRING_DUE: 'RECURRING_DUE',
+  RECURRING_OVERDUE: 'RECURRING_OVERDUE',
+  GOAL_DUE_SOON: 'GOAL_DUE_SOON',
+  GOAL_BEHIND: 'GOAL_BEHIND',
+  DEBT_OVERDUE: 'DEBT_OVERDUE',
+} as const;
+export type PersonalNotificationKind =
+  (typeof PersonalNotificationKind)[keyof typeof PersonalNotificationKind];
+
+export const PersonalNotificationSeverity = {
+  INFO: 'INFO',
+  WARNING: 'WARNING',
+  DANGER: 'DANGER',
+} as const;
+export type PersonalNotificationSeverity =
+  (typeof PersonalNotificationSeverity)[keyof typeof PersonalNotificationSeverity];
+
+/** Referral wallet / commission row. Isolated from PersonalEntry and store Expense. */
+export const ReferralCommissionStatus = {
+  PENDING: 'PENDING',
+  AVAILABLE: 'AVAILABLE',
+  WITHDRAW_REQUESTED: 'WITHDRAW_REQUESTED',
+  PAID: 'PAID',
+  REJECTED: 'REJECTED',
+} as const;
+export type ReferralCommissionStatus =
+  (typeof ReferralCommissionStatus)[keyof typeof ReferralCommissionStatus];
+
+export const ReferralWithdrawalStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  PAID: 'PAID',
+} as const;
+export type ReferralWithdrawalStatus =
+  (typeof ReferralWithdrawalStatus)[keyof typeof ReferralWithdrawalStatus];
+
+export const ReferralPaymentSourceType = {
+  PLATFORM_INVOICE: 'PLATFORM_INVOICE',
+  SUBSCRIPTION_REQUEST: 'SUBSCRIPTION_REQUEST',
+} as const;
+export type ReferralPaymentSourceType =
+  (typeof ReferralPaymentSourceType)[keyof typeof ReferralPaymentSourceType];
+
+export const DEFAULT_REFERRAL_COMMISSION_PERCENT = 10;
+export const DEFAULT_REFERRAL_MIN_WITHDRAWAL_SOM = 100_000;

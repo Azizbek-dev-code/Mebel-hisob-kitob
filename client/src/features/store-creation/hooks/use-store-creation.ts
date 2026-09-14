@@ -1,10 +1,12 @@
 import {
   StoreCreationRequestStatus,
+  type CreateAuthenticatedBusinessRequestBody,
   type CreateStoreRequestBody,
   type StoreCreationRequestListQuery,
 } from '@furniture-erp/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { accountsService } from '@/services/accounts.service';
 import { storeCreationService } from '@/services/store-creation.service';
 
 export const storeCreationQueryKeys = {
@@ -18,6 +20,13 @@ export const storeCreationQueryKeys = {
 export function useCreateStoreRequest() {
   return useMutation({
     mutationFn: (body: CreateStoreRequestBody) => storeCreationService.create(body),
+  });
+}
+
+export function useCreateAuthenticatedBusinessRequest() {
+  return useMutation({
+    mutationFn: (body: CreateAuthenticatedBusinessRequestBody) =>
+      accountsService.createBusinessRequest(body),
   });
 }
 

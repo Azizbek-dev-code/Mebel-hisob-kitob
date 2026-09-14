@@ -1,4 +1,4 @@
-import type { AuthUser, LoginRequest } from '@furniture-erp/shared';
+import type { AuthPrincipal, LoginRequest } from '@furniture-erp/shared';
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 
 import { ApiClientError } from '@/lib/api-client';
@@ -17,7 +17,7 @@ export const authQueryKeys = {
  * A 401 is resolved to `null` rather than thrown: being signed out is the normal
  * state of a visitor, not an error the interface should report.
  */
-export function useCurrentUser(): UseQueryResult<AuthUser | null, Error> {
+export function useCurrentUser(): UseQueryResult<AuthPrincipal | null, Error> {
   return useQuery({
     queryKey: authQueryKeys.currentUser,
     queryFn: async () => {

@@ -12,6 +12,14 @@ export const optionalMoneySchema = moneySchema.optional();
 
 export const cuidSchema = z.string().cuid('Invalid id');
 
+/** Workspace / identity ids may be cuid (default) or UUID (identity-layer backfill). */
+export const entityIdSchema = z
+  .string()
+  .min(1, 'Invalid id')
+  .refine((value) => z.string().cuid().safeParse(value).success || z.string().uuid().safeParse(value).success, {
+    message: 'Invalid id',
+  });
+
 export const calendarDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use the date format YYYY-MM-DD');

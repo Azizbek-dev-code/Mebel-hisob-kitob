@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 
+import { resolvePlatformDateRange } from '../lib/platform-date-range.js';
 import * as billing from '../services/platform-billing.service.js';
 import * as entitlement from '../services/entitlement.service.js';
 import { ApiError } from '../utils/api-error.js';
@@ -25,23 +26,7 @@ function requireUser(req: Request) {
 }
 
 function rangeFromQuery(query: { from?: string; to?: string; preset?: string }) {
-  const now = new Date();
-  if (query.preset === 'LAST_MONTH') {
-    const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const to = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-    return { from, to, label: "O'tgan oy" };
-  }
-  if (query.preset === 'THIS_YEAR') {
-    const from = new Date(now.getFullYear(), 0, 1);
-    const to = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
-    return { from, to, label: 'Shu yil' };
-  }
-  if (query.from && query.to) {
-    return { from: new Date(query.from), to: new Date(query.to), label: 'Custom' };
-  }
-  const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-  return { from, to, label: 'Shu oy' };
+  return resolvePlatformDateRange(query);
 }
 
 export const getPlans = asyncHandler(async (req: Request, res: Response) => {
@@ -186,7 +171,8 @@ export const getAnalytics = asyncHandler(async (req: Request, res: Response) => 
 
 export const getDashboard = asyncHandler(async (req: Request, res: Response) => {
   const user = requireUser(req);
-  sendSuccess(res, await billing.getDashboard(user.role));
+  const { from, to, label } = rangeFromQuery(req.query as typeof pnlQuerySchema._type);
+  sendSuccess(res, await billing.getDashboard(user.role, from, to, label));
 });
 
 export const getStoreAccess = asyncHandler(async (req: Request, res: Response) => {

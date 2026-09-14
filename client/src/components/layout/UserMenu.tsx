@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
+import { AccountWorkspaceList } from '@/features/accounts/components/AccountWorkspaceList';
 import { useCurrentUser } from '@/features/auth/hooks/use-auth';
 import { cn } from '@/lib/cn';
 import { ROUTES } from '@/routes/paths';
@@ -71,7 +72,7 @@ export function UserMenu() {
         <div
           role="menu"
           aria-label={t('nav.account')}
-          className="absolute right-0 top-full z-40 mt-2 w-60 rounded-card border border-line bg-surface p-1.5 shadow-overlay"
+          className="absolute right-0 top-full z-40 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-card border border-line bg-surface p-1.5 shadow-overlay"
         >
           <div className="px-2.5 py-2">
             <p className="truncate text-sm font-medium text-ink">{user.username ?? user.email}</p>
@@ -79,6 +80,7 @@ export function UserMenu() {
               {roleLabel(user.role)} · {user.storeName}
             </p>
           </div>
+          <AccountWorkspaceList onPicked={() => setOpen(false)} />
 
           <div className="my-1 h-px bg-line" />
 

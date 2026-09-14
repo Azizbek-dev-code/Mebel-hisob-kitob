@@ -11,6 +11,8 @@ const INTENTIONALLY_EXCLUDED = new Set([
   'StoreSubscription',
   'PlatformInvoice',
   'SubscriptionRequest',
+  /// Account overlay, not store ERP data. storeId is the BUSINESS link only.
+  'Workspace',
 ]);
 
 function delegateName(modelName: string): string {
@@ -41,6 +43,21 @@ describe('backup model list', () => {
 
   it('never exports the backup catalogue itself', () => {
     expect(BACKUP_MODELS.some((model) => model.delegate === 'backupJob')).toBe(false);
+  });
+
+  it('keeps personal-finance tables out of store backups and free of storeId', () => {
+    const personal = Prisma.dmmf.datamodel.models.filter((model) => model.name.startsWith('Personal'));
+    expect(personal.map((model) => model.name).length).toBeGreaterThan(0);
+
+    const covered = new Set(BACKUP_MODELS.map((model) => model.delegate));
+    for (const model of personal) {
+      expect(
+        model.fields.some((field) => field.name === 'storeId'),
+        `${model.name} must not carry storeId`,
+      ).toBe(false);
+      const delegate = delegateName(model.name);
+      expect(covered.has(delegate), `${delegate} must not be in a store backup`).toBe(false);
+    }
   });
 
   it('never exports or purges the audit trail', () => {

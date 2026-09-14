@@ -84,6 +84,16 @@ describe('platform billing authorization', () => {
     expect(res.status).toBe(403);
   });
 
+  it('forbids store ADMIN from platform finance and analytics', async () => {
+    const cookie = await loginAs(ADMIN_RECORD);
+    const pnl = await request(app).get('/api/platform/pnl').set('Cookie', cookie);
+    const analytics = await request(app).get('/api/platform/analytics').set('Cookie', cookie);
+    const expenses = await request(app).get('/api/platform/expenses').set('Cookie', cookie);
+    expect(pnl.status).toBe(403);
+    expect(analytics.status).toBe(403);
+    expect(expenses.status).toBe(403);
+  });
+
   it('lists plans for PLATFORM_ADMIN', async () => {
     billingMock.listPlans.mockResolvedValue({ items: [] });
     const cookie = await loginAs(PLATFORM_RECORD);

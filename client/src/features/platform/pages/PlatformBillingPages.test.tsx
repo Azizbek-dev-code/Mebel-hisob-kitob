@@ -7,6 +7,7 @@ import { renderWithProviders, screen } from '@/test/test-utils';
 
 import { PlatformPlansPage } from './PlatformPlansPage';
 import { PlatformPaymentsHistoryPage } from './PlatformPaymentsPages';
+import { PlatformSubscriptionRequestsPage } from './PlatformSubscriptionRequestsPage';
 import { AccessBlockedPage } from './AccessBlockedPage';
 import { TEST_ADMIN } from '@/test/auth-fixtures';
 import { StoreAccessStatus } from '@furniture-erp/shared';
@@ -47,6 +48,9 @@ describe('platform billing UI', () => {
       </MemoryRouter>,
     );
     expect(await screen.findByText('START')).toBeInTheDocument();
+    expect(screen.getByText('Pullik')).toBeInTheDocument();
+    expect(screen.getByText('Sinov')).toBeInTheDocument();
+    expect(screen.queryByText('Gilam')).not.toBeInTheDocument();
     expect(container.querySelector('.overflow-x-hidden')).toBeTruthy();
   });
 
@@ -100,6 +104,7 @@ describe('platform billing UI', () => {
     );
     expect(await screen.findByText('Fayz Mebel')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /To'lovni qayd etish/ })).toBeInTheDocument();
+    expect(screen.getByText('Shaxsiy to‘lov yo‘q')).toBeInTheDocument();
   });
 
   it('shows the payment-required screen for a blocked owner', async () => {
@@ -136,5 +141,46 @@ describe('platform billing UI', () => {
     expect(await screen.findByText(/vaqtinchalik bloklangan/)).toBeInTheDocument();
     expect(await screen.findByText('Fayz Mebel')).toBeInTheDocument();
     expect(screen.getByText(/Platforma administratori/)).toBeInTheDocument();
+  });
+
+  it('lists store and personal tariff requests in one queue', async () => {
+    mockApi({
+      '/auth/me': { status: 200, body: { success: true, data: { user: TEST_PLATFORM_ADMIN } } },
+      '/platform/subscription-requests': {
+        status: 200,
+        body: {
+          success: true,
+          data: {
+            items: [
+              {
+                id: 'req_1',
+                storeId: 'store_1',
+                storeName: 'Fayz Mebel',
+                ownerName: 'Ali',
+                ownerPhone: '+998901112233',
+                ownerEmail: 'ali@store.uz',
+                currentPlanName: 'START',
+                currentStatus: 'ACTIVE',
+                planName: 'PRO',
+                requestedPriceSnapshot: 200000,
+                status: 'PENDING',
+                requestedAt: '2026-09-01T00:00:00.000Z',
+              },
+            ],
+          },
+        },
+      },
+    });
+    renderWithProviders(
+      <MemoryRouter>
+        <PlatformSubscriptionRequestsPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Fayz Mebel')).toBeInTheDocument();
+    expect(screen.getByText(/So'ralgan: PRO/)).toBeInTheDocument();
+    expect(screen.getByText(/Biznes/)).toBeInTheDocument();
+    expect(screen.queryByText('Shaxsiy so‘rov yo‘q')).not.toBeInTheDocument();
+    expect(screen.queryByText("Do'konlar")).not.toBeInTheDocument();
   });
 });

@@ -7,7 +7,12 @@ interface SeriesPoint {
 interface PlatformBarChartProps {
   title: string;
   series: SeriesPoint[];
-  keys: Array<{ key: string; label: string; className: string }>;
+  keys: Array<{
+    key: string;
+    label: string;
+    className: string;
+    format?: (value: number) => string;
+  }>;
   emptyLabel: string;
 }
 
@@ -42,7 +47,7 @@ export function PlatformBarChart({ title, series, keys, emptyLabel }: PlatformBa
                         <div className={`h-2 rounded-full ${item.className}`} style={{ width }} />
                       </div>
                       <span className="w-16 shrink-0 text-right text-[11px] tabular-nums text-ink">
-                        {formatMoneyCompact(value)}
+                        {item.format ? item.format(value) : formatMoneyCompact(value)}
                       </span>
                     </div>
                   );

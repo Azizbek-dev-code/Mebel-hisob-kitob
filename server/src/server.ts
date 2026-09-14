@@ -21,6 +21,19 @@ import { logger } from './utils/logger.js';
             message: error instanceof Error ? error.message : String(error),
           });
         });
+
+      void import('./modules/accounts/account-layer.service.js')
+        .then((mod) => mod.backfillAccountLayer())
+        .then((result) => {
+          if (result.identitiesCreated + result.workspacesCreated + result.membershipsCreated > 0) {
+            logger.info('Backfilled account layer on boot', { ...result });
+          }
+        })
+        .catch((error: unknown) => {
+          logger.error('Failed to backfill account layer', {
+            message: error instanceof Error ? error.message : String(error),
+          });
+        });
     }
   });
 

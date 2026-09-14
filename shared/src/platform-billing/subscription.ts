@@ -60,6 +60,25 @@ export function canWriteWithSubscription(status: string): boolean {
 }
 
 /**
+ * Persist EXPIRED when the stored column still says TRIAL/ACTIVE/PAST_DUE but
+ * the period has ended. BLOCKED/CANCELLED stay as written.
+ */
+export function persistedExpiredStatus(
+  stored: string,
+  effective: SubscriptionStatus,
+): SubscriptionStatus | null {
+  if (
+    effective === SubscriptionStatus.EXPIRED &&
+    stored !== SubscriptionStatus.EXPIRED &&
+    stored !== SubscriptionStatus.BLOCKED &&
+    stored !== SubscriptionStatus.CANCELLED
+  ) {
+    return SubscriptionStatus.EXPIRED;
+  }
+  return null;
+}
+
+/**
  * Legacy plans (no PlanFeature rows) keep every module open.
  * Once an admin saves a feature set, only those keys are allowed —
  * including the empty set (nothing enabled).

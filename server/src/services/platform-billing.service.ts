@@ -6,6 +6,10 @@ import {
   PRO_LIMIT_PRESET,
   PlatformBillingStatus,
   PlatformExpenseStatus,
+  PERSONAL_PAID_MONTHLY_PRICE_SOM,
+  PERSONAL_PAID_PERIOD_DAYS,
+  PERSONAL_PLAN_KEY,
+  PlanAudience,
   STARTER_FEATURE_KEYS,
   STARTER_LIMIT_PRESET,
   UNLIMITED_LIMIT_PRESET,
@@ -13,6 +17,7 @@ import {
   SubscriptionRequestStatus,
   SubscriptionStatus,
   UserRole,
+  WorkspaceType,
   addCalendarDays,
   addMonthsClamped,
   calendarDaysBetween,
@@ -33,6 +38,7 @@ import {
   type PlatformInvoiceDto,
   type PlatformInvoiceListQuery,
   type PlatformInvoiceListResponse,
+  type PlatformPaymentInstructionsDto,
   type PlatformPnlResponse,
   type PlatformSettingsDto,
   type PlatformShopDetail,
@@ -47,6 +53,7 @@ import {
   type SubscriptionPlanDto,
   type SubscriptionRequestDto,
   type UpdatePlatformExpenseBody,
+  ReferralPaymentSourceType,
   type UpdatePlatformSettingsBody,
   type UpdateSubscriptionPlanBody,
 } from '@furniture-erp/shared';
@@ -55,6 +62,11 @@ import type { Prisma } from '@prisma/client';
 import { env } from '../config/env.js';
 import { prisma } from '../lib/prisma.js';
 import { ApiError } from '../utils/api-error.js';
+import {
+  countPendingReferralWithdrawals,
+  countReferralSignups,
+  grantFirstPaymentCommission,
+} from '../modules/referrals/referral.service.js';
 import { recordAudit } from './audit.service.js';
 import {
   attachDefaultEntitlements,
@@ -90,6 +102,36 @@ async function getSettingsRow() {
     create: { id: SETTINGS_ID, updatedAt: new Date() },
     update: {},
   });
+}
+
+function toSettingsDto(row: {
+  platformName: string;
+  defaultCurrency: string;
+  gracePeriodDays: number;
+  billingCycle: PlatformSettingsDto['billingCycle'];
+  paymentRemindersEnabled: boolean;
+  reminderDaysBeforeDue: number;
+  paymentCardNumber: string;
+  paymentAccountNumber: string;
+  paymentInstructions: string;
+  referralCommissionPercent?: number;
+  referralMinWithdrawalSom?: bigint | number;
+  referralProgramActive?: boolean;
+}): PlatformSettingsDto {
+  return {
+    platformName: row.platformName,
+    defaultCurrency: row.defaultCurrency,
+    gracePeriodDays: row.gracePeriodDays,
+    billingCycle: row.billingCycle,
+    paymentRemindersEnabled: row.paymentRemindersEnabled,
+    reminderDaysBeforeDue: row.reminderDaysBeforeDue,
+    paymentCardNumber: row.paymentCardNumber,
+    paymentAccountNumber: row.paymentAccountNumber,
+    paymentInstructions: row.paymentInstructions,
+    referralCommissionPercent: row.referralCommissionPercent ?? 10,
+    referralMinWithdrawalSom: Number(row.referralMinWithdrawalSom ?? 100000),
+    referralProgramActive: row.referralProgramActive ?? true,
+  };
 }
 
 function daysOverdue(dueDate: Date, status: string, now = new Date()): number {
@@ -206,8 +248,9 @@ export async function listPlans(actorRole: string): Promise<{ items: Subscriptio
   assertPlatform(actorRole);
   await ensureFeatureCatalog();
   const items = await prisma.subscriptionPlan.findMany({
+    where: { audience: PlanAudience.STORE },
     include: planEntitlementInclude,
-    orderBy: { monthlyPrice: 'asc' },
+    orderBy: [{ rank: 'asc' }, { monthlyPrice: 'asc' }],
   });
   return { items: items.map(toPlanDto) };
 }
@@ -235,6 +278,8 @@ export async function createPlan(
         currency: body.currency?.trim() || 'UZS',
         trialDays: body.trialDays ?? 0,
         isDefaultTrial: body.isDefaultTrial ?? false,
+        rank: body.rank ?? (body.isDefaultTrial ? 0 : 1),
+        audience: PlanAudience.STORE,
         features: (body.features ?? {}) as Prisma.InputJsonValue,
       },
     });
@@ -287,6 +332,7 @@ export async function updatePlan(
       ...(body.trialDays !== undefined ? { trialDays: body.trialDays } : {}),
       ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
       ...(body.isDefaultTrial !== undefined ? { isDefaultTrial: body.isDefaultTrial } : {}),
+      ...(body.rank !== undefined ? { rank: body.rank } : {}),
       ...(body.features !== undefined ? { features: body.features as Prisma.InputJsonValue } : {}),
     },
   });
@@ -309,7 +355,7 @@ export async function updatePlan(
 
 export async function getDefaultPlan() {
   const trial = await prisma.subscriptionPlan.findFirst({
-    where: { isDefaultTrial: true, isActive: true },
+    where: { isDefaultTrial: true, isActive: true, audience: PlanAudience.STORE },
   });
   if (trial) return trial;
   const named = await prisma.subscriptionPlan.findFirst({
@@ -434,6 +480,7 @@ export function toSubscriptionDto(sub: {
     enabledFeatures: toPlanDto(sub.plan).enabledFeatures,
     limits: toPlanLimitDtos(sub.plan),
     usage: sub.usage ?? [],
+    planRank: sub.plan.rank ?? 0,
   };
 }
 
@@ -638,6 +685,14 @@ export async function recordPayment(
       metadata: { reason: 'payment' },
     });
   }
+
+  await grantFirstPaymentCommission({
+    storeId: result.updated.storeId,
+    sourceType: ReferralPaymentSourceType.PLATFORM_INVOICE,
+    sourceId: result.updated.id,
+    sourceAmountSom: result.updated.amount,
+    paid: result.updated.status === PlatformBillingStatus.PAID,
+  });
 
   return toInvoiceDto(result.updated);
 }
@@ -956,13 +1011,16 @@ export async function getShopDetail(actorRole: string, storeId: string): Promise
 export async function getSettings(actorRole: string): Promise<PlatformSettingsDto> {
   assertPlatform(actorRole);
   const row = await getSettingsRow();
+  return toSettingsDto(row);
+}
+
+export async function getPublicPaymentInstructions(): Promise<PlatformPaymentInstructionsDto> {
+  const row = await getSettingsRow();
   return {
     platformName: row.platformName,
-    defaultCurrency: row.defaultCurrency,
-    gracePeriodDays: row.gracePeriodDays,
-    billingCycle: row.billingCycle,
-    paymentRemindersEnabled: row.paymentRemindersEnabled,
-    reminderDaysBeforeDue: row.reminderDaysBeforeDue,
+    paymentCardNumber: row.paymentCardNumber,
+    paymentAccountNumber: row.paymentAccountNumber,
+    paymentInstructions: row.paymentInstructions,
   };
 }
 
@@ -987,6 +1045,22 @@ export async function updateSettings(
         : {}),
       ...(body.reminderDaysBeforeDue !== undefined
         ? { reminderDaysBeforeDue: body.reminderDaysBeforeDue }
+        : {}),
+      ...(body.paymentCardNumber !== undefined ? { paymentCardNumber: body.paymentCardNumber.trim() } : {}),
+      ...(body.paymentAccountNumber !== undefined
+        ? { paymentAccountNumber: body.paymentAccountNumber.trim() }
+        : {}),
+      ...(body.paymentInstructions !== undefined
+        ? { paymentInstructions: body.paymentInstructions.trim() }
+        : {}),
+      ...(body.referralCommissionPercent !== undefined
+        ? { referralCommissionPercent: body.referralCommissionPercent }
+        : {}),
+      ...(body.referralMinWithdrawalSom !== undefined
+        ? { referralMinWithdrawalSom: BigInt(body.referralMinWithdrawalSom) }
+        : {}),
+      ...(body.referralProgramActive !== undefined
+        ? { referralProgramActive: body.referralProgramActive }
         : {}),
     },
   });
@@ -1138,6 +1212,29 @@ function monthRange(from: Date, to: Date): { start: Date; end: Date } {
   return { start: from, end: to };
 }
 
+function accountGrowthSeries(
+  rows: Array<{ type: string; createdAt: Date }>,
+): Array<{ month: string; personal: number; business: number }> {
+  const buckets = new Map<string, { personal: number; business: number }>();
+  for (const row of rows) {
+    const key = monthKey(row.createdAt);
+    const bucket = buckets.get(key) ?? { personal: 0, business: 0 };
+    if (row.type === WorkspaceType.PERSONAL) bucket.personal += 1;
+    else bucket.business += 1;
+    buckets.set(key, bucket);
+  }
+  return [...buckets.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, values]) => ({ month, ...values }));
+}
+
+function workspaceCountByType(
+  groups: Array<{ type: string; _count: { _all: number } }>,
+  type: string,
+): number {
+  return groups.find((row) => row.type === type)?._count._all ?? 0;
+}
+
 export async function getPnl(
   actorRole: string,
   from: Date,
@@ -1149,9 +1246,11 @@ export async function getPnl(
   const [paid, expenses] = await Promise.all([
     prisma.platformInvoice.findMany({
       where: { status: PlatformBillingStatus.PAID, paidAt: { gte: start, lte: end } },
+      select: { amount: true, paidAt: true, dueDate: true },
     }),
     prisma.platformExpense.findMany({
       where: { status: PlatformExpenseStatus.ACTIVE, date: { gte: start, lte: end } },
+      select: { amount: true, date: true },
     }),
   ]);
   const revenue = paid.reduce((sum, row) => sum + money(row.amount), 0);
@@ -1188,8 +1287,18 @@ export async function getPnl(
 
 export async function getAnalytics(actorRole: string, from: Date, to: Date): Promise<PlatformAnalyticsResponse> {
   assertPlatform(actorRole);
-  const finance = await getPnl(actorRole, from, to, 'Analytics');
-  const [requests, stores, currentSubs, paidEver, cancelledPaid] = await Promise.all([
+  const [
+    finance,
+    requests,
+    stores,
+    currentSubs,
+    paidEver,
+    cancelledPaid,
+    workspacesInRange,
+    workspaceCounts,
+    personalSubs,
+  ] = await Promise.all([
+    getPnl(actorRole, from, to, 'Analytics'),
     prisma.storeCreationRequest.findMany({
       where: { createdAt: { gte: from, lte: to } },
       select: { createdAt: true, status: true },
@@ -1211,6 +1320,14 @@ export async function getAnalytics(actorRole: string, from: Date, to: Date): Pro
         status: { in: [SubscriptionStatus.EXPIRED, SubscriptionStatus.CANCELLED] },
         endedAt: { gte: from, lte: to },
       },
+    }),
+    prisma.workspace.findMany({
+      where: { createdAt: { gte: from, lte: to } },
+      select: { type: true, createdAt: true },
+    }),
+    prisma.workspace.groupBy({ by: ['type'], _count: { _all: true } }),
+    prisma.personalSubscription.findMany({
+      select: { planKey: true, status: true, trialEndsAt: true, currentPeriodEnd: true },
     }),
   ]);
   const submitted = requests.length;
@@ -1254,6 +1371,9 @@ export async function getAnalytics(actorRole: string, from: Date, to: Date): Pro
   for (const row of currentSubs) {
     byPlanMap.set(row.plan.name, (byPlanMap.get(row.plan.name) ?? 0) + 1);
   }
+  for (const row of personalSubs) {
+    byPlanMap.set(row.planKey, (byPlanMap.get(row.planKey) ?? 0) + 1);
+  }
   const mrr = currentSubs
     .filter((row) => effectiveSubscriptionStatus(row) === SubscriptionStatus.ACTIVE)
     .reduce((sum, row) => sum + money(row.plan.monthlyPrice), 0);
@@ -1271,6 +1391,11 @@ export async function getAnalytics(actorRole: string, from: Date, to: Date): Pro
       pendingPayment,
       series,
     },
+    accounts: {
+      personal: workspaceCountByType(workspaceCounts, WorkspaceType.PERSONAL),
+      business: workspaceCountByType(workspaceCounts, WorkspaceType.BUSINESS),
+      growth: accountGrowthSeries(workspacesInRange),
+    },
     finance,
     subscriptions: {
       trial,
@@ -1285,25 +1410,37 @@ export async function getAnalytics(actorRole: string, from: Date, to: Date): Pro
   };
 }
 
-export async function getDashboard(actorRole: string): Promise<PlatformDashboardResponse> {
+export async function getDashboard(
+  actorRole: string,
+  from?: Date,
+  to?: Date,
+  label?: string,
+): Promise<PlatformDashboardResponse> {
   assertPlatform(actorRole);
   await syncBillingStatuses();
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-  const pnl = await getPnl(actorRole, monthStart, monthEnd, 'Shu oy');
-  const analytics = await getAnalytics(actorRole, monthStart, monthEnd);
+  const rangeStart = from ?? monthStart;
+  const rangeEnd = to ?? monthEnd;
+  const rangeLabel = label ?? 'Shu oy';
   const [
+    pnl,
     stores,
     pendingRequests,
     pendingSubscriptionRequests,
+    pendingPersonalSubscriptionRequests,
     revenueTotalAgg,
-    revenueMonthAgg,
-    pending,
-    overdue,
-    latestPayments,
-    latestRequests,
+    revenuePeriodAgg,
+    pendingAgg,
+    overdueAgg,
+    personalSubs,
+    workspacesInRange,
+    workspaceCounts,
+    pendingWithdrawals,
+    referralSignups,
   ] = await Promise.all([
+    getPnl(actorRole, rangeStart, rangeEnd, rangeLabel),
     prisma.store.findMany({
       where: TENANT_STORE_WHERE,
       select: {
@@ -1315,39 +1452,65 @@ export async function getDashboard(actorRole: string): Promise<PlatformDashboard
             status: true,
             trialEndsAt: true,
             currentPeriodEnd: true,
+            plan: { select: { name: true } },
           },
         },
       },
     }),
     prisma.storeCreationRequest.count({ where: { status: 'PENDING' } }),
     prisma.subscriptionRequest.count({ where: { status: SubscriptionRequestStatus.PENDING } }),
+    prisma.subscriptionRequest.count({
+      where: { status: SubscriptionRequestStatus.PENDING, workspaceId: { not: null } },
+    }),
     prisma.platformInvoice.aggregate({
       where: { status: PlatformBillingStatus.PAID },
       _sum: { amount: true },
     }),
     prisma.platformInvoice.aggregate({
-      where: { status: PlatformBillingStatus.PAID, paidAt: { gte: monthStart, lte: monthEnd } },
+      where: { status: PlatformBillingStatus.PAID, paidAt: { gte: rangeStart, lte: rangeEnd } },
       _sum: { amount: true },
     }),
-    prisma.platformInvoice.findMany({ where: { status: PlatformBillingStatus.PENDING } }),
-    prisma.platformInvoice.findMany({ where: { status: PlatformBillingStatus.OVERDUE } }),
-    prisma.platformInvoice.findMany({
-      where: { status: PlatformBillingStatus.PAID },
-      include: invoiceInclude,
-      orderBy: { paidAt: 'desc' },
-      take: 5,
+    prisma.platformInvoice.aggregate({
+      where: { status: PlatformBillingStatus.PENDING },
+      _sum: { amount: true },
+      _count: { _all: true },
     }),
-    prisma.storeCreationRequest.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-      select: { id: true, storeName: true, status: true, createdAt: true },
+    prisma.platformInvoice.aggregate({
+      where: { status: PlatformBillingStatus.OVERDUE },
+      _sum: { amount: true },
+      _count: { _all: true },
     }),
+    prisma.personalSubscription.findMany({
+      select: { planKey: true, status: true, trialEndsAt: true, currentPeriodEnd: true },
+    }),
+    prisma.workspace.findMany({
+      where: { createdAt: { gte: rangeStart, lte: rangeEnd } },
+      select: { type: true, createdAt: true },
+    }),
+    prisma.workspace.groupBy({ by: ['type'], _count: { _all: true } }),
+    countPendingReferralWithdrawals(),
+    countReferralSignups(),
   ]);
   const statuses = stores.map((store) =>
     store.subscriptions[0]
       ? effectiveSubscriptionStatus(store.subscriptions[0])
       : SubscriptionStatus.EXPIRED,
   );
+  let personalTrial = 0;
+  let personalActive = 0;
+  let personalExpired = 0;
+  const byPlanMap = new Map<string, number>();
+  for (const store of stores) {
+    const planName = store.subscriptions[0]?.plan.name;
+    if (planName) byPlanMap.set(planName, (byPlanMap.get(planName) ?? 0) + 1);
+  }
+  for (const row of personalSubs) {
+    const effective = effectiveSubscriptionStatus(row);
+    if (effective === SubscriptionStatus.TRIAL) personalTrial += 1;
+    else if (effective === SubscriptionStatus.ACTIVE) personalActive += 1;
+    else personalExpired += 1;
+    byPlanMap.set(row.planKey, (byPlanMap.get(row.planKey) ?? 0) + 1);
+  }
   return {
     totalStores: stores.length,
     activeStores: stores.filter((store) => store.accessStatus === StoreAccessStatus.ACTIVE).length,
@@ -1360,24 +1523,35 @@ export async function getDashboard(actorRole: string): Promise<PlatformDashboard
     expiredStores: statuses.filter((status) => status === SubscriptionStatus.EXPIRED).length,
     pendingStoreRequests: pendingRequests,
     pendingSubscriptionRequests,
+    pendingPersonalSubscriptionRequests,
+    pendingBusinessSubscriptionRequests:
+      pendingSubscriptionRequests - pendingPersonalSubscriptionRequests,
     subscriptionRevenueTotal: money(revenueTotalAgg._sum.amount ?? 0n),
-    subscriptionRevenueThisMonth: money(revenueMonthAgg._sum.amount ?? 0n),
-    pendingPayments: pending.length,
-    pendingPaymentAmount: pending.reduce((sum, row) => sum + money(row.amount), 0),
-    overduePayments: overdue.length,
-    overduePaymentAmount: overdue.reduce((sum, row) => sum + money(row.amount), 0),
+    subscriptionRevenueThisMonth: money(revenuePeriodAgg._sum.amount ?? 0n),
+    pendingPayments: pendingAgg._count._all,
+    pendingPaymentAmount: money(pendingAgg._sum.amount ?? 0n),
+    overduePayments: overdueAgg._count._all,
+    overduePaymentAmount: money(overdueAgg._sum.amount ?? 0n),
     monthRevenue: pnl.revenue,
     monthExpenses: pnl.expenses,
     monthNetProfit: pnl.netProfit,
-    pnlSeries: pnl.series,
-    storeSeries: analytics.stores.series,
-    latestPayments: latestPayments.map(toInvoiceDto),
-    latestStoreRequests: latestRequests.map((row) => ({
-      id: row.id,
-      storeName: row.storeName,
-      status: row.status,
-      createdAt: row.createdAt.toISOString(),
+    otherRevenue: 0,
+    personalWorkspaces: workspaceCountByType(workspaceCounts, WorkspaceType.PERSONAL),
+    personalActive,
+    personalTrial,
+    personalExpired,
+    pendingWithdrawals,
+    referralSignups,
+    accountGrowth: accountGrowthSeries(workspacesInRange),
+    subscriptionByPlan: [...byPlanMap.entries()].map(([planName, storeCount]) => ({
+      planName,
+      storeCount,
     })),
+    pnlSeries: pnl.series,
+    storeSeries: [],
+    latestPayments: [],
+    latestStoreRequests: [],
+    period: pnl.period,
   };
 }
 
@@ -1415,6 +1589,8 @@ export async function seedDefaultPlansAndBackfill(): Promise<void> {
       trialDays: env.TRIAL_DAYS,
       isDefaultTrial: true,
       isActive: true,
+      rank: 0,
+      audience: PlanAudience.STORE,
       description: 'Yangi do‘konlar uchun 7 kunlik bepul sinov',
     },
     create: {
@@ -1425,6 +1601,8 @@ export async function seedDefaultPlansAndBackfill(): Promise<void> {
       trialDays: env.TRIAL_DAYS,
       isDefaultTrial: true,
       isActive: true,
+      rank: 0,
+      audience: PlanAudience.STORE,
       features: { highlights: ['Bepul 7 kunlik sinov'] },
     },
   });
@@ -1442,6 +1620,7 @@ export async function seedDefaultPlansAndBackfill(): Promise<void> {
       name: 'START',
       description: 'Asosiy tarif',
       price: env.SEED_PLAN_START_PRICE,
+      rank: 1,
       featureKeys: STARTER_FEATURE_KEYS,
       limits: STARTER_LIMIT_PRESET.map((row) => ({ ...row })),
       features: {
@@ -1454,6 +1633,7 @@ export async function seedDefaultPlansAndBackfill(): Promise<void> {
       name: 'PRO',
       description: 'Kengaytirilgan tarif',
       price: env.SEED_PLAN_PRO_PRICE,
+      rank: 2,
       featureKeys: PRO_FEATURE_KEYS,
       limits: PRO_LIMIT_PRESET.map((row) => ({ ...row })),
       features: {
@@ -1466,6 +1646,7 @@ export async function seedDefaultPlansAndBackfill(): Promise<void> {
       name: 'BUSINESS',
       description: 'Biznes tarif',
       price: env.SEED_PLAN_BUSINESS_PRICE,
+      rank: 3,
       featureKeys: BUSINESS_FEATURE_KEYS,
       limits: UNLIMITED_LIMIT_PRESET.map((row) => ({ ...row })),
       features: {
@@ -1482,6 +1663,8 @@ export async function seedDefaultPlansAndBackfill(): Promise<void> {
         monthlyPrice: BigInt(plan.price),
         description: plan.description,
         isActive: true,
+        rank: plan.rank,
+        audience: PlanAudience.STORE,
         features: plan.features as Prisma.InputJsonValue,
       },
       create: {
@@ -1490,11 +1673,38 @@ export async function seedDefaultPlansAndBackfill(): Promise<void> {
         monthlyPrice: BigInt(plan.price),
         currency: 'UZS',
         isActive: true,
+        rank: plan.rank,
+        audience: PlanAudience.STORE,
         features: plan.features as Prisma.InputJsonValue,
       },
     });
     await attachDefaultEntitlements(saved.id, plan.featureKeys, plan.limits);
   }
+
+  await prisma.subscriptionPlan.upsert({
+    where: { name: PERSONAL_PLAN_KEY.PAID },
+    update: {
+      monthlyPrice: BigInt(PERSONAL_PAID_MONTHLY_PRICE_SOM),
+      description: 'Shaxsiy moliya pullik tarif',
+      isActive: true,
+      isDefaultTrial: false,
+      rank: 1,
+      audience: PlanAudience.PERSONAL,
+    },
+    create: {
+      name: PERSONAL_PLAN_KEY.PAID,
+      description: 'Shaxsiy moliya pullik tarif',
+      monthlyPrice: BigInt(PERSONAL_PAID_MONTHLY_PRICE_SOM),
+      currency: 'UZS',
+      trialDays: 0,
+      isActive: true,
+      isDefaultTrial: false,
+      rank: 1,
+      audience: PlanAudience.PERSONAL,
+      features: {},
+    },
+  });
+
   await getSettingsRow();
   const stores = await prisma.store.findMany({
     where: TENANT_STORE_WHERE,
@@ -1523,6 +1733,21 @@ export const requestInclude = {
       },
     },
   },
+  workspace: {
+    select: {
+      id: true,
+      name: true,
+      type: true,
+      personalSubscription: {
+        select: { status: true, trialEndsAt: true, currentPeriodEnd: true, planKey: true },
+      },
+      memberships: {
+        orderBy: { createdAt: 'asc' as const },
+        take: 1,
+        select: { identity: { select: { fullName: true, email: true } } },
+      },
+    },
+  },
   plan: { select: { id: true, name: true } },
   reviewedBy: { select: { fullName: true } },
 } satisfies Prisma.SubscriptionRequestInclude;
@@ -1530,19 +1755,31 @@ export const requestInclude = {
 export function toRequestDto(
   row: Prisma.SubscriptionRequestGetPayload<{ include: typeof requestInclude }>,
 ): SubscriptionRequestDto {
-  const owner = row.store.users[0];
-  const current = row.store.subscriptions[0];
+  const isPersonal = Boolean(row.workspaceId);
+  const storeOwner = row.store?.users[0];
+  const personalOwner = row.workspace?.memberships[0]?.identity;
+  const currentStore = row.store?.subscriptions[0];
+  const personalSub = row.workspace?.personalSubscription;
   return {
     id: row.id,
     storeId: row.storeId,
-    storeName: row.store.name,
-    ownerName: owner?.fullName ?? null,
-    ownerPhone: owner?.phone ?? row.store.phone,
-    ownerEmail: owner?.email ?? null,
+    workspaceId: row.workspaceId,
+    accountKind: isPersonal ? WorkspaceType.PERSONAL : WorkspaceType.BUSINESS,
+    storeName: row.store?.name ?? row.workspace?.name ?? '',
+    ownerName: (isPersonal ? personalOwner?.fullName : storeOwner?.fullName) ?? null,
+    ownerPhone: isPersonal ? null : (storeOwner?.phone ?? row.store?.phone ?? null),
+    ownerEmail: (isPersonal ? personalOwner?.email : storeOwner?.email) ?? null,
     planId: row.planId,
     planName: row.plan.name,
-    currentPlanName: row.fromPlanName ?? current?.plan.name ?? null,
-    currentStatus: current ? effectiveSubscriptionStatus(current) : null,
+    currentPlanName:
+      row.fromPlanName ??
+      currentStore?.plan.name ??
+      (personalSub?.planKey === PERSONAL_PLAN_KEY.PAID ? 'Pullik' : personalSub ? 'Sinov' : null),
+    currentStatus: currentStore
+      ? effectiveSubscriptionStatus(currentStore)
+      : personalSub
+        ? effectiveSubscriptionStatus(personalSub)
+        : null,
     requestedPriceSnapshot: money(row.requestedPriceSnapshot),
     currency: row.currency,
     status: row.status,
@@ -1551,6 +1788,9 @@ export function toRequestDto(
     reviewedByName: row.reviewedBy?.fullName ?? null,
     rejectionReason: row.rejectionReason,
     note: row.note,
+    paymentMethod: row.paymentMethod,
+    payerReference: row.payerReference,
+    proofUrl: row.proofUrl,
     createdInvoiceId: row.createdInvoiceId,
     createdSubscriptionId: row.createdSubscriptionId,
   };
@@ -1573,7 +1813,7 @@ export async function approveSubscriptionRequest(
   actor: { id: string; role: string },
   requestId: string,
   body: ApproveSubscriptionRequestBody,
-): Promise<{ request: SubscriptionRequestDto; invoice: PlatformInvoiceDto }> {
+): Promise<{ request: SubscriptionRequestDto; invoice: PlatformInvoiceDto | null }> {
   assertPlatform(actor.role);
   const existing = await prisma.subscriptionRequest.findUnique({
     where: { id: requestId },
@@ -1586,10 +1826,6 @@ export async function approveSubscriptionRequest(
 
   const start = body.startDate ? new Date(body.startDate) : new Date();
   if (Number.isNaN(start.getTime())) {
-    throw ApiError.validation('Sana oralig‘i noto‘g‘ri');
-  }
-  const end = body.endDate ? new Date(body.endDate) : addMonthsClamped(start, 1);
-  if (Number.isNaN(end.getTime()) || end <= start) {
     throw ApiError.validation('Sana oralig‘i noto‘g‘ri');
   }
 
@@ -1615,6 +1851,38 @@ export async function approveSubscriptionRequest(
       where: { id: requestId },
       include: { plan: true, store: true },
     });
+
+    const end = body.endDate
+      ? new Date(body.endDate)
+      : request.workspaceId
+        ? addCalendarDays(start, PERSONAL_PAID_PERIOD_DAYS)
+        : addMonthsClamped(start, 1);
+    if (Number.isNaN(end.getTime()) || end <= start) {
+      throw ApiError.validation('Sana oralig‘i noto‘g‘ri');
+    }
+
+    if (request.workspaceId) {
+      const personal = await tx.personalSubscription.update({
+        where: { workspaceId: request.workspaceId },
+        data: {
+          planKey: PERSONAL_PLAN_KEY.PAID,
+          status: SubscriptionStatus.ACTIVE,
+          currentPeriodStart: start,
+          currentPeriodEnd: end,
+          cancelledAt: null,
+        },
+      });
+      const updatedRequest = await tx.subscriptionRequest.update({
+        where: { id: request.id },
+        data: { createdSubscriptionId: personal.id },
+        include: requestInclude,
+      });
+      return { updatedRequest, invoice: null };
+    }
+
+    if (!request.storeId) {
+      throw ApiError.badRequest("So'rov hisobga bog'lanmagan");
+    }
 
     const next = await activatePaidPeriod(tx, {
       storeId: request.storeId,
@@ -1656,7 +1924,7 @@ export async function approveSubscriptionRequest(
       include: requestInclude,
     });
 
-    if (request.store.accessStatus !== StoreAccessStatus.MANUALLY_BLOCKED) {
+    if (request.store && request.store.accessStatus !== StoreAccessStatus.MANUALLY_BLOCKED) {
       await tx.store.update({
         where: { id: request.storeId },
         data: { accessStatus: StoreAccessStatus.ACTIVE, isActive: true },
@@ -1666,23 +1934,44 @@ export async function approveSubscriptionRequest(
     return { updatedRequest, invoice };
   });
 
+  const requestDto = toRequestDto(result.updatedRequest);
+  const invoiceDto = result.invoice ? toInvoiceDto(result.invoice) : null;
   await recordAudit({
     storeId: result.updatedRequest.storeId,
     actorUserId: actor.id,
     eventType: AuditEventType.SUBSCRIPTION_REQUEST_APPROVED,
     entityType: AuditEntityType.SUBSCRIPTION_REQUEST,
     entityId: result.updatedRequest.id,
-    summary: `Subscription request approved: ${result.updatedRequest.store.name}`,
+    summary: `Subscription request approved: ${requestDto.storeName}`,
     metadata: {
       planId: result.updatedRequest.planId,
-      amount: money(result.invoice.amount),
-      invoiceId: result.invoice.id,
+      amount: invoiceDto?.amount ?? requestDto.requestedPriceSnapshot,
+      invoiceId: invoiceDto?.id ?? null,
+      workspaceId: result.updatedRequest.workspaceId,
     },
   });
 
+  if (result.invoice) {
+    await grantFirstPaymentCommission({
+      storeId: result.updatedRequest.storeId,
+      sourceType: ReferralPaymentSourceType.PLATFORM_INVOICE,
+      sourceId: result.invoice.id,
+      sourceAmountSom: result.invoice.amount,
+      paid: true,
+    });
+  } else if (result.updatedRequest.workspaceId) {
+    await grantFirstPaymentCommission({
+      referredWorkspaceId: result.updatedRequest.workspaceId,
+      sourceType: ReferralPaymentSourceType.SUBSCRIPTION_REQUEST,
+      sourceId: result.updatedRequest.id,
+      sourceAmountSom: result.updatedRequest.requestedPriceSnapshot,
+      paid: true,
+    });
+  }
+
   return {
-    request: toRequestDto(result.updatedRequest),
-    invoice: toInvoiceDto(result.invoice),
+    request: requestDto,
+    invoice: invoiceDto,
   };
 }
 
@@ -1718,10 +2007,12 @@ export async function rejectSubscriptionRequest(
     throw ApiError.conflict("Bu so'rov allaqachon ko'rib chiqilgan");
   }
   // The shop is no longer waiting on this plan, so stop advertising it as next.
-  await prisma.storeSubscription.updateMany({
-    where: { storeId: existing.storeId, isCurrent: true, pendingPlanId: existing.planId },
-    data: { pendingPlanId: null },
-  });
+  if (existing.storeId) {
+    await prisma.storeSubscription.updateMany({
+      where: { storeId: existing.storeId, isCurrent: true, pendingPlanId: existing.planId },
+      data: { pendingPlanId: null },
+    });
+  }
   const updated = await prisma.subscriptionRequest.findUniqueOrThrow({
     where: { id: requestId },
     include: requestInclude,
@@ -1732,8 +2023,8 @@ export async function rejectSubscriptionRequest(
     eventType: AuditEventType.SUBSCRIPTION_REQUEST_REJECTED,
     entityType: AuditEntityType.SUBSCRIPTION_REQUEST,
     entityId: updated.id,
-    summary: `Subscription request rejected: ${updated.store.name}`,
-    metadata: { reasonLength: reason.length },
+    summary: `Subscription request rejected: ${toRequestDto(updated).storeName}`,
+    metadata: { reasonLength: reason.length, workspaceId: updated.workspaceId },
   });
   return toRequestDto(updated);
 }

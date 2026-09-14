@@ -1,6 +1,8 @@
 import { createBrowserRouter, Navigate, useParams, type RouteObject } from 'react-router-dom';
 import type { ReactNode } from 'react';
 
+import { PersonalEntryType } from '@furniture-erp/shared';
+
 import { AppLayout } from '@/components/layout/AppLayout';
 import { LoginPage } from '@/features/auth/pages/LoginPage';
 import { useCurrentUser } from '@/features/auth/hooks/use-auth';
@@ -10,6 +12,24 @@ import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
 import { DebtsPage } from '@/features/debts/pages/DebtsPage';
 import { ExpensesPage } from '@/features/expenses/pages/ExpensesPage';
 import { InventoryPage } from '@/features/inventory/pages/InventoryPage';
+import { PersonalBillingPage } from '@/features/personal/billing/pages/PersonalBillingPage';
+import { PersonalDashboardPage } from '@/features/personal/dashboard/pages/PersonalDashboardPage';
+import { PersonalHistoryPage } from '@/features/personal/history/pages/PersonalHistoryPage';
+import { PersonalLayout } from '@/features/personal/layout/PersonalLayout';
+import { PersonalCategoriesPage } from '@/features/personal/ledger/pages/PersonalCategoriesPage';
+import { PersonalEntriesPage } from '@/features/personal/ledger/pages/PersonalEntriesPage';
+import { PersonalWalletsPage } from '@/features/personal/ledger/pages/PersonalWalletsPage';
+import { PersonalBudgetsPage } from '@/features/personal/planning/pages/PersonalBudgetsPage';
+import { PersonalGoalsPage } from '@/features/personal/planning/pages/PersonalGoalsPage';
+import { PersonalAnalyticsPage } from '@/features/personal/analytics/pages/PersonalAnalyticsPage';
+import { PersonalDebtsPage } from '@/features/personal/lifecycle/pages/PersonalDebtsPage';
+import { PersonalNotificationsPage } from '@/features/personal/lifecycle/pages/PersonalNotificationsPage';
+import { PersonalRecurringPage } from '@/features/personal/lifecycle/pages/PersonalRecurringPage';
+import { OnboardingCompletePage } from '@/features/personal/onboarding/pages/OnboardingCompletePage';
+import { OnboardingPage } from '@/features/personal/onboarding/pages/OnboardingPage';
+import { PersonalSettingsPage } from '@/features/personal/settings/pages/PersonalSettingsPage';
+import { ReferralDashboardPage, StoreReferralPage } from '@/features/referrals/pages/ReferralDashboardPage';
+import { ReferralLandingPage } from '@/features/referrals/pages/ReferralLandingPage';
 import { AccessBlockedPage } from '@/features/platform/pages/AccessBlockedPage';
 import {
   PlatformAnalyticsExpensesPage,
@@ -20,6 +40,27 @@ import {
 } from '@/features/platform/pages/PlatformAnalyticsPages';
 import { PlatformDashboardPage } from '@/features/platform/pages/PlatformDashboardPage';
 import { PlatformExpensesPage } from '@/features/platform/pages/PlatformExpensesPage';
+import { PlatformOnboardingPage } from '@/features/platform/pages/PlatformOnboardingPage';
+import {
+  PlatformOnboardingAnswersPage,
+  PlatformOnboardingNeedsPage,
+  PlatformOnboardingQuestionsPage,
+  PlatformOnboardingSolutionsPage,
+} from '@/features/platform/pages/PlatformOnboardingAdminPages';
+import { PlatformPersonalPage } from '@/features/platform/pages/PlatformPersonalPage';
+import {
+  PlatformFinanceIncomePage,
+  PlatformFinanceOverviewPage,
+  PlatformSubscriptionsOverviewPage,
+} from '@/features/platform/pages/PlatformHubPages';
+import { PlatformAccountsPage } from '@/features/platform/pages/PlatformAccountsPage';
+import { PlatformAccountDetailPage } from '@/features/platform/pages/PlatformAccountDetailPage';
+import {
+  PlatformReferralPage,
+  PlatformReferralSettingsPage,
+  PlatformReferralUsersPage,
+  PlatformReferralWithdrawalsPage,
+} from '@/features/platform/pages/PlatformReferralPage';
 import {
   PlatformPaymentsHistoryPage,
   PlatformPaymentsOverduePage,
@@ -70,7 +111,7 @@ import { WorkerEditPage } from '@/features/workers/pages/WorkerEditPage';
 import { WorkerFinancesPage } from '@/features/workers/pages/WorkerFinancesPage';
 import { WorkersPage } from '@/features/workers/pages/WorkersPage';
 
-import { ProtectedRoute, PublicOnlyRoute } from './guards';
+import { ProtectedRoute, PersonalProtectedRoute, PublicOnlyRoute } from './guards';
 import {
   canManageExpenses,
   canManageInventory,
@@ -172,6 +213,40 @@ export const routes: RouteObject[] = [
   },
   { path: ROUTES.registerStore, element: <RegisterStorePage /> },
   { path: '/register-store/:id', element: <StoreRequestStatusPage /> },
+  { path: '/ref/:code', element: <ReferralLandingPage /> },
+  { path: ROUTES.onboarding, element: <OnboardingPage /> },
+  { path: ROUTES.onboardingComplete, element: <OnboardingCompletePage /> },
+  {
+    element: <PersonalProtectedRoute />,
+    children: [
+      {
+        element: <PersonalLayout />,
+        children: [
+          { path: ROUTES.personalDashboard, element: <PersonalDashboardPage /> },
+          { path: ROUTES.personalHistory, element: <PersonalHistoryPage /> },
+          { path: ROUTES.personalSettings, element: <PersonalSettingsPage /> },
+          { path: ROUTES.personalAccounts, element: <PersonalWalletsPage /> },
+          {
+            path: ROUTES.personalIncome,
+            element: <PersonalEntriesPage type={PersonalEntryType.INCOME} />,
+          },
+          {
+            path: ROUTES.personalExpenses,
+            element: <PersonalEntriesPage type={PersonalEntryType.EXPENSE} />,
+          },
+          { path: ROUTES.personalCategories, element: <PersonalCategoriesPage /> },
+          { path: ROUTES.personalBudgets, element: <PersonalBudgetsPage /> },
+          { path: ROUTES.personalGoals, element: <PersonalGoalsPage /> },
+          { path: ROUTES.personalAnalytics, element: <PersonalAnalyticsPage /> },
+          { path: ROUTES.personalRecurring, element: <PersonalRecurringPage /> },
+          { path: ROUTES.personalDebts, element: <PersonalDebtsPage /> },
+          { path: ROUTES.personalNotifications, element: <PersonalNotificationsPage /> },
+          { path: ROUTES.personalBilling, element: <PersonalBillingPage /> },
+          { path: ROUTES.personalReferral, element: <ReferralDashboardPage /> },
+        ],
+      },
+    ],
+  },
   {
     element: <ProtectedRoute />,
     children: [
@@ -183,6 +258,33 @@ export const routes: RouteObject[] = [
         children: [
           { path: ROUTES.dashboard, element: <HomeDashboard /> },
           { path: ROUTES.billing, element: <StoreBillingPage /> },
+          { path: ROUTES.storeReferral, element: <StoreReferralPage /> },
+          { path: ROUTES.platformAccounts, element: platformOnly(<PlatformAccountsPage filter="all" />) },
+          {
+            path: ROUTES.platformAccountsPersonal,
+            element: platformOnly(<PlatformAccountsPage filter="personal" />),
+          },
+          {
+            path: ROUTES.platformAccountsBusiness,
+            element: platformOnly(<PlatformAccountsPage filter="business" />),
+          },
+          {
+            path: '/platform/accounts/w/:id',
+            element: platformOnly(<PlatformAccountDetailPage />),
+          },
+          { path: ROUTES.platformSubscriptions, element: platformOnly(<PlatformSubscriptionsOverviewPage />) },
+          { path: ROUTES.platformFinance, element: platformOnly(<PlatformFinanceOverviewPage />) },
+          { path: ROUTES.platformFinanceIncome, element: platformOnly(<PlatformFinanceIncomePage />) },
+          { path: ROUTES.platformReferral, element: platformOnly(<PlatformReferralPage />) },
+          { path: ROUTES.platformReferralUsers, element: platformOnly(<PlatformReferralUsersPage />) },
+          {
+            path: ROUTES.platformReferralWithdrawals,
+            element: platformOnly(<PlatformReferralWithdrawalsPage />),
+          },
+          {
+            path: ROUTES.platformReferralSettings,
+            element: platformOnly(<PlatformReferralSettingsPage />),
+          },
           { path: ROUTES.platformStoreRequests, element: platformOnly(<PlatformStoreRequestsPage />) },
           {
             path: '/platform/stores/requests/:id',
@@ -234,6 +336,24 @@ export const routes: RouteObject[] = [
           { path: ROUTES.platformExpenses, element: platformOnly(<PlatformExpensesPage />) },
           { path: ROUTES.platformPnl, element: platformOnly(<PlatformPnlPage />) },
           { path: ROUTES.platformAnalytics, element: platformOnly(<PlatformAnalyticsPage />) },
+          { path: ROUTES.platformOnboarding, element: platformOnly(<PlatformOnboardingPage />) },
+          {
+            path: ROUTES.platformOnboardingQuestions,
+            element: platformOnly(<PlatformOnboardingQuestionsPage />),
+          },
+          {
+            path: ROUTES.platformOnboardingAnswers,
+            element: platformOnly(<PlatformOnboardingAnswersPage />),
+          },
+          {
+            path: ROUTES.platformOnboardingNeeds,
+            element: platformOnly(<PlatformOnboardingNeedsPage />),
+          },
+          {
+            path: ROUTES.platformOnboardingSolutions,
+            element: platformOnly(<PlatformOnboardingSolutionsPage />),
+          },
+          { path: ROUTES.platformPersonal, element: platformOnly(<PlatformPersonalPage />) },
           {
             path: ROUTES.platformAnalyticsStores,
             element: platformOnly(<PlatformAnalyticsStoresPage />),

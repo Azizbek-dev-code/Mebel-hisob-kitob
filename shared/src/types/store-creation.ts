@@ -1,4 +1,4 @@
-import type { StoreCreationRequestStatus } from '../constants/enums.js';
+import type { BusinessType, StoreCreationRequestStatus } from '../constants/enums.js';
 import type { IsoDateString } from './api.js';
 
 /**
@@ -18,6 +18,7 @@ export interface StoreCreationRequestPublic {
   region: string;
   district: string;
   address: string;
+  businessType: BusinessType;
   status: StoreCreationRequestStatus;
   rejectionReason: string | null;
   reviewedAt: IsoDateString | null;
@@ -45,6 +46,18 @@ export interface CreateStoreRequestBody {
   region: string;
   district: string;
   address: string;
+  /** Guest applications may omit this; the API defaults to FURNITURE. */
+  businessType?: BusinessType;
+}
+
+/** Signed-in identity opening another business — no password or identity fields. */
+export interface CreateAuthenticatedBusinessRequestBody {
+  phone: string;
+  storeName: string;
+  region: string;
+  district: string;
+  address: string;
+  businessType: BusinessType;
 }
 
 export interface CreateStoreRequestResponse {

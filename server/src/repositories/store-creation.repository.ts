@@ -1,6 +1,7 @@
 import {
   StoreCreationRequestStatus,
   applicantFullName,
+  type BusinessType,
   type StoreCreationRequestAdmin,
   type StoreCreationRequestPublic,
 } from '@furniture-erp/shared';
@@ -19,6 +20,8 @@ const publicSelect = {
   region: true,
   district: true,
   address: true,
+  businessType: true,
+  identityId: true,
   status: true,
   rejectionReason: true,
   reviewedAt: true,
@@ -46,6 +49,7 @@ function toPublic(row: StoreCreationRequestRecord): StoreCreationRequestPublic {
     region: row.region,
     district: row.district,
     address: row.address,
+    businessType: row.businessType as BusinessType,
     status: row.status as StoreCreationRequestStatus,
     rejectionReason: row.rejectionReason,
     reviewedAt: row.reviewedAt ? row.reviewedAt.toISOString() : null,
@@ -82,10 +86,23 @@ export async function createPendingRequest(data: {
   region: string;
   district: string;
   address: string;
+  businessType: BusinessType;
+  identityId?: string | null;
 }): Promise<StoreCreationRequestRecord> {
   return prisma.storeCreationRequest.create({
     data: {
-      ...data,
+      applicantFirstName: data.applicantFirstName,
+      applicantLastName: data.applicantLastName,
+      phone: data.phone,
+      email: data.email,
+      username: data.username,
+      passwordHash: data.passwordHash,
+      storeName: data.storeName,
+      region: data.region,
+      district: data.district,
+      address: data.address,
+      businessType: data.businessType,
+      identityId: data.identityId ?? null,
       status: StoreCreationRequestStatus.PENDING,
     },
     select: publicSelect,
@@ -96,17 +113,21 @@ export function findById(id: string): Promise<StoreCreationRequestRecord | null>
   return prisma.storeCreationRequest.findUnique({ where: { id }, select: publicSelect });
 }
 
-export function findPendingByPhone(phone: string): Promise<{ id: string } | null> {
+export function findPendingByPhone(
+  phone: string,
+): Promise<{ id: string; identityId: string | null } | null> {
   return prisma.storeCreationRequest.findFirst({
     where: { phone, status: StoreCreationRequestStatus.PENDING },
-    select: { id: true },
+    select: { id: true, identityId: true },
   });
 }
 
-export function findPendingByEmail(email: string): Promise<{ id: string } | null> {
+export function findPendingByEmail(
+  email: string,
+): Promise<{ id: string; identityId: string | null } | null> {
   return prisma.storeCreationRequest.findFirst({
     where: { email: { equals: email, mode: 'insensitive' }, status: StoreCreationRequestStatus.PENDING },
-    select: { id: true },
+    select: { id: true, identityId: true },
   });
 }
 
@@ -133,6 +154,19 @@ export function findPendingByStoreName(storeName: string): Promise<{ id: string 
 export function findUserByEmail(email: string): Promise<{ id: string } | null> {
   return prisma.user.findFirst({
     where: { email: { equals: email, mode: 'insensitive' } },
+    select: { id: true },
+  });
+}
+
+export function findUserByEmailOutsideIdentity(
+  email: string,
+  identityId: string,
+): Promise<{ id: string } | null> {
+  return prisma.user.findFirst({
+    where: {
+      email: { equals: email, mode: 'insensitive' },
+      OR: [{ identityId: null }, { identityId: { not: identityId } }],
+    },
     select: { id: true },
   });
 }
@@ -192,6 +226,8 @@ export function loadPendingForUpdate(
   region: string;
   district: string;
   address: string;
+  businessType: BusinessType;
+  identityId: string | null;
 } | null> {
   return tx.storeCreationRequest.findUnique({
     where: { id },
@@ -208,6 +244,8 @@ export function loadPendingForUpdate(
       region: true,
       district: true,
       address: true,
+      businessType: true,
+      identityId: true,
     },
   });
 }

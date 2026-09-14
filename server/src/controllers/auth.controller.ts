@@ -27,11 +27,12 @@ export const postLogin = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export function getCurrentUser(req: Request, res: Response): void {
-  if (!req.auth) {
+  const user = req.auth ?? req.personalAuth;
+  if (!user) {
     throw ApiError.unauthorized();
   }
 
-  sendSuccess<CurrentUserResponse>(res, { user: req.auth });
+  sendSuccess<CurrentUserResponse>(res, { user });
 }
 
 /**
@@ -46,7 +47,7 @@ export const postLogout = asyncHandler(async (req: Request, res: Response) => {
       const { user } = await authService.authenticate(token);
       await recordAudit({
         storeId: user.storeId,
-        actorUserId: user.id,
+        actorUserId: 'kind' in user && user.kind === 'PERSONAL' ? null : user.id,
         eventType: AuditEventType.LOGOUT,
         entityType: AuditEntityType.SESSION,
         entityId: user.id,

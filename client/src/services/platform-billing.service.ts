@@ -91,20 +91,32 @@ export const platformBillingService = {
   updateSettings(body: UpdatePlatformSettingsBody) {
     return apiClient.patch<{ settings: PlatformSettingsDto }>('/platform/settings', { body });
   },
-  getPnl(preset: string, signal?: AbortSignal) {
+  getPnl(preset: string, signal?: AbortSignal, range?: { from?: string; to?: string }) {
     return apiClient.get<PlatformPnlResponse>('/platform/pnl', {
       signal,
-      searchParams: { preset },
+      searchParams: {
+        preset,
+        ...(range?.from && range?.to ? { from: range.from, to: range.to } : {}),
+      },
     });
   },
-  getAnalytics(preset: string, signal?: AbortSignal) {
+  getAnalytics(preset: string, signal?: AbortSignal, range?: { from?: string; to?: string }) {
     return apiClient.get<PlatformAnalyticsResponse>('/platform/analytics', {
       signal,
-      searchParams: { preset },
+      searchParams: {
+        preset,
+        ...(range?.from && range?.to ? { from: range.from, to: range.to } : {}),
+      },
     });
   },
-  getDashboard(signal?: AbortSignal) {
-    return apiClient.get<PlatformDashboardResponse>('/platform/dashboard', { signal });
+  getDashboard(signal?: AbortSignal, preset?: string, range?: { from?: string; to?: string }) {
+    return apiClient.get<PlatformDashboardResponse>('/platform/dashboard', {
+      signal,
+      searchParams: {
+        ...(preset ? { preset } : {}),
+        ...(range?.from && range?.to ? { from: range.from, to: range.to } : {}),
+      },
+    });
   },
   getStoreAccess(signal?: AbortSignal) {
     return apiClient.get<{ access: StoreAccessStatusResponse }>('/store-access', { signal });

@@ -384,6 +384,12 @@ async function main(): Promise<void> {
   await seedDefaultPlansAndBackfill();
   console.log('  platform plans + store subscriptions backfilled');
 
+  const { backfillAccountLayer } = await import('../src/modules/accounts/account-layer.service.js');
+  const accountLayer = await backfillAccountLayer(prisma);
+  console.log(
+    `  account layer: ${accountLayer.identitiesCreated} identities, ${accountLayer.workspacesCreated} workspaces, ${accountLayer.membershipsCreated} memberships`,
+  );
+
   console.log('\nDemo seed complete.');
   console.log('  Sign in at http://localhost:5173/login with either account:');
   console.log(`    admin   — ${env.SEED_ADMIN_EMAIL} / ${env.SEED_ADMIN_PASSWORD}`);

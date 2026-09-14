@@ -26,6 +26,7 @@ function renderLoginPage() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/dashboard" element={<p>Workspace</p>} />
+        <Route path="/personal/dashboard" element={<p>Personal home</p>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -44,10 +45,11 @@ describe('LoginPage', () => {
     expect(screen.getByLabelText('Login yoki email')).toBeInTheDocument();
     expect(screen.getByLabelText('Parol')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Kirish' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Yangi do‘kon ochish' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Yangi hisob ochish' })).toHaveAttribute(
       'href',
-      '/register-store',
+      '/onboarding',
     );
+    expect(screen.queryByRole('link', { name: 'Yangi do‘kon ochish' })).not.toBeInTheDocument();
   });
 
   it('asks for both fields before contacting the API', async () => {
@@ -82,6 +84,57 @@ describe('LoginPage', () => {
       identifier: 'admin',
       password: 'Admin123!',
     });
+  });
+
+  it('sends a personal session to the personal dashboard', async () => {
+    mockApi({
+      '/auth/login': {
+        status: 200,
+        body: {
+          success: true,
+          data: {
+            user: {
+              kind: 'PERSONAL',
+              id: 'idn_1',
+              email: 'aziz@example.com',
+              username: null,
+              fullName: 'Aziz Karimov',
+              phone: null,
+              role: 'PERSONAL',
+              responsibilities: [],
+              storeId: null,
+              storeName: 'Azizning shaxsiy moliyasi',
+              workspaceId: 'ws_1',
+              identityId: 'idn_1',
+              membershipRole: 'OWNER',
+              subscription: {
+                status: 'TRIAL',
+                storedStatus: 'TRIAL',
+                planId: 'PERSONAL_TRIAL',
+                planName: 'Sinov',
+                trialEndsAt: '2026-09-20T00:00:00.000Z',
+                currentPeriodEnd: '2026-09-20T00:00:00.000Z',
+                trialWelcomeSeenAt: null,
+                daysRemaining: 7,
+                canWrite: true,
+                hasPendingPaymentRequest: false,
+                featureKeys: [],
+                featuresRestricted: false,
+              },
+            },
+          },
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderLoginPage();
+
+    await user.type(screen.getByLabelText('Login yoki email'), 'aziz@example.com');
+    await user.type(screen.getByLabelText('Parol'), 'Secret123');
+    await user.click(screen.getByRole('button', { name: 'Kirish' }));
+
+    expect(await screen.findByText('Personal home')).toBeInTheDocument();
+    expect(screen.queryByText('Workspace')).not.toBeInTheDocument();
   });
 
   it('shows the rejection message and stays put on bad credentials', async () => {

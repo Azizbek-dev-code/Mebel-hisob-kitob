@@ -14,7 +14,6 @@ import { ErrorState } from '@/components/feedback/ErrorState';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Badge } from '@/components/ui/Badge';
 import { SectionCard } from '@/components/ui/SectionCard';
-import { SegmentedNav } from '@/components/ui/SegmentedNav';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ROUTES } from '@/routes/paths';
 import { formatDate } from '@/utils/format';
@@ -44,8 +43,8 @@ export function PlatformSubscriptionRequestsPage() {
       <div>
         <h2 className="text-lg font-semibold tracking-tight text-ink">Tarif so&apos;rovlari</h2>
         <p className="mt-1 text-sm text-ink-muted">
-          Do&apos;konlar tarifni o&apos;zgartirishni so&apos;raganda so&apos;rov shu yerda chiqadi. Qabul qilish
-          to&apos;lovni tasdiqlaydi.
+          Do&apos;kon va shaxsiy hisoblar tarif o&apos;zgartirishni so&apos;raganda so&apos;rov shu yerda chiqadi.
+          Qabul qilish to&apos;lovni tasdiqlaydi.
         </p>
       </div>
 
@@ -71,16 +70,7 @@ export function PlatformSubscriptionRequestsPage() {
         ))}
       </div>
 
-      <SegmentedNav
-        ariaLabel="Billing bo'limlari"
-        items={[
-          { to: ROUTES.platformSubscriptionRequests, label: "Tarif so'rovlari", end: true },
-          { to: ROUTES.platformPayments, label: "To'lovlar" },
-          { to: ROUTES.platformShops, label: "Do'konlar" },
-        ]}
-      />
-
-      <SectionCard title="Ro'yxat">
+      <SectionCard title="So'rovlar">
         {requests.isPending && !requests.data ? (
           <Skeleton className="h-24 w-full" />
         ) : requests.isError ? (
@@ -104,14 +94,21 @@ export function PlatformSubscriptionRequestsPage() {
                 className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between"
               >
                 <div className="min-w-0">
-                  <Link
-                    to={ROUTES.platformShopDetail(row.storeId)}
-                    className="font-medium text-ink hover:underline"
-                  >
-                    {row.storeName}
-                  </Link>
+                  {row.storeId ? (
+                    <Link
+                      to={ROUTES.platformShopDetail(row.storeId)}
+                      className="font-medium text-ink hover:underline"
+                    >
+                      {row.storeName}
+                    </Link>
+                  ) : (
+                    <p className="font-medium text-ink">{row.storeName}</p>
+                  )}
                   <p className="mt-0.5 text-xs text-ink-muted">
-                    {[row.ownerName, row.ownerPhone, row.ownerEmail].filter(Boolean).join(' · ')}
+                    {row.accountKind === 'PERSONAL' ? 'Shaxsiy' : 'Biznes'}
+                    {row.ownerName || row.ownerPhone || row.ownerEmail
+                      ? ` · ${[row.ownerName, row.ownerPhone, row.ownerEmail].filter(Boolean).join(' · ')}`
+                      : ''}
                   </p>
                   <p className="mt-0.5 text-xs text-ink-muted">
                     Hozirgi: {row.currentPlanName ?? '—'}
@@ -119,6 +116,16 @@ export function PlatformSubscriptionRequestsPage() {
                     {' → '}
                     So&apos;ralgan: {row.planName} · {formatMoney(row.requestedPriceSnapshot)}
                   </p>
+                  {row.proofUrl ? (
+                    <a
+                      href={row.proofUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-0.5 inline-block text-xs font-medium text-brand-700 hover:underline"
+                    >
+                      To‘lov cheki
+                    </a>
+                  ) : null}
                   <p className="mt-0.5 text-xs text-ink-muted">{formatDate(row.requestedAt)}</p>
                 </div>
                 <div className="flex shrink-0 flex-col items-start gap-1">

@@ -103,5 +103,5 @@ platformBillingRouter.patch('/settings', validate({ body: updateSettingsBodySche
 
 platformBillingRouter.get('/pnl', validate({ query: pnlQuerySchema }), getPnl);
 platformBillingRouter.get('/analytics', validate({ query: pnlQuerySchema }), getAnalytics);
-platformBillingRouter.get('/dashboard', getDashboard);
+platformBillingRouter.get('/dashboard', validate({ query: pnlQuerySchema }), getDashboard);
 platformBillingRouter.get('/account-deletions', listAccountDeletions);

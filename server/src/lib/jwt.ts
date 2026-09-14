@@ -1,4 +1,4 @@
-import { type AccessTokenPayload, UserRole } from '@furniture-erp/shared';
+import { type AccessTokenPayload, AuthSessionKind, UserRole } from '@furniture-erp/shared';
 import jwt, { type SignOptions } from 'jsonwebtoken';
 
 import { env } from '../config/env.js';
@@ -13,10 +13,24 @@ export interface IssuedAccessToken {
   expiresAt: Date;
 }
 
-export interface VerifiedAccessToken extends AccessTokenPayload {
+export type VerifiedAccessToken = {
+  sub: string;
   issuedAt: Date;
   expiresAt: Date;
-}
+} & (
+  | {
+      ctx: typeof AuthSessionKind.STORE;
+      storeId: string;
+      role: UserRole;
+      workspaceId?: undefined;
+    }
+  | {
+      ctx: typeof AuthSessionKind.PERSONAL;
+      workspaceId: string;
+      storeId?: undefined;
+      role?: undefined;
+    }
+);
 
 export class InvalidTokenError extends Error {
   constructor(message = 'Invalid access token') {
@@ -47,6 +61,9 @@ export function signAccessToken(payload: AccessTokenPayload): IssuedAccessToken 
  * version of the API expects. A token signed by us but predating a claim change
  * must be rejected rather than silently producing `undefined` fields.
  *
+ * Store tokens minted before Personal sessions omit `ctx` and still require
+ * `storeId` + `role`. Personal tokens set `ctx: 'PERSONAL'` and never carry storeId.
+ *
  * @throws {InvalidTokenError} for any token that must not be trusted.
  */
 export function verifyAccessToken(token: string): VerifiedAccessToken {
@@ -64,26 +81,32 @@ export function verifyAccessToken(token: string): VerifiedAccessToken {
     throw new InvalidTokenError();
   }
 
-  const { sub, storeId, role, iat, exp } = claims as Record<string, unknown>;
+  const raw = claims as Record<string, unknown>;
+  const { sub, storeId, role, iat, exp, ctx, workspaceId } = raw;
+
+  if (typeof sub !== 'string' || typeof iat !== 'number' || typeof exp !== 'number') {
+    throw new InvalidTokenError('Access token claims are malformed');
+  }
+
+  const issuedAt = new Date(iat * 1000);
+  const expiresAt = new Date(exp * 1000);
+
+  if (ctx === AuthSessionKind.PERSONAL) {
+    if (typeof workspaceId !== 'string' || workspaceId.length === 0) {
+      throw new InvalidTokenError('Access token claims are malformed');
+    }
+    return { sub, ctx: AuthSessionKind.PERSONAL, workspaceId, issuedAt, expiresAt };
+  }
 
   if (
-    typeof sub !== 'string' ||
     typeof storeId !== 'string' ||
     typeof role !== 'string' ||
-    !isUserRole(role) ||
-    typeof iat !== 'number' ||
-    typeof exp !== 'number'
+    !isUserRole(role)
   ) {
     throw new InvalidTokenError('Access token claims are malformed');
   }
 
-  return {
-    sub,
-    storeId,
-    role,
-    issuedAt: new Date(iat * 1000),
-    expiresAt: new Date(exp * 1000),
-  };
+  return { sub, ctx: AuthSessionKind.STORE, storeId, role, issuedAt, expiresAt };
 }
 
 function isUserRole(value: string): value is UserRole {

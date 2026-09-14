@@ -31,6 +31,7 @@ const authUserSelect = {
     select: {
       name: true,
       accessStatus: true,
+      businessType: true,
       subscriptions: {
         where: { isCurrent: true },
         take: 1,
@@ -171,6 +172,10 @@ export function toAuthUser(record: AuthUserRecord): AuthUser {
     ),
     storeId: record.storeId,
     storeName: record.store.name,
+    businessType:
+      'businessType' in record.store && record.store.businessType
+        ? (record.store.businessType as AuthUser['businessType'])
+        : undefined,
     storeAccessStatus: record.store.accessStatus ?? StoreAccessStatus.ACTIVE,
     subscription: toSubscriptionSnapshot(record),
   };

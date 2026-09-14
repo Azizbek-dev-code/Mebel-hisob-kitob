@@ -258,6 +258,15 @@ enum StoreAccessStatus {
   MANUALLY_BLOCKED
 }
 
+/// Business vertical on a Store. Additive — do not invent rows for unused values.
+enum BusinessType {
+  FURNITURE
+  CARPET
+  CLOTHING
+  ELECTRONICS
+  OTHER
+}
+
 enum SubscriptionStatus {
   TRIAL
   ACTIVE
@@ -293,6 +302,7 @@ enum PlatformExpenseCategory {
   ADVERTISING
   MARKETING
   DEVELOPMENT
+  SALARY
   OTHER
 }
 
@@ -305,11 +315,112 @@ enum PlatformBillingCycle {
   MONTHLY
 }
 
+enum ReferralCommissionStatus {
+  PENDING
+  AVAILABLE
+  WITHDRAW_REQUESTED
+  PAID
+  REJECTED
+}
+
+enum ReferralWithdrawalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+}
+
+enum PlanAudience {
+  STORE
+  PERSONAL
+}
+
 enum SubscriptionRequestStatus {
   PENDING
   APPROVED
   REJECTED
   CANCELLED
+}
+
+/// Overlay account type. BUSINESS workspaces point at an existing Store.
+/// PERSONAL rows are not created in this phase; the enum exists so the CHECK
+/// constraint can keep Personal data off Store.
+enum WorkspaceType {
+  PERSONAL
+  BUSINESS
+}
+
+enum WorkspaceStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum WorkspaceMembershipRole {
+  OWNER
+  MEMBER
+}
+
+enum OnboardingSubmissionStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+enum OnboardingAudience {
+  PERSONAL
+  BUSINESS
+}
+
+enum OnboardingAnswerType {
+  SINGLE
+  MULTI
+  TEXT
+}
+
+enum PersonalWalletKind {
+  CASH
+  CARD
+  BANK
+  OTHER
+  UZCARD
+  HUMO
+  PAYME
+  CLICK
+  SAVINGS
+}
+
+enum PersonalCategoryKind {
+  INCOME
+  EXPENSE
+}
+
+enum PersonalEntryType {
+  INCOME
+  EXPENSE
+}
+
+enum PersonalBudgetKind {
+  TOTAL
+  CATEGORY
+}
+
+enum PersonalSavingGoalStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum PersonalRecurringFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+  CUSTOM
+}
+
+enum PersonalDebtDirection {
+  LENT
+  BORROWED
 }
 
 // ---------------------------------------------------------------------------
@@ -328,6 +439,8 @@ model Store {
   isActive Boolean @default(true)
   /// Why the store is open or closed. Payment vs manual block must stay distinct.
   accessStatus StoreAccessStatus @default(ACTIVE)
+  /// Vertical. Existing stores default to furniture; new types are additive enum values.
+  businessType BusinessType @default(FURNITURE)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -361,9 +474,12 @@ model Store {
   platformInvoices            PlatformInvoice[]
   subscriptionRequests        SubscriptionRequest[]
   accountDeletions            AccountDeletion[]
+  /// 1:1 overlay for the shared account layer. Not an ERP tenant replacement.
+  workspace                   Workspace?
 
   @@index([isActive])
   @@index([accessStatus])
+  @@index([businessType])
   @@map("stores")
 }
 
@@ -383,11 +499,15 @@ model User {
   /// Set when the user completes self-service account deletion. Login stays blocked.
   deletedAt    DateTime?
   lastLoginAt  DateTime?
+  /// Optional link to the login-person overlay. Auth still reads User; Identity
+  /// is backfilled 1:1 and is not unique on email in this phase (no merge).
+  identityId   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store    Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  identity Identity? @relation(fields: [identityId], references: [id], onDelete: SetNull)
 
   salesCreated          Sale[]         @relation("SaleCreatedBy")
   salesSold             Sale[]         @relation("SaleSeller")
@@ -430,7 +550,490 @@ model User {
   @@index([storeId, isActive])
   @@index([storeId, role])
   @@index([storeId, deletedAt])
+  @@index([identityId])
   @@map("users")
+}
+
+/// Global person record for a future Personal + Business account switcher.
+///
+/// Email is not unique: existing stores may theoretically share an address, and
+/// Phase 2 backfilled 1 Identity per User rather than merging. ERP login still
+/// authenticates against User.passwordHash. Personal self-registration stores a
+/// digest here for a later Personal session (Phase 5).
+model Identity {
+  id       String @id @default(cuid())
+  email    String
+  fullName String
+  /// Set on Personal self-registration. Backfilled ERP identities stay null —
+  /// those accounts still authenticate against User.passwordHash.
+  passwordHash String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users        User[]
+  memberships  WorkspaceMembership[]
+  onboardingSubmissions OnboardingSubmission[]
+  storeCreationRequests StoreCreationRequest[]
+  referralCode          ReferralCode?
+  referralAttributions  ReferralAttribution[]  @relation("ReferredIdentity")
+  referralCommissions   ReferralCommission[]   @relation("ReferrerCommissions")
+  referralWithdrawals   ReferralWithdrawal[]
+
+  @@index([email])
+  @@map("identities")
+}
+
+/// Account/workspace overlay. BUSINESS is 1:1 with Store via storeId.
+/// PERSONAL workspaces have storeId null (enforced by a CHECK in the migration).
+model Workspace {
+  id      String          @id @default(cuid())
+  type    WorkspaceType
+  name    String
+  status  WorkspaceStatus @default(ACTIVE)
+  /// Set only when type = BUSINESS. Unique so a store cannot have two overlays.
+  storeId String?         @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store       Store?                 @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  memberships WorkspaceMembership[]
+  onboardingSubmissions OnboardingSubmission[]
+  personalProfile       PersonalProfile?
+  personalSubscription  PersonalSubscription?
+  personalWallets       PersonalWallet[]
+  personalCategories    PersonalCategory[]
+  personalEntries       PersonalEntry[]
+  personalTransfers     PersonalTransfer[]
+  personalBudgets        PersonalBudget[]
+  personalSavingGoals    PersonalSavingGoal[]
+  personalRecurringRules PersonalRecurringRule[]
+  personalDebts          PersonalDebt[]
+  subscriptionRequests   SubscriptionRequest[]
+
+  @@index([type, status])
+  @@index([type, createdAt])
+  @@map("workspaces")
+}
+
+model WorkspaceMembership {
+  id          String                   @id @default(cuid())
+  identityId  String
+  workspaceId String
+  role        WorkspaceMembershipRole
+  createdAt   DateTime                 @default(now())
+
+  identity  Identity  @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([identityId, workspaceId])
+  @@index([workspaceId])
+  @@map("workspace_memberships")
+}
+
+/// Versioned onboarding capture. Answers JSON is non-sensitive; custom income
+/// lives on OnboardingSensitiveAnswer so platform admin aggregations cannot
+/// accidentally select a raw amount.
+model OnboardingSubmission {
+  id             String                     @id @default(cuid())
+  publicToken    String                     @unique
+  flowKey        String
+  flowVersion    Int
+  experimentKey  String?
+  status         OnboardingSubmissionStatus @default(IN_PROGRESS)
+  answers        Json                       @default("{}")
+  identityId     String?
+  workspaceId    String?
+  completedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  identity  Identity?  @relation(fields: [identityId], references: [id], onDelete: SetNull)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  sensitive OnboardingSensitiveAnswer?
+
+  @@index([status, createdAt])
+  @@index([flowKey, flowVersion])
+  @@index([identityId])
+  @@map("onboarding_submissions")
+}
+
+model OnboardingSensitiveAnswer {
+  id                       String @id @default(cuid())
+  submissionId             String @unique
+  /// Whole so'm. Present only when monthlyIncomeBand = CUSTOM.
+  customMonthlyIncomeSom   BigInt?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  submission OnboardingSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@map("onboarding_sensitive_answers")
+}
+
+/// Admin-managed question. Runtime UI reads this table — not hardcoded steps.
+model OnboardingQuestion {
+  id           String               @id @default(cuid())
+  key          String               @unique
+  audience     OnboardingAudience
+  /// Null = every business vertical. Set only for BUSINESS audience rows.
+  businessType BusinessType?
+  promptUz     String
+  promptRu     String
+  hintUz       String?
+  hintRu       String?
+  answerType   OnboardingAnswerType
+  required     Boolean              @default(true)
+  isActive     Boolean              @default(true)
+  /// System rows (businessType) cannot be deleted.
+  isSystem     Boolean              @default(false)
+  sortOrder    Int
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  options  OnboardingOption[]
+  mappings OnboardingNeedMapping[]
+
+  @@index([audience, isActive, sortOrder])
+  @@map("onboarding_questions")
+}
+
+model OnboardingOption {
+  id          String  @id @default(cuid())
+  questionId  String
+  key         String
+  labelUz     String
+  labelRu     String
+  allowsOther Boolean @default(false)
+  isActive    Boolean @default(true)
+  sortOrder   Int
+
+  question OnboardingQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, key])
+  @@index([questionId, sortOrder])
+  @@map("onboarding_options")
+}
+
+model OnboardingNeed {
+  id        String  @id @default(cuid())
+  key       String  @unique
+  labelUz   String
+  labelRu   String
+  isActive  Boolean @default(true)
+  sortOrder Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  mappings OnboardingNeedMapping[]
+
+  @@map("onboarding_needs")
+}
+
+model OnboardingSolution {
+  id        String  @id @default(cuid())
+  key       String  @unique
+  labelUz   String
+  labelRu   String
+  isActive  Boolean @default(true)
+  sortOrder Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  mappings OnboardingNeedMapping[]
+
+  @@map("onboarding_solutions")
+}
+
+model OnboardingNeedMapping {
+  id         String @id @default(cuid())
+  questionId String
+  optionKey  String
+  needId     String
+  solutionId String
+
+  question OnboardingQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  need     OnboardingNeed     @relation(fields: [needId], references: [id], onDelete: Cascade)
+  solution OnboardingSolution @relation(fields: [solutionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, optionKey, needId, solutionId])
+  @@index([needId])
+  @@map("onboarding_need_mappings")
+}
+
+/// Non-sensitive Personal onboarding snapshot for product use. No custom income.
+model PersonalProfile {
+  id                 String @id @default(cuid())
+  workspaceId        String @unique
+  goals              Json   @default("[]")
+  discoverySource    String?
+  monthlyIncomeBand  String?
+  helpWith           Json   @default("[]")
+  notifyBudget       Boolean @default(true)
+  notifyGoals        Boolean @default(true)
+  notifyRecurring    Boolean @default(true)
+  notifyDebts        Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("personal_profiles")
+}
+
+/// Personal Finance entitlement. Not a StoreSubscription and not tied to the
+/// store `isDefaultTrial` plan. No storeId — never part of an ERP backup.
+model PersonalSubscription {
+  id                 String             @id @default(cuid())
+  workspaceId        String             @unique
+  /// PERSONAL_TRIAL | PERSONAL_PAID — not a SubscriptionPlan id.
+  planKey            String
+  status             SubscriptionStatus @default(TRIAL)
+  startedAt          DateTime
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  trialStartedAt     DateTime?
+  trialEndsAt        DateTime?
+  trialWelcomeSeenAt DateTime?
+  cancelledAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([status, currentPeriodEnd])
+  @@map("personal_subscriptions")
+}
+
+/// Personal cash/card/bank wallet. No storeId — never part of an ERP backup.
+model PersonalWallet {
+  id                 String             @id @default(cuid())
+  workspaceId        String
+  name               String
+  kind               PersonalWalletKind
+  openingBalanceSom  BigInt             @default(0)
+  sortOrder          Int                @default(0)
+  isArchived         Boolean            @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace      Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  entries        PersonalEntry[]
+  transfersOut   PersonalTransfer[]      @relation("PersonalTransferFrom")
+  transfersIn    PersonalTransfer[]      @relation("PersonalTransferTo")
+  recurringRules PersonalRecurringRule[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, isArchived])
+  @@map("personal_wallets")
+}
+
+/// Income/expense category for a PERSONAL workspace. Not ExpenseCategory.
+model PersonalCategory {
+  id          String               @id @default(cuid())
+  workspaceId String
+  kind        PersonalCategoryKind
+  key         String?
+  name        String
+  color       String               @default("slate")
+  sortOrder   Int                  @default(0)
+  isActive    Boolean              @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace      Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  entries        PersonalEntry[]
+  budgets        PersonalBudget[]
+  recurringRules PersonalRecurringRule[]
+
+  @@unique([workspaceId, kind, name])
+  @@index([workspaceId, kind, isActive])
+  @@map("personal_categories")
+}
+
+/// Personal income or expense row. Amount is always a positive whole so'm.
+model PersonalEntry {
+  id          String            @id @default(cuid())
+  workspaceId String
+  walletId    String
+  categoryId  String
+  type        PersonalEntryType
+  amount      BigInt
+  occurredAt  DateTime
+  note        String?
+  status      ExpenseStatus     @default(ACTIVE)
+  cancelledAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  wallet    PersonalWallet   @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  category  PersonalCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, occurredAt])
+  @@index([workspaceId, type, status])
+  @@index([walletId])
+  @@index([categoryId])
+  @@map("personal_entries")
+}
+
+/// Wallet-to-wallet move. Not income or expense — excluded from month KPIs,
+/// budgets and analytics. No storeId.
+model PersonalTransfer {
+  id           String        @id @default(cuid())
+  workspaceId  String
+  fromWalletId String
+  toWalletId   String
+  amount       BigInt
+  occurredAt   DateTime
+  note         String?
+  status       ExpenseStatus @default(ACTIVE)
+  cancelledAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace  Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  fromWallet PersonalWallet @relation("PersonalTransferFrom", fields: [fromWalletId], references: [id], onDelete: Restrict)
+  toWallet   PersonalWallet @relation("PersonalTransferTo", fields: [toWalletId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, occurredAt])
+  @@index([workspaceId, status])
+  @@index([fromWalletId])
+  @@index([toWalletId])
+  @@map("personal_transfers")
+}
+
+/// Monthly spend limit for a PERSONAL workspace. Progress is derived from
+/// PersonalEntry, never from store Expense. No storeId.
+model PersonalBudget {
+  id          String             @id @default(cuid())
+  workspaceId String
+  kind        PersonalBudgetKind
+  /// Required when kind = CATEGORY. Null for TOTAL.
+  categoryId  String?
+  name        String
+  limitSom    BigInt
+  isActive    Boolean            @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  category  PersonalCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, isActive])
+  @@index([categoryId])
+  @@map("personal_budgets")
+}
+
+/// Savings target for a PERSONAL workspace. Not onboarding PersonalGoal tags.
+model PersonalSavingGoal {
+  id              String                   @id @default(cuid())
+  workspaceId     String
+  name            String
+  targetAmountSom BigInt
+  targetDate      DateTime?
+  /// Planned monthly set-aside. Null means the user did not set a pace.
+  monthlyContributionSom BigInt?
+  status          PersonalSavingGoalStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace     Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contributions PersonalGoalContribution[]
+
+  @@index([workspaceId, status])
+  @@map("personal_saving_goals")
+}
+
+model PersonalGoalContribution {
+  id          String   @id @default(cuid())
+  goalId      String
+  amountSom   BigInt
+  occurredAt  DateTime
+  note        String?
+
+  createdAt DateTime @default(now())
+
+  goal PersonalSavingGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@index([goalId, occurredAt])
+  @@map("personal_goal_contributions")
+}
+
+/// Reminder template. Logging a due date as an entry is explicit — never auto-pay.
+/// No storeId.
+model PersonalRecurringRule {
+  id           String                      @id @default(cuid())
+  workspaceId  String
+  name         String
+  type         PersonalEntryType
+  amountSom    BigInt
+  frequency    PersonalRecurringFrequency
+  intervalDays Int?
+  dayOfMonth   Int?
+  nextDueAt    DateTime
+  walletId     String?
+  categoryId   String?
+  note         String?
+  isActive     Boolean                     @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  wallet    PersonalWallet?   @relation(fields: [walletId], references: [id], onDelete: SetNull)
+  category  PersonalCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, isActive, nextDueAt])
+  @@map("personal_recurring_rules")
+}
+
+/// Person-to-person loan in a PERSONAL workspace. Not Sale / customer debt.
+model PersonalDebt {
+  id            String                @id @default(cuid())
+  workspaceId   String
+  direction     PersonalDebtDirection
+  personName    String
+  principalSom  BigInt
+  occurredAt    DateTime
+  dueAt         DateTime?
+  note          String?
+  isArchived    Boolean               @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  payments  PersonalDebtPayment[]
+
+  @@index([workspaceId, isArchived])
+  @@map("personal_debts")
+}
+
+model PersonalDebtPayment {
+  id          String   @id @default(cuid())
+  debtId      String
+  amountSom   BigInt
+  occurredAt  DateTime
+  note        String?
+
+  createdAt DateTime @default(now())
+
+  debt PersonalDebt @relation(fields: [debtId], references: [id], onDelete: Cascade)
+
+  @@index([debtId, occurredAt])
+  @@map("personal_debt_payments")
 }
 
 /// Application to open a new store. Not store-scoped until approval links
@@ -451,6 +1054,10 @@ model StoreCreationRequest {
   region    String
   district  String
   address   String
+  /// Vertical requested for the new store. Defaults to furniture for legacy rows.
+  businessType BusinessType @default(FURNITURE)
+  /// When set, approve attaches the new store User to this Identity (same person, extra business).
+  identityId String?
 
   status StoreCreationRequestStatus @default(PENDING)
 
@@ -467,12 +1074,14 @@ model StoreCreationRequest {
   reviewedBy    User?  @relation("StoreCreationReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
   createdStore  Store? @relation(fields: [createdStoreId], references: [id], onDelete: SetNull)
   createdUser   User?  @relation("StoreCreationCreatedUser", fields: [createdUserId], references: [id], onDelete: SetNull)
+  identity      Identity? @relation(fields: [identityId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
   @@index([phone, status])
   @@index([email, status])
   @@index([username, status])
   @@index([createdStoreId])
+  @@index([identityId])
   @@map("store_creation_requests")
 }
 
@@ -1349,6 +1958,11 @@ model SubscriptionPlan {
   isActive       Boolean @default(true)
   /// Used when a new store is approved — typically the free trial plan.
   isDefaultTrial Boolean @default(false)
+  /// Paid-plan sort / upgrade ladder. Trial is 0; START < PRO < BUSINESS.
+  /// Mapped away from physical `rank` — PostgreSQL treats bare `rank` as an ordered-set aggregate.
+  rank           Int     @default(0) @map("plan_rank")
+  /// STORE tariffs power Furniture ERP. PERSONAL_PAID is seeded separately.
+  audience       PlanAudience @default(STORE)
   /// Optional marketing copy. Entitlements live on PlanFeature / PlanLimit.
   features       Json    @default("{}")
 
@@ -1364,6 +1978,7 @@ model SubscriptionPlan {
 
   @@index([isActive])
   @@index([isDefaultTrial])
+  @@index([audience, rank])
   @@map("subscription_plans")
 }
 
@@ -1447,13 +2062,15 @@ model StoreSubscription {
   @@map("store_subscriptions")
 }
 
-/// Store-initiated "obuna bo'lish" request. Price is snapshotted so later plan
+/// Account-initiated tariff request. Price is snapshotted so later plan
 /// edits cannot rewrite what the shop asked to pay. `fromPlan*` is the tariff
-/// the shop was on when it asked — kept even after Accept so history does not
+/// the account was on when it asked — kept even after Accept so history does not
 /// rewrite "hozirgi tarif" to the new plan.
+/// Exactly one of storeId / workspaceId is set (CHECK in the migration).
 model SubscriptionRequest {
   id                     String                     @id @default(cuid())
-  storeId                String
+  storeId                String?
+  workspaceId            String?
   planId                 String
   fromPlanId             String?
   fromPlanName           String?
@@ -1465,18 +2082,24 @@ model SubscriptionRequest {
   reviewedAt             DateTime?
   rejectionReason        String?
   note                   String?
+  paymentMethod          PlatformPaymentMethod?
+  payerReference         String?
+  proofUrl               String?
+  proofKey               String?
   createdInvoiceId       String?
   createdSubscriptionId  String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  store      Store            @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  store      Store?           @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  workspace  Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   plan       SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
   reviewedBy User?            @relation("SubscriptionRequestReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@index([status, requestedAt])
   @@index([storeId, status])
+  @@index([workspaceId, status])
   @@index([planId])
   @@map("subscription_requests")
 }
@@ -1515,6 +2138,7 @@ model PlatformInvoice {
   @@unique([subscriptionId, billingPeriodStart])
   @@index([storeId, status, dueDate])
   @@index([status, dueDate])
+  @@index([status, paidAt])
   @@index([paidAt])
   @@map("platform_invoices")
 }
@@ -1553,8 +2177,108 @@ model PlatformSettings {
   billingCycle             PlatformBillingCycle @default(MONTHLY)
   paymentRemindersEnabled  Boolean              @default(false)
   reminderDaysBeforeDue    Int                  @default(3)
+  paymentCardNumber        String               @default("")
+  paymentAccountNumber     String               @default("")
+  paymentInstructions      String               @default("")
+  referralCommissionPercent Int                 @default(10)
+  referralMinWithdrawalSom  BigInt              @default(100000)
+  referralProgramActive     Boolean             @default(true)
 
   updatedAt DateTime @updatedAt
 
   @@map("platform_settings")
+}
+
+/// Identity-level referral code. Not derived from email/username.
+model ReferralCode {
+  id         String   @id @default(cuid())
+  identityId String   @unique
+  code       String   @unique
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  identity      Identity               @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  clicks        ReferralClick[]
+  attributions  ReferralAttribution[]
+
+  @@map("referral_codes")
+}
+
+model ReferralClick {
+  id             String   @id @default(cuid())
+  referralCodeId String
+  visitorKey     String
+  createdAt      DateTime @default(now())
+
+  referralCode ReferralCode @relation(fields: [referralCodeId], references: [id], onDelete: Cascade)
+
+  @@index([referralCodeId, createdAt])
+  @@index([visitorKey, referralCodeId])
+  @@map("referral_clicks")
+}
+
+/// One referred identity belongs to exactly one referrer. Never updated after insert.
+model ReferralAttribution {
+  id                  String    @id @default(cuid())
+  referralCodeId      String
+  referrerIdentityId  String
+  referredIdentityId  String    @unique
+  referredWorkspaceId String?
+  visitorKey          String?
+  registeredAt        DateTime  @default(now())
+  accountCreatedAt    DateTime?
+  firstPaidAt         DateTime?
+
+  createdAt DateTime @default(now())
+
+  referralCode ReferralCode          @relation(fields: [referralCodeId], references: [id], onDelete: Restrict)
+  referred     Identity              @relation("ReferredIdentity", fields: [referredIdentityId], references: [id], onDelete: Restrict)
+  commission   ReferralCommission?
+
+  @@index([referrerIdentityId])
+  @@map("referral_attributions")
+}
+
+/// Separate ledger from PersonalEntry / store Expense / PlatformExpense.
+model ReferralCommission {
+  id                 String                    @id @default(cuid())
+  attributionId      String                    @unique
+  referrerIdentityId String
+  amountSom          BigInt
+  commissionPercent  Int
+  sourceAmountSom    BigInt
+  sourceType         String
+  sourceId           String
+  status             ReferralCommissionStatus  @default(AVAILABLE)
+  withdrawalId       String?
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+
+  attribution ReferralAttribution  @relation(fields: [attributionId], references: [id], onDelete: Restrict)
+  referrer    Identity             @relation("ReferrerCommissions", fields: [referrerIdentityId], references: [id], onDelete: Restrict)
+  withdrawal  ReferralWithdrawal?  @relation(fields: [withdrawalId], references: [id], onDelete: SetNull)
+
+  @@unique([sourceType, sourceId])
+  @@index([referrerIdentityId, status])
+  @@map("referral_commissions")
+}
+
+model ReferralWithdrawal {
+  id               String                    @id @default(cuid())
+  identityId       String
+  amountSom        BigInt
+  status           ReferralWithdrawalStatus  @default(PENDING)
+  rejectionReason  String?
+  reviewedById     String?
+  reviewedAt       DateTime?
+  paidAt           DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+
+  identity    Identity             @relation(fields: [identityId], references: [id], onDelete: Restrict)
+  commissions ReferralCommission[]
+
+  @@index([identityId, status])
+  @@index([status, createdAt])
+  @@map("referral_withdrawals")
 }

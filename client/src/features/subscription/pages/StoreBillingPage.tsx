@@ -2,12 +2,13 @@ import {
   PLATFORM_BILLING_STATUS_LABELS,
   SUBSCRIPTION_REQUEST_STATUS_LABELS,
   SUBSCRIPTION_STATUS_LABELS,
+  canRequestPaidPlan,
   formatMoney,
   type RequestStoreSubscriptionBody,
   type StoreSubscriptionDto,
   type SubscriptionPlanDto,
 } from '@furniture-erp/shared';
-import { Loader2, Tags } from 'lucide-react';
+import { Tags } from 'lucide-react';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -15,23 +16,20 @@ import { EmptyState } from '@/components/feedback/EmptyState';
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Badge } from '@/components/ui/Badge';
-import { Dialog } from '@/components/ui/Dialog';
 import { SectionCard } from '@/components/ui/SectionCard';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { PaymentRequestModal } from '@/features/billing/components/PaymentRequestModal';
 import { useCurrentUser } from '@/features/auth/hooks/use-auth';
 import { ApiClientError } from '@/lib/api-client';
 import { storeBillingService } from '@/services/store-billing.service';
 import { formatDate } from '@/utils/format';
 
-const fieldClass =
-  'w-full rounded-input border border-line bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100';
-
 export function StoreBillingPage() {
   const { data: user } = useCurrentUser();
   const queryClient = useQueryClient();
-  const [note, setNote] = useState('');
   const [selected, setSelected] = useState<SubscriptionPlanDto | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const plans = useQuery({
     queryKey: ['store-billing-plans'],
@@ -49,11 +47,15 @@ export function StoreBillingPage() {
     queryKey: ['store-billing-payments'],
     queryFn: ({ signal }) => storeBillingService.listPayments(signal),
   });
+  const instructions = useQuery({
+    queryKey: ['store-billing-payment-instructions'],
+    queryFn: ({ signal }) => storeBillingService.getPaymentInstructions(signal),
+    enabled: Boolean(selected),
+  });
   const request = useMutation({
     mutationFn: (body: RequestStoreSubscriptionBody) => storeBillingService.requestPayment(body),
     onSuccess: () => {
       setSelected(null);
-      setNote('');
       setSuccess("Tarifni o‘zgartirish so‘rovi yuborildi. Platforma administratori ko‘rib chiqadi.");
       void queryClient.invalidateQueries({ queryKey: ['auth'] });
       void queryClient.invalidateQueries({ queryKey: ['store-billing-subscription'] });
@@ -120,6 +122,17 @@ export function StoreBillingPage() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {plans.data?.items.map((plan) => {
               const isCurrent = subscription?.planId === plan.id;
+              const selectable = Boolean(
+                subscription &&
+                  canRequestPaidPlan({
+                    effectiveStatus: subscription.status,
+                    currentPlanId: subscription.planId,
+                    currentRank: subscription.planRank ?? 0,
+                    targetPlanId: plan.id,
+                    targetRank: plan.rank ?? 0,
+                    targetIsTrial: plan.isDefaultTrial,
+                  }),
+              );
               return (
                 <article
                   key={plan.id}
@@ -153,9 +166,9 @@ export function StoreBillingPage() {
                     type="button"
                     className="mt-auto pt-4 text-left text-sm font-medium text-brand-700 hover:underline disabled:opacity-50"
                     onClick={() => setSelected(plan)}
-                    disabled={isCurrent || hasPending}
+                    disabled={isCurrent || hasPending || !selectable}
                   >
-                    {isCurrent ? 'Joriy tarif' : 'Tarifni o‘zgartirish'}
+                    {isCurrent ? 'Joriy tarif' : selectable ? 'Tarifni o‘zgartirish' : 'Mavjud emas'}
                   </button>
                 </article>
               );
@@ -244,57 +257,36 @@ export function StoreBillingPage() {
       </SectionCard>
 
       {selected ? (
-        <Dialog
-          open
-          title="Tarifni o‘zgartirish"
-          description={`${selected.name} · ${formatMoney(selected.monthlyPrice)} / oy`}
+        <PaymentRequestModal
+          accountName={user?.storeName ?? ''}
+          planName={selected.name}
+          price={selected.monthlyPrice}
+          instructions={instructions.data ?? null}
+          submitting={request.isPending}
+          uploading={uploading}
+          errorMessage={
+            request.isError
+              ? request.error instanceof ApiClientError
+                ? request.error.message
+                : "So'rov yuborilmadi"
+              : null
+          }
           onClose={() => setSelected(null)}
-        >
-          <form
-            className="space-y-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              request.mutate({ planId: selected.id, note: note.trim() || undefined });
-            }}
-          >
-            <p className="text-sm text-ink">
-              {user?.storeName} · {user?.fullName}
-              {user?.phone ? ` · ${user.phone}` : ''}
-            </p>
-            <p className="text-sm text-ink-muted">
-              Hozirgi: {subscription?.planName ?? '—'} → so‘ralgan: {selected.name}
-            </p>
-            <label className="block space-y-1 text-sm">
-              <span className="font-medium text-ink">Izoh (ixtiyoriy)</span>
-              <textarea
-                className={fieldClass}
-                rows={3}
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-              />
-            </label>
-            {request.isError ? (
-              <p role="alert" className="text-sm text-danger-700">
-                {request.error instanceof ApiClientError
-                  ? request.error.message
-                  : "So'rov yuborilmadi"}
-              </p>
-            ) : null}
-            <div className="flex justify-end gap-2">
-              <button type="button" className="rounded-input px-3 py-2 text-sm" onClick={() => setSelected(null)}>
-                Bekor
-              </button>
-              <button
-                type="submit"
-                disabled={request.isPending}
-                className="inline-flex items-center gap-1.5 rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
-              >
-                {request.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-                Tarifni o‘zgartirish
-              </button>
-            </div>
-          </form>
-        </Dialog>
+          onUploadProof={async (file) => {
+            setUploading(true);
+            try {
+              return await storeBillingService.uploadProof(file);
+            } finally {
+              setUploading(false);
+            }
+          }}
+          onSubmit={(body) =>
+            request.mutate({
+              planId: selected.id,
+              ...body,
+            })
+          }
+        />
       ) : null}
     </PageContainer>
   );

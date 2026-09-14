@@ -1,12 +1,14 @@
-import type { AuthUser } from '@furniture-erp/shared';
+import type { AuthUser, PersonalAuthUser } from '@furniture-erp/shared';
 
 declare global {
   namespace Express {
     interface Request {
       /** Correlates every log line and error response for a single request. */
       requestId: string;
-      /** Populated by `requireAuth`; absent on public routes. */
+      /** Store ERP session. Absent on public routes and Personal sessions. */
       auth?: AuthUser;
+      /** Personal Finance session. Absent on store ERP sessions. */
+      personalAuth?: PersonalAuthUser;
     }
   }
 }

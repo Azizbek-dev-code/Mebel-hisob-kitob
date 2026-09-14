@@ -1,6 +1,7 @@
 import {
   FEATURE_CATALOG,
   LIMIT_CATALOG,
+  PERSONAL_PLANS,
   formatMoney,
   type CreateSubscriptionPlanBody,
   type FeatureDto,
@@ -9,6 +10,7 @@ import {
 } from '@furniture-erp/shared';
 import { Loader2, Plus, Tags } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { ErrorState } from '@/components/feedback/ErrorState';
@@ -31,6 +33,7 @@ const fieldClass =
   'w-full rounded-input border border-line bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100';
 
 export function PlatformPlansPage() {
+  const { t } = useTranslation();
   const list = usePlatformPlans();
   const [editing, setEditing] = useState<SubscriptionPlanDto | null | 'new'>(null);
 
@@ -85,6 +88,7 @@ export function PlatformPlansPage() {
                   <p className="mt-0.5 truncate text-xs text-ink-muted">
                     {plan.description || 'Tavsif yo‘q'} · {formatMoney(plan.monthlyPrice)} / oy
                     {plan.trialDays > 0 ? ` · ${plan.trialDays} kun sinov` : ''}
+                    {` · daraja ${plan.rank ?? 0}`}
                   </p>
                   <p className="mt-1 truncate text-xs text-ink-subtle">
                     {plan.enabledFeatures?.length
@@ -115,6 +119,31 @@ export function PlatformPlansPage() {
         )}
       </SectionCard>
 
+      <SectionCard
+        title={t('platformAdmin.subscriptions.personalPlansTitle')}
+        description={t('platformAdmin.subscriptions.personalPlansHint')}
+      >
+        <ul className="divide-y divide-line">
+          {PERSONAL_PLANS.map((plan) => (
+            <li key={plan.key} className="flex items-baseline justify-between gap-3 py-3 first:pt-0 last:pb-0">
+              <div className="min-w-0">
+                <p className="font-medium text-ink">{t(`personal.plans.${plan.key}`)}</p>
+                <p className="mt-0.5 text-xs text-ink-muted">
+                  {plan.trialDays > 0
+                    ? t('platformAdmin.subscriptions.personalPlanTrial', { days: plan.trialDays })
+                    : t('platformAdmin.subscriptions.personalPlanPrice', {
+                        price: formatMoney(plan.monthlyPriceSom),
+                      })}
+                </p>
+              </div>
+              <p className="shrink-0 tabular-money text-sm font-medium text-ink">
+                {formatMoney(plan.monthlyPriceSom)}
+              </p>
+            </li>
+          ))}
+        </ul>
+      </SectionCard>
+
       {editing ? (
         <PlanDialog plan={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />
       ) : null}
@@ -131,6 +160,7 @@ function PlanDialog({ plan, onClose }: { plan: SubscriptionPlanDto | null; onClo
   const [description, setDescription] = useState(plan?.description ?? '');
   const [monthlyPrice, setMonthlyPrice] = useState(plan?.monthlyPrice ?? 0);
   const [trialDays, setTrialDays] = useState(plan ? String(plan.trialDays) : '0');
+  const [rank, setRank] = useState(plan ? String(plan.rank ?? 0) : '1');
   const [isActive, setIsActive] = useState(plan?.isActive ?? true);
   const [isDefaultTrial, setIsDefaultTrial] = useState(plan?.isDefaultTrial ?? false);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
@@ -190,6 +220,7 @@ function PlanDialog({ plan, onClose }: { plan: SubscriptionPlanDto | null; onClo
       monthlyPrice,
       trialDays: Number(trialDays) || 0,
       isDefaultTrial,
+      rank: Number(rank) || 0,
       featureKeys: [...selectedKeys],
       limits: limitPayload,
     };
@@ -234,6 +265,15 @@ function PlanDialog({ plan, onClose }: { plan: SubscriptionPlanDto | null; onClo
             inputMode="numeric"
             value={trialDays}
             onChange={(event) => setTrialDays(event.target.value)}
+          />
+        </label>
+        <label className="block space-y-1 text-sm">
+          <span className="font-medium text-ink">Daraja (upgrade tartibi)</span>
+          <input
+            className={fieldClass}
+            inputMode="numeric"
+            value={rank}
+            onChange={(event) => setRank(event.target.value)}
           />
         </label>
 
