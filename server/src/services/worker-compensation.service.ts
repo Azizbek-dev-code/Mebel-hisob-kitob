@@ -12,6 +12,7 @@ import {
   computeSellerCommissionLines,
   compensationDateRangesOverlap,
   findCompensationRuleForTypeOnDate,
+  findSellerCompensationRuleForSaleDate,
   formatBasisPointsAsPercentLabel,
   formatMoneyNumber,
   isFixedCompensationType,
@@ -413,11 +414,14 @@ function productSummary(names: string[]): string {
   return names.filter(Boolean).join(', ') || '—';
 }
 
-function rulesToMatchInputs(rules: WorkerCompensationRule[]): CompensationRuleMatchInput[] {
+function rulesToMatchInputs(
+  rules: WorkerCompensationRule[],
+): Array<CompensationRuleMatchInput & { isActive: boolean }> {
   return rules.map((rule) => ({
     id: rule.id,
     type: rule.type,
     value: rule.value,
+    isActive: rule.isActive,
     effectiveFrom: new Date(rule.effectiveFrom),
     effectiveTo: rule.effectiveTo ? new Date(rule.effectiveTo) : null,
   }));
@@ -496,7 +500,7 @@ export function buildCompensationPreview(options: {
     for (const line of commissionLines) {
       if (line.ruleType === 'MANUAL_SELLER') continue;
       const type = line.ruleType;
-      const rule = findCompensationRuleForTypeOnDate(matchRules, type, eventDate);
+      const rule = findSellerCompensationRuleForSaleDate(matchRules, type, eventDate);
       if (!rule) continue;
 
       const fullRule = options.rules.find((row) => row.id === rule.id);

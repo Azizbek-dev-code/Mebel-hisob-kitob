@@ -135,6 +135,21 @@ import {
   canReviewStoreCreationRequests,
 } from './navigation';
 import { ROUTES } from './paths';
+import { MarketingLayout } from '@/features/marketing/components/MarketingLayout';
+import { MarketingHomePage } from '@/features/marketing/pages/MarketingHomePage';
+import {
+  MarketingFinancePage,
+  MarketingGoalsPage,
+  MarketingHabitsPage,
+  MarketingPomodoroPage,
+  MarketingTodoPage,
+} from '@/features/marketing/pages/feature-pages';
+import {
+  MarketingAboutPage,
+  MarketingFaqPage,
+  MarketingPricingPage,
+  NotFoundPage,
+} from '@/features/marketing/pages/MarketingMetaPages';
 
 export { ROUTES } from './paths';
 
@@ -223,7 +238,23 @@ function RequireInventoryManager({ children }: { children: ReactNode }) {
 export const routes: RouteObject[] = [
   {
     element: <PublicOnlyRoute />,
-    children: [{ path: ROUTES.login, element: <LoginPage /> }],
+    children: [
+      {
+        element: <MarketingLayout />,
+        children: [
+          { path: ROUTES.home, element: <MarketingHomePage /> },
+          { path: ROUTES.marketingTodo, element: <MarketingTodoPage /> },
+          { path: ROUTES.marketingHabits, element: <MarketingHabitsPage /> },
+          { path: ROUTES.marketingPomodoro, element: <MarketingPomodoroPage /> },
+          { path: ROUTES.marketingFinance, element: <MarketingFinancePage /> },
+          { path: ROUTES.marketingGoals, element: <MarketingGoalsPage /> },
+          { path: ROUTES.marketingPricing, element: <MarketingPricingPage /> },
+          { path: ROUTES.marketingAbout, element: <MarketingAboutPage /> },
+          { path: ROUTES.marketingFaq, element: <MarketingFaqPage /> },
+        ],
+      },
+      { path: ROUTES.login, element: <LoginPage /> },
+    ],
   },
   { path: ROUTES.registerStore, element: <RegisterStorePage /> },
   { path: '/register-store/:id', element: <StoreRequestStatusPage /> },
@@ -288,7 +319,6 @@ export const routes: RouteObject[] = [
   {
     element: <ProtectedRoute />,
     children: [
-      { index: true, element: <Navigate to={ROUTES.dashboard} replace /> },
       { path: ROUTES.systemCheck, element: <SystemCheckPage /> },
       { path: ROUTES.accessBlocked, element: <AccessBlockedPage /> },
       {
@@ -602,8 +632,8 @@ export const routes: RouteObject[] = [
     ],
   },
   {
-    path: '*',
-    element: <Navigate to={ROUTES.dashboard} replace />,
+    element: <MarketingLayout />,
+    children: [{ path: '*', element: <NotFoundPage /> }],
   },
 ];
 

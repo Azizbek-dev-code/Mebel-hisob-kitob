@@ -118,6 +118,19 @@ export function todayStoreInputDate(
   return toIsoDate(zonedYmd(now, timeZone));
 }
 
+/**
+ * Default `effectiveFrom` for new compensation rules: Jan 1 of the current
+ * store-local year. Using "today" made historical backdated sales miss the
+ * only open rate and show seller commission as 0.
+ */
+export function defaultCompensationEffectiveFrom(
+  now: Date = new Date(),
+  timeZone: string = WORKER_FINANCE_TIME_ZONE,
+): string {
+  const today = zonedYmd(now, timeZone);
+  return toIsoDate({ year: today.year, month: 1, day: 1 });
+}
+
 export function periodContextLabel(period: DashboardPeriod): string {
   switch (period.preset) {
     case DateRangePreset.TODAY:

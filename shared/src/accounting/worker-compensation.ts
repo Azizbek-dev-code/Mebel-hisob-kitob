@@ -185,3 +185,44 @@ export function findCompensationRuleForTypeOnDate(
   );
   return matches[0] ?? null;
 }
+
+export interface SellerCompensationRuleMatchInput extends CompensationRuleMatchInput {
+  /** Soft flag — inactive rules still apply inside their window; backfill uses active only. */
+  isActive?: boolean;
+}
+
+/**
+ * Seller sale commission rule for a business `saleDate`.
+ *
+ * 1. Prefer a rule whose effective window covers `saleDate` (unchanged).
+ * 2. If none — and the sale is *before* an open-ended active rate — backfill that
+ *    current rate onto the historical sale.
+ *
+ * Why (2): the add-rule UI defaults `effectiveFrom` to today, so backdated sales
+ * (e.g. 01.08 when the rule starts 18.09) otherwise get 0 while today's sales work.
+ * Closed windows (`effectiveTo` set) are never extended — intentional end stays 0.
+ *
+ * Ledger attribution still uses `saleDate` (not `createdAt` / wall clock).
+ */
+export function findSellerCompensationRuleForSaleDate(
+  rules: readonly SellerCompensationRuleMatchInput[],
+  type: WorkerCompensationTypeValue,
+  saleDate: Date,
+): CompensationRuleMatchInput | null {
+  const covering = findCompensationRuleForTypeOnDate(rules, type, saleDate);
+  if (covering) return covering;
+
+  const eventDay = utcCalendarDay(saleDate);
+  const backfill = rules
+    .filter(
+      (rule) =>
+        rule.type === type &&
+        rule.isActive !== false &&
+        rule.effectiveTo == null &&
+        eventDay < utcCalendarDay(rule.effectiveFrom),
+    )
+    .sort((a, b) =>
+      utcCalendarDay(b.effectiveFrom).localeCompare(utcCalendarDay(a.effectiveFrom)),
+    );
+  return backfill[0] ?? null;
+}

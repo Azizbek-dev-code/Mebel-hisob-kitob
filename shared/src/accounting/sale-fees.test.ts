@@ -189,6 +189,61 @@ describe('estimateSellerCommission', () => {
     expect(result.amount).toBe(200_000);
     expect(result.rateLabel).toBe("qat'iy");
   });
+
+  it('historical saleDate before rule effectiveFrom still gets same commission as today', () => {
+    const rule = {
+      id: 'r-aziz',
+      type: WorkerCompensationType.PERCENT_OF_SALE,
+      value: 1000,
+      isActive: true,
+      // UI used to default effectiveFrom to "today" (18.09)
+      effectiveFrom: new Date('2026-09-18T12:00:00.000Z'),
+      effectiveTo: null,
+    };
+    const today = estimateSellerCommission({
+      rules: [rule],
+      saleDate: new Date('2026-09-18T12:00:00.000Z'),
+      totalSalePrice: 320_000,
+      grossProfit: 40_000,
+    });
+    const august = estimateSellerCommission({
+      rules: [rule],
+      saleDate: new Date('2026-08-01T12:00:00.000Z'),
+      totalSalePrice: 320_000,
+      grossProfit: 40_000,
+    });
+    const july = estimateSellerCommission({
+      rules: [rule],
+      saleDate: new Date('2026-07-01T12:00:00.000Z'),
+      totalSalePrice: 320_000,
+      grossProfit: 40_000,
+    });
+    expect(today.amount).toBe(32_000);
+    expect(august.amount).toBe(32_000);
+    expect(july.amount).toBe(32_000);
+    expect(august.amount).toBe(today.amount);
+  });
+
+  it('payment date is irrelevant — commission uses saleDate only', () => {
+    // Payment on 18.09 must not zero out commission for an 01.08 sale.
+    const result = estimateSellerCommission({
+      rules: [
+        {
+          id: 'r1',
+          type: WorkerCompensationType.PERCENT_OF_GROSS_PROFIT,
+          value: 1500,
+          isActive: true,
+          effectiveFrom: new Date('2026-09-18T12:00:00.000Z'),
+          effectiveTo: null,
+        },
+      ],
+      saleDate: new Date('2026-08-01T12:00:00.000Z'),
+      totalSalePrice: 320_000,
+      grossProfit: 40_000,
+    });
+    expect(result.amount).toBe(6_000);
+    expect(result.amount).toBeGreaterThan(0);
+  });
 });
 
 describe('formatBasisPointsAsPercentLabel', () => {

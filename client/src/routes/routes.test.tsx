@@ -206,13 +206,14 @@ describe('application routes', () => {
     expect(screen.getByText(i18n.t('sales.totalSale'))).toBeInTheDocument();
   });
 
-  it('falls back to the dashboard for an unknown address', async () => {
+  it('shows a 404 page for an unknown address', async () => {
     mockSignedInApp();
     renderApp('/not-a-page');
 
     expect(
-      await screen.findByRole('heading', { level: 1, name: i18n.t('nav.dashboard') }),
+      await screen.findByRole('heading', { level: 1, name: 'Sahifa topilmadi' }),
     ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Bosh sahifa' })).toHaveAttribute('href', ROUTES.home);
   });
 
   it.each(NAV_ITEMS.map((item) => [i18n.t(item.labelKey), item.to]))(

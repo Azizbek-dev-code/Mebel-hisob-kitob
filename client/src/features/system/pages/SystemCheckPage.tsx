@@ -28,7 +28,7 @@ export function SystemCheckPage() {
             </svg>
           </div>
           <div>
-            <h1 className="text-lg font-semibold text-ink">Furniture ERP</h1>
+            <h1 className="text-lg font-semibold text-ink">Balancy.Space</h1>
             <p className="text-sm text-ink-muted">Foundation check</p>
           </div>
         </div>

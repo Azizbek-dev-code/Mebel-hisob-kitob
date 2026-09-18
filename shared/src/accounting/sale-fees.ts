@@ -5,7 +5,7 @@ import {
 import type { Money } from '../types/api.js';
 import {
   calculateWorkerCompensation,
-  findCompensationRuleForTypeOnDate,
+  findSellerCompensationRuleForSaleDate,
   isPercentCompensationType,
 } from './worker-compensation.js';
 
@@ -136,7 +136,9 @@ export function computeSellerCommissionLines(input: {
   const lines: SellerCommissionLine[] = [];
 
   for (const type of SELLER_SALE_COMPENSATION_TYPES) {
-    const rule = findCompensationRuleForTypeOnDate(active, type, input.saleDate);
+    // Match on saleDate (business date), not createdAt / today. Backdated sales
+    // still receive the current open-ended rate when no earlier window exists.
+    const rule = findSellerCompensationRuleForSaleDate(active, type, input.saleDate);
     if (!rule) continue;
 
     const baseAmount =

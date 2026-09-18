@@ -269,4 +269,46 @@ describe('syncSellerCommissionForSale historical saleDate', () => {
       undefined,
     );
   });
+
+  it('posts commission for August saleDate when rule effectiveFrom is today (backfill)', async () => {
+    prismaMock.sale.findFirst.mockResolvedValue({
+      id: 'sale_aug_backfill',
+      saleNumber: 11,
+      saleDate: augustSaleDate,
+      status: SaleStatus.ACTIVE,
+      sellerId: 'seller_1',
+      totalSalePrice: 10_000_000n,
+      grossProfit: 2_000_000n,
+      netProfit: 1_500_000n,
+      items: [{ productName: 'Divan' }],
+      workerCompensations: [],
+    });
+    compensationRepoMock.listRulesForWorker.mockResolvedValue([
+      {
+        id: 'rule_today',
+        type: 'PERCENT_OF_SALE',
+        value: 1000,
+        isActive: true,
+        effectiveFrom: new Date('2026-09-18T12:00:00.000Z'),
+        effectiveTo: null,
+      },
+    ]);
+    prismaMock.workerFinancialTransaction.findMany.mockResolvedValue([]);
+
+    const result = await syncSellerCommissionForSale({
+      storeId: 'store_1',
+      saleId: 'sale_aug_backfill',
+      actorId: 'admin_1',
+    });
+
+    expect(result.posted).toBe(1);
+    expect(financialRepoMock.createTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: WorkerFinancialTransactionType.COMMISSION,
+        transactionDate: augustSaleDate,
+        amount: 1_000_000,
+      }),
+      undefined,
+    );
+  });
 });

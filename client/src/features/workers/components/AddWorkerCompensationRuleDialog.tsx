@@ -19,7 +19,7 @@ import {
   isValidCompensationPercentInput,
   percentInputToBasisPoints,
 } from '@/features/workers/utils/compensation-labels';
-import { todayStoreInputDate } from '@/features/workers/utils/period-range';
+import { defaultCompensationEffectiveFrom } from '@/features/workers/utils/period-range';
 import { ApiClientError } from '@/lib/api-client';
 
 const fieldClass =
@@ -109,7 +109,7 @@ export function AddWorkerCompensationRuleDialog({
   const [type, setType] = useState<WorkerCompensationTypeValue | ''>('');
   const [percentText, setPercentText] = useState('');
   const [fixedAmount, setFixedAmount] = useState(0);
-  const [effectiveFrom, setEffectiveFrom] = useState(todayStoreInputDate);
+  const [effectiveFrom, setEffectiveFrom] = useState(defaultCompensationEffectiveFrom);
   const [effectiveTo, setEffectiveTo] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -126,7 +126,7 @@ export function AddWorkerCompensationRuleDialog({
     setType(types[0] ?? '');
     setPercentText('');
     setFixedAmount(0);
-    setEffectiveFrom(todayStoreInputDate());
+    setEffectiveFrom(defaultCompensationEffectiveFrom());
     setEffectiveTo('');
     setFieldErrors({});
     setFormError(null);

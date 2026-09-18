@@ -177,3 +177,17 @@
   min-height: 2.75rem;
   min-width: 2.75rem;
 }
+
+/* Public marketing (Balancy.Space) */
+.font-display {
+  font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+}
+
+.marketing-surface {
+  font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 480px at 10% -10%, rgb(99 102 241 / 0.12), transparent 55%),
+    radial-gradient(900px 400px at 90% 0%, rgb(20 184 166 / 0.08), transparent 50%),
+    var(--color-canvas);
+}
+

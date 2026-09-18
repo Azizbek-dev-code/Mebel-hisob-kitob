@@ -1,5 +1,14 @@
 /** Route paths are declared once so links, redirects and the sidebar never drift apart. */
 export const ROUTES = {
+  home: '/',
+  marketingTodo: '/to-do',
+  marketingHabits: '/habit-tracker',
+  marketingPomodoro: '/pomodoro',
+  marketingFinance: '/personal-finance',
+  marketingGoals: '/goal-tracker',
+  marketingPricing: '/pricing',
+  marketingAbout: '/about',
+  marketingFaq: '/faq',
   login: '/login',
   registerStore: '/register-store',
   registerStoreStatus: (id: string) => `/register-store/${id}`,

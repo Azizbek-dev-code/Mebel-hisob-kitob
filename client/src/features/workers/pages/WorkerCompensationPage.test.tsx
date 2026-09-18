@@ -6,7 +6,7 @@ import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, MemoryRouter, Route, Routes, RouterProvider } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { todayStoreInputDate } from '@/features/workers/utils/period-range';
+import { defaultCompensationEffectiveFrom } from '@/features/workers/utils/period-range';
 import { routes } from '@/routes/index';
 import { ROUTES } from '@/routes/paths';
 import { TEST_ADMIN, TEST_EMPLOYEE } from '@/test/auth-fixtures';
@@ -162,7 +162,9 @@ describe('WorkerCompensationPage', () => {
     const responsibility = within(dialog).getByLabelText(/Mas/i);
     expect(responsibility).toHaveDisplayValue(/Sotuvchi|Teruvchi/);
     expect(within(dialog).queryByRole('option', { name: /Yetkazib beruvchi/i })).not.toBeInTheDocument();
-    expect(within(dialog).getByLabelText(/Boshlanish sanasi/i)).toHaveValue(todayStoreInputDate());
+    expect(within(dialog).getByLabelText(/Boshlanish sanasi/i)).toHaveValue(
+      defaultCompensationEffectiveFrom(),
+    );
   });
 
   it('does not offer assembly type for seller responsibility', async () => {

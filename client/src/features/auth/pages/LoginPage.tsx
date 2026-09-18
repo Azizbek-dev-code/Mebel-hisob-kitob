@@ -8,6 +8,8 @@ import { z } from 'zod';
 
 import { homePathForAuth, isPersonalAuth } from '@furniture-erp/shared';
 import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
+import { usePageSeo } from '@/features/marketing/hooks/use-page-seo';
+import { MARKETING_SEO } from '@/features/marketing/seo';
 import { ApiClientError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { ROUTES } from '@/routes/paths';
@@ -21,6 +23,7 @@ type LoginFormValues = {
 };
 
 export function LoginPage() {
+  usePageSeo(MARKETING_SEO.login);
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();

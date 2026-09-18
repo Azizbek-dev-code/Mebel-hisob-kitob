@@ -41,7 +41,7 @@ describe('LoginPage', () => {
     mockApi({});
     renderLoginPage();
 
-    expect(screen.getByRole('heading', { name: 'Furniture ERP' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Balancy.Space' })).toBeInTheDocument();
     expect(screen.getByLabelText('Login yoki email')).toBeInTheDocument();
     expect(screen.getByLabelText('Parol')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Kirish' })).toBeInTheDocument();

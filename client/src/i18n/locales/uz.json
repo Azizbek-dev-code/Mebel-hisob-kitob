@@ -1,7 +1,7 @@
 {
   "app": {
-    "name": "Furniture ERP",
-    "tagline": "Sotuv, mijozlar va hisob-kitob",
+    "name": "Balancy.Space",
+    "tagline": "Hayotingizni bir joyda tartibga soling",
     "loading": "Yuklanmoqda…"
   },
   "lang": {
@@ -759,7 +759,7 @@
     }
   },
   "personal": {
-    "appTitle": "O‘sish",
+    "appTitle": "Balancy.Space",
     "dashboardTitle": "Shaxsiy moliya",
     "dashboardHint": "Daromad, xarajat, budjet va maqsadlar shu yerda. Do‘kon ERP dan alohida.",
     "homeTitle": "Bugun",

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { AccountSwitcher } from '@/features/accounts/components/AccountSwitcher';
 import { useCurrentUser } from '@/features/auth/hooks/use-auth';
+import { useNoIndex } from '@/features/marketing/hooks/use-page-seo';
 import { PersonalBillingGate } from '@/features/personal/billing/components/PersonalBillingGate';
 import { PersonalTrialBanner } from '@/features/personal/billing/components/PersonalTrialBanner';
 import { cn } from '@/lib/cn';
@@ -21,6 +22,7 @@ function itemIsActive(pathname: string, item: NavItem): boolean {
 }
 
 export function PersonalLayout() {
+  useNoIndex();
   const { t } = useTranslation();
   const { pathname } = useLocation();
   const { data: user } = useCurrentUser();

@@ -4,6 +4,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { Header } from './Header';
 import { MobileSidebar } from './MobileSidebar';
 import { Sidebar } from './Sidebar';
+import { useNoIndex } from '@/features/marketing/hooks/use-page-seo';
 import { PlatformHubChrome } from '@/features/platform/components/PlatformHubChrome';
 import { FeatureLockedPanel } from '@/features/subscription/FeatureLockedPanel';
 import { SubscriptionProvider } from '@/features/subscription/SubscriptionProvider';
@@ -33,6 +34,7 @@ function FeatureGatedOutlet() {
  * the drawer and the inset disappears.
  */
 export function AppLayout() {
+  useNoIndex();
   const [isNavOpen, setNavOpen] = useState(false);
   const { pathname } = useLocation();
 

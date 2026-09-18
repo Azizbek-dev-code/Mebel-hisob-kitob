@@ -1,7 +1,7 @@
 {
   "app": {
-    "name": "Furniture ERP",
-    "tagline": "Продажи, клиенты и учёт",
+    "name": "Balancy.Space",
+    "tagline": "Упорядочите жизнь в одном месте",
     "loading": "Загрузка…"
   },
   "lang": {
@@ -759,7 +759,7 @@
     }
   },
   "personal": {
-    "appTitle": "Рост",
+    "appTitle": "Balancy.Space",
     "dashboardTitle": "Личные финансы",
     "dashboardHint": "Доходы, расходы, бюджет и цели здесь. Отдельно от ERP магазина.",
     "homeTitle": "Сегодня",
