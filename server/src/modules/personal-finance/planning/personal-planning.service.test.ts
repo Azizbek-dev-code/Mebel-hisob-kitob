@@ -8,33 +8,40 @@ import {
 } from '@furniture-erp/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { prismaMock, recordAuditMock, ensurePersonalLedger } = vi.hoisted(() => ({
-  prismaMock: {
-    workspace: { findUnique: vi.fn() },
-    personalBudget: {
-      findMany: vi.fn(),
-      findFirst: vi.fn(),
-      create: vi.fn(),
-      update: vi.fn(),
+const { prismaMock, recordAuditMock, ensurePersonalLedger, tryAwardXpMock, tryEvaluateAchievementsMock } =
+  vi.hoisted(() => ({
+    prismaMock: {
+      workspace: { findUnique: vi.fn() },
+      personalBudget: {
+        findMany: vi.fn(),
+        findFirst: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+      },
+      personalCategory: { findFirst: vi.fn() },
+      personalEntry: { aggregate: vi.fn() },
+      personalSavingGoal: {
+        findMany: vi.fn(),
+        findFirst: vi.fn(),
+        findFirstOrThrow: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+      },
+      personalGoalContribution: { create: vi.fn() },
     },
-    personalCategory: { findFirst: vi.fn() },
-    personalEntry: { aggregate: vi.fn() },
-    personalSavingGoal: {
-      findMany: vi.fn(),
-      findFirst: vi.fn(),
-      findFirstOrThrow: vi.fn(),
-      create: vi.fn(),
-      update: vi.fn(),
-    },
-    personalGoalContribution: { create: vi.fn() },
-  },
-  recordAuditMock: vi.fn(),
-  ensurePersonalLedger: vi.fn(),
-}));
+    recordAuditMock: vi.fn(),
+    ensurePersonalLedger: vi.fn(),
+    tryAwardXpMock: vi.fn(),
+    tryEvaluateAchievementsMock: vi.fn(),
+  }));
 
 vi.mock('../../../lib/prisma.js', () => ({ prisma: prismaMock }));
 vi.mock('../../../services/audit.service.js', () => ({ recordAudit: recordAuditMock }));
 vi.mock('../ledger/personal-ledger.service.js', () => ({ ensurePersonalLedger }));
+vi.mock('../growth/personal-growth-xp.service.js', () => ({ tryAwardXp: tryAwardXpMock }));
+vi.mock('../growth/personal-growth-achievements.service.js', () => ({
+  tryEvaluateAchievements: tryEvaluateAchievementsMock,
+}));
 
 const {
   addPersonalGoalContribution,
@@ -54,6 +61,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   recordAuditMock.mockResolvedValue(undefined);
   ensurePersonalLedger.mockResolvedValue(undefined);
+  tryAwardXpMock.mockResolvedValue(undefined);
+  tryEvaluateAchievementsMock.mockResolvedValue(undefined);
   prismaMock.workspace.findUnique.mockResolvedValue(WORKSPACE);
   prismaMock.personalEntry.aggregate.mockResolvedValue({ _sum: { amount: 0n } });
 });
@@ -169,6 +178,7 @@ describe('createPersonalSavingGoal', () => {
     expect(goal.contributions).toEqual([]);
     expect(prismaMock.personalSavingGoal.create.mock.calls[0][0].data).not.toHaveProperty('storeId');
     expect(prismaMock.personalSavingGoal.create.mock.calls[0][0].data.monthlyContributionSom).toBe(20_000n);
+    expect(tryEvaluateAchievementsMock).toHaveBeenCalledWith('ws_1', 'idn_1');
   });
 });
 
@@ -184,7 +194,7 @@ describe('addPersonalGoalContribution', () => {
       createdAt: new Date('2026-09-03T12:00:00.000Z'),
       contributions: [],
     });
-    prismaMock.personalGoalContribution.create.mockResolvedValue({});
+    prismaMock.personalGoalContribution.create.mockResolvedValue({ id: 'con_1' });
     prismaMock.personalSavingGoal.findFirstOrThrow.mockResolvedValue({
       id: 'goal_1',
       name: 'Zaxira',
@@ -214,5 +224,14 @@ describe('addPersonalGoalContribution', () => {
     expect(goal.estimatedReachAt).toBeNull();
     expect(goal.etaKind).toBeNull();
     expect(prismaMock.personalSavingGoal.update).not.toHaveBeenCalled();
+    expect(tryAwardXpMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'FINANCE_DISCIPLINE',
+        sourceEntityId: 'finance-contrib:con_1',
+        amount: 15,
+        dayKey: '2026-09-03',
+      }),
+    );
+    expect(tryEvaluateAchievementsMock).toHaveBeenCalledWith('ws_1', 'idn_1');
   });
 });

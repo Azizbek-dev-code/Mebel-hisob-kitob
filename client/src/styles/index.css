@@ -165,3 +165,15 @@
 .pf-amount-negative {
   color: var(--pf-negative);
 }
+
+/* Mobile (≤390px class of phone): prefer 44px taps, avoid accidental zooms. */
+.pf-shell button,
+.pf-shell a,
+.pf-shell [role='button'] {
+  touch-action: manipulation;
+}
+
+.pf-touch-target {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+}

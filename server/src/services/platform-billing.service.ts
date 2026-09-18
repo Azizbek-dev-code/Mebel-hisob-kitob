@@ -9,6 +9,7 @@ import {
   PERSONAL_PAID_MONTHLY_PRICE_SOM,
   PERSONAL_PAID_PERIOD_DAYS,
   PERSONAL_PLAN_KEY,
+  PERSONAL_TRIAL_DAYS,
   PlanAudience,
   STARTER_FEATURE_KEYS,
   STARTER_LIMIT_PRESET,
@@ -69,7 +70,6 @@ import {
 } from '../modules/referrals/referral.service.js';
 import { recordAudit } from './audit.service.js';
 import {
-  attachDefaultEntitlements,
   enabledFeatureKeys,
   ensureFeatureCatalog,
   getCurrentSubscription,
@@ -77,6 +77,7 @@ import {
   planEntitlementInclude,
   planFeaturesRestricted,
   repairFreePlanEntitlements,
+  syncCatalogPlanEntitlements,
   toPlanDto,
   toPlanLimitDtos,
   syncPlanEntitlements,
@@ -248,9 +249,8 @@ export async function listPlans(actorRole: string): Promise<{ items: Subscriptio
   assertPlatform(actorRole);
   await ensureFeatureCatalog();
   const items = await prisma.subscriptionPlan.findMany({
-    where: { audience: PlanAudience.STORE },
     include: planEntitlementInclude,
-    orderBy: [{ rank: 'asc' }, { monthlyPrice: 'asc' }],
+    orderBy: [{ audience: 'asc' }, { rank: 'asc' }, { monthlyPrice: 'asc' }],
   });
   return { items: items.map(toPlanDto) };
 }
@@ -266,8 +266,15 @@ export async function createPlan(
   if (!Number.isInteger(body.monthlyPrice) || body.monthlyPrice < 0) {
     throw ApiError.validation("Narx noto'g'ri", [{ field: 'monthlyPrice', message: "Narx butun so'm bo'lsin" }]);
   }
+  const audience =
+    body.audience === PlanAudience.PERSONAL ? PlanAudience.PERSONAL : PlanAudience.STORE;
+  if (audience === PlanAudience.PERSONAL && body.isDefaultTrial) {
+    throw ApiError.validation('Shaxsiy tarif do‘kon sinov tarifiga aylantirilmaydi', [
+      { field: 'isDefaultTrial', message: 'Faqat do‘kon tariflari uchun' },
+    ]);
+  }
   try {
-    if (body.isDefaultTrial) {
+    if (body.isDefaultTrial && audience === PlanAudience.STORE) {
       await prisma.subscriptionPlan.updateMany({ data: { isDefaultTrial: false } });
     }
     const plan = await prisma.subscriptionPlan.create({
@@ -277,16 +284,18 @@ export async function createPlan(
         monthlyPrice: BigInt(body.monthlyPrice),
         currency: body.currency?.trim() || 'UZS',
         trialDays: body.trialDays ?? 0,
-        isDefaultTrial: body.isDefaultTrial ?? false,
+        isDefaultTrial: audience === PlanAudience.STORE ? (body.isDefaultTrial ?? false) : false,
         rank: body.rank ?? (body.isDefaultTrial ? 0 : 1),
-        audience: PlanAudience.STORE,
+        audience,
         features: (body.features ?? {}) as Prisma.InputJsonValue,
       },
     });
-    await syncPlanEntitlements(plan.id, {
-      featureKeys: body.featureKeys,
-      limits: body.limits,
-    });
+    if (audience === PlanAudience.STORE) {
+      await syncPlanEntitlements(plan.id, {
+        featureKeys: body.featureKeys,
+        limits: body.limits,
+      });
+    }
     await recordAudit({
       storeId: null,
       actorUserId: actor.id,
@@ -294,7 +303,7 @@ export async function createPlan(
       entityType: AuditEntityType.SUBSCRIPTION_PLAN,
       entityId: plan.id,
       summary: `Plan created: ${plan.name}`,
-      metadata: { name: plan.name, monthlyPrice: body.monthlyPrice },
+      metadata: { name: plan.name, monthlyPrice: body.monthlyPrice, audience },
     });
     const loaded = await loadPlan(plan.id);
     return toPlanDto(loaded!);
@@ -316,7 +325,16 @@ export async function updatePlan(
   const existing = await prisma.subscriptionPlan.findUnique({ where: { id: planId } });
   if (!existing) throw ApiError.notFound('Tarif topilmadi');
 
-  if (body.isDefaultTrial) {
+  if (body.monthlyPrice !== undefined && (!Number.isInteger(body.monthlyPrice) || body.monthlyPrice < 0)) {
+    throw ApiError.validation("Narx noto'g'ri", [{ field: 'monthlyPrice', message: "Narx butun so'm bo'lsin" }]);
+  }
+  if (body.trialDays !== undefined && (!Number.isInteger(body.trialDays) || body.trialDays < 0)) {
+    throw ApiError.validation('Sinov kunlari noto‘g‘ri', [
+      { field: 'trialDays', message: 'Manfiy bo‘lishi mumkin emas' },
+    ]);
+  }
+
+  if (body.isDefaultTrial && existing.audience === PlanAudience.STORE) {
     await prisma.subscriptionPlan.updateMany({
       where: { id: { not: planId } },
       data: { isDefaultTrial: false },
@@ -331,15 +349,19 @@ export async function updatePlan(
       ...(body.monthlyPrice !== undefined ? { monthlyPrice: BigInt(body.monthlyPrice) } : {}),
       ...(body.trialDays !== undefined ? { trialDays: body.trialDays } : {}),
       ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
-      ...(body.isDefaultTrial !== undefined ? { isDefaultTrial: body.isDefaultTrial } : {}),
+      ...(body.isDefaultTrial !== undefined && existing.audience === PlanAudience.STORE
+        ? { isDefaultTrial: body.isDefaultTrial }
+        : {}),
       ...(body.rank !== undefined ? { rank: body.rank } : {}),
       ...(body.features !== undefined ? { features: body.features as Prisma.InputJsonValue } : {}),
     },
   });
-  await syncPlanEntitlements(planId, {
-    featureKeys: body.featureKeys,
-    limits: body.limits,
-  });
+  if (existing.audience === PlanAudience.STORE) {
+    await syncPlanEntitlements(planId, {
+      featureKeys: body.featureKeys,
+      limits: body.limits,
+    });
+  }
   await recordAudit({
     storeId: null,
     actorUserId: actor.id,
@@ -347,7 +369,11 @@ export async function updatePlan(
     entityType: AuditEntityType.SUBSCRIPTION_PLAN,
     entityId: planId,
     summary: `Plan updated: ${existing.name}`,
-    metadata: { isActive: body.isActive ?? existing.isActive },
+    metadata: {
+      isActive: body.isActive ?? existing.isActive,
+      monthlyPrice: body.monthlyPrice,
+      audience: existing.audience,
+    },
   });
   const loaded = await loadPlan(planId);
   return toPlanDto(loaded!);
@@ -546,6 +572,21 @@ export async function listInvoices(
 
 type BillingTx = Prisma.TransactionClient;
 
+async function resolvePersonalPaidPeriodDays(tx: BillingTx, planId: string): Promise<number> {
+  const plan = await tx.subscriptionPlan.findUnique({
+    where: { id: planId },
+    select: { features: true, trialDays: true },
+  });
+  const features = plan?.features;
+  if (features && typeof features === 'object' && !Array.isArray(features)) {
+    const raw = (features as Record<string, unknown>).periodDays;
+    const days = typeof raw === 'number' ? raw : Number(raw);
+    if (Number.isFinite(days) && days > 0) return Math.floor(days);
+  }
+  if (plan?.trialDays && plan.trialDays > 0) return plan.trialDays;
+  return PERSONAL_PAID_PERIOD_DAYS;
+}
+
 async function activatePaidPeriod(
   tx: BillingTx,
   input: {
@@ -646,6 +687,17 @@ export async function recordPayment(
       });
     }
 
+    await grantFirstPaymentCommission(
+      {
+        storeId: invoice.storeId,
+        sourceType: ReferralPaymentSourceType.PLATFORM_INVOICE,
+        sourceId: updated.id,
+        sourceAmountSom: updated.amount,
+        paid: updated.status === PlatformBillingStatus.PAID,
+      },
+      tx,
+    );
+
     return {
       updated,
       unblocked:
@@ -685,14 +737,6 @@ export async function recordPayment(
       metadata: { reason: 'payment' },
     });
   }
-
-  await grantFirstPaymentCommission({
-    storeId: result.updated.storeId,
-    sourceType: ReferralPaymentSourceType.PLATFORM_INVOICE,
-    sourceId: result.updated.id,
-    sourceAmountSom: result.updated.amount,
-    paid: result.updated.status === PlatformBillingStatus.PAID,
-  });
 
   return toInvoiceDto(result.updated);
 }
@@ -1678,18 +1722,40 @@ export async function seedDefaultPlansAndBackfill(): Promise<void> {
         features: plan.features as Prisma.InputJsonValue,
       },
     });
-    await attachDefaultEntitlements(saved.id, plan.featureKeys, plan.limits);
+    await syncCatalogPlanEntitlements(saved.id, plan.featureKeys, plan.limits);
   }
+
+  await prisma.subscriptionPlan.upsert({
+    where: { name: PERSONAL_PLAN_KEY.TRIAL },
+    update: {
+      // Preserve admin-edited trialDays / description / isActive.
+      audience: PlanAudience.PERSONAL,
+      isDefaultTrial: false,
+      monthlyPrice: 0n,
+      rank: 0,
+    },
+    create: {
+      name: PERSONAL_PLAN_KEY.TRIAL,
+      description: 'Shaxsiy moliya 7 kunlik sinov',
+      monthlyPrice: 0n,
+      currency: 'UZS',
+      trialDays: PERSONAL_TRIAL_DAYS,
+      isActive: true,
+      isDefaultTrial: false,
+      rank: 0,
+      audience: PlanAudience.PERSONAL,
+      features: { periodDays: PERSONAL_TRIAL_DAYS },
+    },
+  });
 
   await prisma.subscriptionPlan.upsert({
     where: { name: PERSONAL_PLAN_KEY.PAID },
     update: {
-      monthlyPrice: BigInt(PERSONAL_PAID_MONTHLY_PRICE_SOM),
-      description: 'Shaxsiy moliya pullik tarif',
-      isActive: true,
+      // Do not overwrite monthlyPrice / trialDays / description / isActive —
+      // admins edit those from the platform plans UI.
+      audience: PlanAudience.PERSONAL,
       isDefaultTrial: false,
       rank: 1,
-      audience: PlanAudience.PERSONAL,
     },
     create: {
       name: PERSONAL_PLAN_KEY.PAID,
@@ -1701,7 +1767,7 @@ export async function seedDefaultPlansAndBackfill(): Promise<void> {
       isDefaultTrial: false,
       rank: 1,
       audience: PlanAudience.PERSONAL,
-      features: {},
+      features: { periodDays: PERSONAL_PAID_PERIOD_DAYS },
     },
   });
 
@@ -1855,7 +1921,7 @@ export async function approveSubscriptionRequest(
     const end = body.endDate
       ? new Date(body.endDate)
       : request.workspaceId
-        ? addCalendarDays(start, PERSONAL_PAID_PERIOD_DAYS)
+        ? addCalendarDays(start, await resolvePersonalPaidPeriodDays(tx, request.planId))
         : addMonthsClamped(start, 1);
     if (Number.isNaN(end.getTime()) || end <= start) {
       throw ApiError.validation('Sana oralig‘i noto‘g‘ri');
@@ -1877,6 +1943,16 @@ export async function approveSubscriptionRequest(
         data: { createdSubscriptionId: personal.id },
         include: requestInclude,
       });
+      await grantFirstPaymentCommission(
+        {
+          referredWorkspaceId: request.workspaceId,
+          sourceType: ReferralPaymentSourceType.SUBSCRIPTION_REQUEST,
+          sourceId: updatedRequest.id,
+          sourceAmountSom: updatedRequest.requestedPriceSnapshot,
+          paid: true,
+        },
+        tx,
+      );
       return { updatedRequest, invoice: null };
     }
 
@@ -1931,6 +2007,17 @@ export async function approveSubscriptionRequest(
       });
     }
 
+    await grantFirstPaymentCommission(
+      {
+        storeId: request.storeId,
+        sourceType: ReferralPaymentSourceType.PLATFORM_INVOICE,
+        sourceId: invoice.id,
+        sourceAmountSom: invoice.amount,
+        paid: true,
+      },
+      tx,
+    );
+
     return { updatedRequest, invoice };
   });
 
@@ -1950,24 +2037,6 @@ export async function approveSubscriptionRequest(
       workspaceId: result.updatedRequest.workspaceId,
     },
   });
-
-  if (result.invoice) {
-    await grantFirstPaymentCommission({
-      storeId: result.updatedRequest.storeId,
-      sourceType: ReferralPaymentSourceType.PLATFORM_INVOICE,
-      sourceId: result.invoice.id,
-      sourceAmountSom: result.invoice.amount,
-      paid: true,
-    });
-  } else if (result.updatedRequest.workspaceId) {
-    await grantFirstPaymentCommission({
-      referredWorkspaceId: result.updatedRequest.workspaceId,
-      sourceType: ReferralPaymentSourceType.SUBSCRIPTION_REQUEST,
-      sourceId: result.updatedRequest.id,
-      sourceAmountSom: result.updatedRequest.requestedPriceSnapshot,
-      paid: true,
-    });
-  }
 
   return {
     request: requestDto,

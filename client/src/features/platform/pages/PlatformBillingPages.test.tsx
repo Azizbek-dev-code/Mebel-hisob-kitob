@@ -10,7 +10,7 @@ import { PlatformPaymentsHistoryPage } from './PlatformPaymentsPages';
 import { PlatformSubscriptionRequestsPage } from './PlatformSubscriptionRequestsPage';
 import { AccessBlockedPage } from './AccessBlockedPage';
 import { TEST_ADMIN } from '@/test/auth-fixtures';
-import { StoreAccessStatus } from '@furniture-erp/shared';
+import { PlanAudience, StoreAccessStatus } from '@furniture-erp/shared';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -32,8 +32,35 @@ describe('platform billing UI', () => {
                 description: 'Asosiy',
                 monthlyPrice: 150000,
                 currency: 'UZS',
+                trialDays: 0,
                 isActive: true,
+                isDefaultTrial: false,
+                rank: 1,
+                audience: PlanAudience.STORE,
                 features: {},
+                featureKeys: [],
+                featuresRestricted: false,
+                enabledFeatures: [],
+                limits: [],
+                createdAt: '2026-01-01T00:00:00.000Z',
+                updatedAt: '2026-01-01T00:00:00.000Z',
+              },
+              {
+                id: 'plan_personal_pro',
+                name: 'PRO',
+                description: 'Shaxsiy pullik',
+                monthlyPrice: 100000,
+                currency: 'UZS',
+                trialDays: 7,
+                isActive: true,
+                isDefaultTrial: false,
+                rank: 2,
+                audience: PlanAudience.PERSONAL,
+                features: {},
+                featureKeys: [],
+                featuresRestricted: false,
+                enabledFeatures: [],
+                limits: [],
                 createdAt: '2026-01-01T00:00:00.000Z',
                 updatedAt: '2026-01-01T00:00:00.000Z',
               },
@@ -48,8 +75,10 @@ describe('platform billing UI', () => {
       </MemoryRouter>,
     );
     expect(await screen.findByText('START')).toBeInTheDocument();
-    expect(screen.getByText('Pullik')).toBeInTheDocument();
-    expect(screen.getByText('Sinov')).toBeInTheDocument();
+    expect(screen.getByText('Business tariflar')).toBeInTheDocument();
+    expect(screen.getByText(/Shaxsiy tariflar/)).toBeInTheDocument();
+    expect(screen.getByText('PRO')).toBeInTheDocument();
+    expect(screen.getAllByText('Faol').length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByText('Gilam')).not.toBeInTheDocument();
     expect(container.querySelector('.overflow-x-hidden')).toBeTruthy();
   });

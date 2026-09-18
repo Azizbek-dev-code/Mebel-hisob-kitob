@@ -87,10 +87,14 @@ async function reverseOpenCommission(
     type: string;
     description: string | null;
     responsibility?: string | null;
+    /** Keep reversal in the same month as the original commission (saleDate-based). */
+    transactionDate?: Date;
   },
   actorId: string,
   reason: string,
   client?: WorkerFinancialTxClient,
+  /** Fallback when original.transactionDate is missing (e.g. sale.saleDate). */
+  businessDate?: Date,
 ): Promise<void> {
   const already = await workerFinancialRepository.findReversalOf(storeId, original.id, client);
   if (already) return;
@@ -104,7 +108,8 @@ async function reverseOpenCommission(
       workerId: original.workerId,
       type: WorkerFinancialTransactionType.REVERSAL,
       amount,
-      transactionDate: new Date(),
+      // Historical sales: never stamp wall-clock month — net the same period as the earn.
+      transactionDate: original.transactionDate ?? businessDate ?? new Date(),
       description: reason,
       referenceType: WorkerFinancialReferenceType.REVERSAL,
       referenceId: original.id,
@@ -235,11 +240,15 @@ export async function syncSellerCommissionForSale(options: {
 
   for (const row of existing) {
     const want = row.referenceId ? desired.get(row.referenceId) : undefined;
-    const same =
+    const sameAmountAndWorker =
       want &&
       want.workerId === row.workerId &&
       fromDbMoney(row.amount) === want.line.amount;
-    if (same) {
+    // Historical saleDate edits must re-stamp the ledger month even when amount is unchanged.
+    const sameBusinessDate =
+      row.transactionDate instanceof Date &&
+      row.transactionDate.getTime() === sale.saleDate.getTime();
+    if (sameAmountAndWorker && sameBusinessDate) {
       desired.delete(row.referenceId!);
       continue;
     }
@@ -249,6 +258,8 @@ export async function syncSellerCommissionForSale(options: {
       options.actorId,
       `Reversal · Sotuv #${sale.saleNumber} komissiyasi qayta hisoblandi`,
       options.client,
+      // Prefer original commission date so August→September edit nets August correctly.
+      row.transactionDate instanceof Date ? row.transactionDate : sale.saleDate,
     );
     reversed += 1;
   }

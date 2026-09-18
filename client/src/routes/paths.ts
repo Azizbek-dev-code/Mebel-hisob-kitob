@@ -6,8 +6,28 @@ export const ROUTES = {
   onboarding: '/onboarding',
   onboardingComplete: '/onboarding/complete',
   personalDashboard: '/personal/dashboard',
-  personalHistory: '/personal/history',
+  /** Calendar / daily plan hub (Growth Phase 3+). */
+  personalPlan: '/personal/plan',
+  /** Productivity hub: learning, habits, focus, social (Growth). */
+  personalGrowth: '/personal/growth',
+  personalGrowthTodos: '/personal/growth/todos',
+  personalGrowthFocus: '/personal/growth/focus',
+  personalGrowthHabits: '/personal/growth/habits',
+  personalGrowthLearning: '/personal/growth/learning',
+  personalGrowthLevel: '/personal/growth/level',
+  personalGrowthAchievements: '/personal/growth/achievements',
+  personalGrowthFriends: '/personal/growth/friends',
+  personalGrowthChallenges: '/personal/growth/challenges',
+  personalGrowthSocial: '/personal/growth/social',
+  personalGrowthNotifications: '/personal/growth/notifications',
+  personalGrowthReviews: '/personal/growth/reviews',
+  /** Finance hub — wallets, history, budgets, saving goals, analytics. */
+  personalFinance: '/personal/finance',
+  /** Profile / account settings (replaces primary “Sozlamalar” tab). */
+  personalProfile: '/personal/profile',
+  /** @deprecated Prefer personalProfile — kept for deep links / redirects. */
   personalSettings: '/personal/settings',
+  personalHistory: '/personal/history',
   personalBilling: '/personal/billing',
   personalReferral: '/personal/referral',
   personalAccounts: '/personal/accounts',

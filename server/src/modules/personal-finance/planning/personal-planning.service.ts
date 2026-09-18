@@ -2,14 +2,17 @@ import {
   AuditEntityType,
   AuditEventType,
   ExpenseStatus,
+  GrowthXpSource,
   PersonalBudgetKind,
   PersonalCategoryKind,
   PersonalEntryType,
   PersonalSavingGoalStatus,
   WorkspaceStatus,
   WorkspaceType,
+  XP_FINANCE_CONTRIBUTION,
   budgetProgress,
   projectGoal,
+  toDayKey,
   type CreatePersonalBudgetRequest,
   type CreatePersonalGoalContributionRequest,
   type CreatePersonalSavingGoalRequest,
@@ -26,6 +29,8 @@ import { fromDbMoney, fromDbMoneySum, toDbMoney } from '../../../lib/money-mappe
 import { prisma as defaultPrisma } from '../../../lib/prisma.js';
 import { recordAudit } from '../../../services/audit.service.js';
 import { ApiError } from '../../../utils/api-error.js';
+import { tryEvaluateAchievements } from '../growth/personal-growth-achievements.service.js';
+import { tryAwardXp } from '../growth/personal-growth-xp.service.js';
 import { ensurePersonalLedger } from '../ledger/personal-ledger.service.js';
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
@@ -384,6 +389,7 @@ export async function createPersonalSavingGoal(
     summary: `Personal saving goal created: ${row.name}`,
     metadata: { workspaceId, identityId },
   });
+  await tryEvaluateAchievements(workspaceId, identityId).catch(() => undefined);
   return toGoalDto(row);
 }
 
@@ -466,7 +472,7 @@ export async function addPersonalGoalContribution(
     throw ApiError.validation('Sanani kiriting', [{ field: 'occurredAt', message: 'Sana noto‘g‘ri' }]);
   }
 
-  await db.personalGoalContribution.create({
+  const contribution = await db.personalGoalContribution.create({
     data: {
       goalId,
       amountSom: toDbMoney(input.amount),
@@ -499,5 +505,19 @@ export async function addPersonalGoalContribution(
     summary: `Personal goal contribution recorded`,
     metadata: { workspaceId, identityId, amount: input.amount },
   });
+
+  // Flat contribution XP — never ∝ money amount.
+  const dayKey = toDayKey(occurredAt);
+  await tryAwardXp({
+    workspaceId,
+    identityId,
+    source: GrowthXpSource.FINANCE_DISCIPLINE,
+    sourceEntityId: `finance-contrib:${contribution.id}`,
+    amount: XP_FINANCE_CONTRIBUTION,
+    summary: 'Saving contribution',
+    dayKey,
+  });
+  await tryEvaluateAchievements(workspaceId, identityId).catch(() => undefined);
+
   return toGoalDto(completed);
 }

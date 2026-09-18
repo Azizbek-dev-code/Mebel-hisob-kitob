@@ -16,6 +16,8 @@ export interface SubscriptionPlanFeatures {
   highlights?: string[];
   maxUsers?: number | null;
   maxProducts?: number | null;
+  /** Personal paid period length in days (admin-editable). */
+  periodDays?: number;
 }
 
 export interface FeatureDto {
@@ -105,6 +107,8 @@ export interface CreateSubscriptionPlanBody {
   trialDays?: number;
   isDefaultTrial?: boolean;
   rank?: number;
+  /** Defaults to STORE. PERSONAL plans must not use store ERP feature catalogs. */
+  audience?: PlanAudience;
   featureKeys?: string[];
   limits?: PlanLimitInput[];
   features?: SubscriptionPlanFeatures;

@@ -286,7 +286,7 @@ describe('GET /api/auth/me', () => {
       .set('Cookie', `${AUTH_COOKIE_NAME}=not.a.real.token`)
       .expect(401);
 
-    expect(response.body.error.message).toBe('Your session has expired. Please sign in again.');
+    expect(response.body.error.message).toBe('Sessiyangiz muddati tugadi. Iltimos, qayta kiring.');
     expect(authCookie(response)).toContain('Expires=Thu, 01 Jan 1970');
   });
 

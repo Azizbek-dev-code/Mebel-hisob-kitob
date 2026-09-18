@@ -137,10 +137,12 @@ async function reverseOpenCommission(
     type: string;
     description: string | null;
     responsibility?: string | null;
+    transactionDate?: Date;
   },
   actorId: string,
   reason: string,
   client: WorkerFinancialTxClient,
+  businessDate?: Date,
 ): Promise<void> {
   const already = await workerFinancialRepository.findReversalOf(storeId, original.id, client);
   if (already) return;
@@ -151,7 +153,8 @@ async function reverseOpenCommission(
       workerId: original.workerId,
       type: WorkerFinancialTransactionType.REVERSAL,
       amount: fromDbMoney(original.amount),
-      transactionDate: new Date(),
+      // Keep reverse in the same business month as the original fee (not wall clock).
+      transactionDate: original.transactionDate ?? businessDate ?? new Date(),
       description: reason,
       referenceType: WorkerFinancialReferenceType.REVERSAL,
       referenceId: original.id,

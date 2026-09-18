@@ -14,7 +14,7 @@ const { prismaMock, recordAuditMock } = vi.hoisted(() => ({
       create: vi.fn(),
       update: vi.fn(),
     },
-    subscriptionPlan: { findFirst: vi.fn() },
+    subscriptionPlan: { findFirst: vi.fn(), findMany: vi.fn() },
     subscriptionRequest: {
       findFirst: vi.fn(),
       findMany: vi.fn(),
@@ -47,6 +47,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   recordAuditMock.mockResolvedValue(undefined);
   prismaMock.subscriptionRequest.findFirst.mockResolvedValue(null);
+  prismaMock.subscriptionPlan.findMany.mockResolvedValue([]);
 });
 
 describe('toPersonalSubscriptionSnapshot', () => {
@@ -155,11 +156,32 @@ describe('getPersonalBilling', () => {
       trialEndsAt: new Date('2026-09-20T00:00:00.000Z'),
       currentPeriodEnd: new Date('2026-09-20T00:00:00.000Z'),
     });
+    prismaMock.subscriptionPlan.findMany.mockResolvedValue([
+      {
+        name: PERSONAL_PLAN_KEY.TRIAL,
+        monthlyPrice: 0n,
+        trialDays: 7,
+        rank: 0,
+        isActive: true,
+        features: { periodDays: 7 },
+      },
+      {
+        name: PERSONAL_PLAN_KEY.PAID,
+        monthlyPrice: 49000n,
+        trialDays: 0,
+        rank: 1,
+        isActive: true,
+        features: { periodDays: 30 },
+      },
+    ]);
     const billing = await getPersonalBilling('ws_1');
     expect(billing.plans.map((plan) => plan.key)).toEqual([
       PERSONAL_PLAN_KEY.TRIAL,
       PERSONAL_PLAN_KEY.PAID,
     ]);
+    expect(billing.plans.find((plan) => plan.key === PERSONAL_PLAN_KEY.PAID)?.monthlyPriceSom).toBe(
+      49000,
+    );
   });
 });
 

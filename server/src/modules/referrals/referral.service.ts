@@ -114,19 +114,50 @@ export async function resolveReferralCode(
 export async function recordReferralClick(
   raw: string,
   visitorKey: string,
+  opts: { actorIdentityId?: string | null } = {},
   db: DbClient = defaultPrisma,
 ): Promise<{ code: string; visitorKey: string }> {
   const resolved = await resolveReferralCode(raw, db);
   if (!resolved.valid) throw ApiError.notFound('Referral havola topilmadi');
   const row = await db.referralCode.findUnique({
     where: { code: resolved.code },
-    select: { id: true },
+    select: { id: true, identityId: true },
   });
   if (!row) throw ApiError.notFound('Referral havola topilmadi');
+  if (opts.actorIdentityId && opts.actorIdentityId === row.identityId) {
+    throw ApiError.conflict('O‘z referral havolangizni ishlatib bo‘lmaydi');
+  }
   await db.referralClick.create({
     data: { referralCodeId: row.id, visitorKey },
   });
   return { code: resolved.code, visitorKey };
+}
+
+function normalizeEmail(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const email = value.trim().toLowerCase();
+  return email.includes('@') ? email : null;
+}
+
+async function isSelfReferral(
+  referrerIdentityId: string,
+  referredIdentityId: string,
+  db: DbClient,
+): Promise<boolean> {
+  if (referrerIdentityId === referredIdentityId) return true;
+  const [referrer, referred] = await Promise.all([
+    db.identity.findUnique({
+      where: { id: referrerIdentityId },
+      select: { email: true },
+    }),
+    db.identity.findUnique({
+      where: { id: referredIdentityId },
+      select: { email: true },
+    }),
+  ]);
+  const left = normalizeEmail(referrer?.email);
+  const right = normalizeEmail(referred?.email);
+  return Boolean(left && right && left === right);
 }
 
 export async function attributeRegistration(
@@ -156,7 +187,7 @@ export async function attributeRegistration(
     select: { id: true, identityId: true, isActive: true },
   });
   if (!referral?.isActive) return;
-  if (referral.identityId === input.referredIdentityId) return;
+  if (await isSelfReferral(referral.identityId, input.referredIdentityId, db)) return;
 
   try {
     await db.referralAttribution.create({
@@ -246,6 +277,7 @@ export async function grantFirstPaymentCommission(
     where: { referredIdentityId },
   });
   if (!attribution || attribution.firstPaidAt) return;
+  if (await isSelfReferral(attribution.referrerIdentityId, referredIdentityId, db)) return;
 
   const amount = BigInt(
     computeReferralCommission(money(input.sourceAmountSom), program.percent),

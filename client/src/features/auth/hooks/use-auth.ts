@@ -31,7 +31,11 @@ export function useCurrentUser(): UseQueryResult<AuthPrincipal | null, Error> {
         throw error;
       }
     },
-    staleTime: 5 * 60_000,
+    // Subscription/feature keys must not stay stale after an admin approve or
+    // account switch — a 5-minute cache was causing false "tarifingizda yo‘q"
+    // gates while the backend already granted the paid plan.
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
     retry: false,
   });
 }

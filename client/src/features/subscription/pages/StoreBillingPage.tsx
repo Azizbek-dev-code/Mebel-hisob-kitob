@@ -4,12 +4,14 @@ import {
   SUBSCRIPTION_STATUS_LABELS,
   canRequestPaidPlan,
   formatMoney,
+  isPersonalAuth,
+  type AuthPrincipal,
   type RequestStoreSubscriptionBody,
   type StoreSubscriptionDto,
   type SubscriptionPlanDto,
 } from '@furniture-erp/shared';
 import { Tags } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { EmptyState } from '@/components/feedback/EmptyState';
@@ -19,7 +21,7 @@ import { Badge } from '@/components/ui/Badge';
 import { SectionCard } from '@/components/ui/SectionCard';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { PaymentRequestModal } from '@/features/billing/components/PaymentRequestModal';
-import { useCurrentUser } from '@/features/auth/hooks/use-auth';
+import { authQueryKeys, useCurrentUser } from '@/features/auth/hooks/use-auth';
 import { ApiClientError } from '@/lib/api-client';
 import { storeBillingService } from '@/services/store-billing.service';
 import { formatDate } from '@/utils/format';
@@ -57,7 +59,7 @@ export function StoreBillingPage() {
     onSuccess: () => {
       setSelected(null);
       setSuccess("Tarifni o‘zgartirish so‘rovi yuborildi. Platforma administratori ko‘rib chiqadi.");
-      void queryClient.invalidateQueries({ queryKey: ['auth'] });
+      void queryClient.invalidateQueries({ queryKey: authQueryKeys.currentUser });
       void queryClient.invalidateQueries({ queryKey: ['store-billing-subscription'] });
       void queryClient.invalidateQueries({ queryKey: ['store-billing-requests'] });
     },
@@ -65,7 +67,7 @@ export function StoreBillingPage() {
   const cancel = useMutation({
     mutationFn: (id: string) => storeBillingService.cancelRequest(id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['auth'] });
+      void queryClient.invalidateQueries({ queryKey: authQueryKeys.currentUser });
       void queryClient.invalidateQueries({ queryKey: ['store-billing-subscription'] });
       void queryClient.invalidateQueries({ queryKey: ['store-billing-requests'] });
     },
@@ -74,6 +76,30 @@ export function StoreBillingPage() {
   const subscription = current.data?.subscription ?? null;
   const pendingRequest = (requests.data?.items ?? []).find((row) => row.status === 'PENDING');
   const hasPending = Boolean(user?.subscription?.hasPendingPaymentRequest || pendingRequest);
+
+  useEffect(() => {
+    if (!subscription || isPersonalAuth(user)) return;
+    queryClient.setQueryData<AuthPrincipal | null>(authQueryKeys.currentUser, (prev) => {
+      if (!prev || isPersonalAuth(prev) || !prev.subscription) return prev;
+      return {
+        ...prev,
+        subscription: {
+          ...prev.subscription,
+          status: subscription.status,
+          storedStatus: subscription.storedStatus,
+          planId: subscription.planId,
+          planName: subscription.planName,
+          trialEndsAt: subscription.trialEndsAt,
+          currentPeriodEnd: subscription.currentPeriodEnd,
+          trialWelcomeSeenAt: subscription.trialWelcomeSeenAt,
+          daysRemaining: subscription.daysRemaining,
+          canWrite: subscription.canWrite,
+          featureKeys: subscription.featureKeys,
+          featuresRestricted: subscription.featuresRestricted,
+        },
+      };
+    });
+  }, [queryClient, subscription, user]);
 
   return (
     <PageContainer className="space-y-6 overflow-x-hidden">

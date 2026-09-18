@@ -25,7 +25,7 @@ export function PersonalLayout() {
   const { pathname } = useLocation();
   const { data: user } = useCurrentUser();
   const title =
-    user && isPersonalAuth(user) ? t('personal.dashboardTitle') : (user?.storeName ?? t('app.name'));
+    user && isPersonalAuth(user) ? t('personal.appTitle') : (user?.storeName ?? t('app.name'));
 
   return (
     <div className="pf-shell min-h-dvh overflow-x-hidden bg-canvas">
@@ -74,7 +74,7 @@ export function PersonalLayout() {
                 <NavLink
                   to={item.to}
                   className={cn(
-                    'flex min-h-14 flex-col items-center justify-center gap-0.5 px-0.5 text-[11px] leading-tight',
+                    'flex min-h-14 flex-col items-center justify-center gap-0.5 px-0.5 text-[10px] leading-tight sm:text-[11px]',
                     active ? 'text-brand-700' : 'text-ink-muted',
                   )}
                 >

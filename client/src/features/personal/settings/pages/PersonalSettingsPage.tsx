@@ -9,18 +9,19 @@ import { AccountSwitcher } from '@/features/accounts/components/AccountSwitcher'
 import { AccountWorkspaceList, currentWorkspaceId } from '@/features/accounts/components/AccountWorkspaceList';
 import { useAccountWorkspaces } from '@/features/accounts/hooks/use-accounts';
 import { useCurrentUser } from '@/features/auth/hooks/use-auth';
+import { HubLinkList, type HubLinkItem } from '@/features/personal/components/HubLinkList';
 import { ROUTES } from '@/routes/paths';
 
-const LINKS = [
-  { to: ROUTES.personalAccounts, labelKey: 'personal.wallets', hintKey: 'personal.walletsHint' },
-  { to: ROUTES.personalCategories, labelKey: 'personal.categories', hintKey: 'personal.categoriesHint' },
-  { to: ROUTES.personalRecurring, labelKey: 'personal.recurring', hintKey: 'personal.recurringHint' },
-  { to: ROUTES.personalDebts, labelKey: 'personal.debts', hintKey: 'personal.debtsHint' },
-  { to: ROUTES.personalNotifications, labelKey: 'personal.notifications', hintKey: 'personal.notificationsHint' },
-  { to: ROUTES.personalAnalytics, labelKey: 'personal.analytics', hintKey: 'personal.analyticsHint' },
+/** Profile-tab links — finance modules live under Moliya hub. */
+const PROFILE_LINKS: readonly HubLinkItem[] = [
+  {
+    to: ROUTES.personalNotifications,
+    labelKey: 'personal.notifications',
+    hintKey: 'personal.notificationsHint',
+  },
   { to: ROUTES.personalBilling, labelKey: 'personal.billingTitle', hintKey: 'personal.billingHint' },
   { to: ROUTES.personalReferral, labelKey: 'personal.referralTitle', hintKey: 'personal.referralHint' },
-] as const;
+];
 
 export function PersonalSettingsPage() {
   const { t } = useTranslation();
@@ -39,11 +40,8 @@ export function PersonalSettingsPage() {
   return (
     <div className="space-y-5 overflow-x-hidden">
       <div>
-        <h1 className="text-lg font-semibold tracking-tight text-ink">{t('personal.settings')}</h1>
-        <p className="mt-1 text-sm text-ink-muted">{t('personal.settingsHint')}</p>
-        <p className="mt-2 rounded-xl border border-line bg-surface-muted px-3 py-2 text-sm text-ink-soft">
-          {t('personal.walletsVsCategories')}
-        </p>
+        <h1 className="text-lg font-semibold tracking-tight text-ink">{t('personal.navProfile')}</h1>
+        <p className="mt-1 text-sm text-ink-muted">{t('personal.profileHint')}</p>
       </div>
 
       <section className="rounded-2xl border border-line bg-surface px-4 py-3.5">
@@ -54,6 +52,9 @@ export function PersonalSettingsPage() {
             </p>
             <p className="mt-1 text-sm font-medium text-ink">{currentName}</p>
             {user?.email ? <p className="mt-0.5 truncate text-xs text-ink-muted">{user.email}</p> : null}
+            {user?.fullName ? (
+              <p className="mt-0.5 truncate text-xs text-ink-muted">{user.fullName}</p>
+            ) : null}
           </div>
           <AccountSwitcher variant="avatar" includeSessionActions />
         </div>
@@ -83,19 +84,7 @@ export function PersonalSettingsPage() {
         <ChevronRight className="size-4 shrink-0 text-ink-subtle" aria-hidden="true" />
       </Link>
 
-      <ul className="overflow-hidden rounded-2xl border border-line bg-surface">
-        {LINKS.map((item) => (
-          <li key={item.to} className="border-b border-line last:border-b-0">
-            <Link to={item.to} className="flex items-center gap-3 px-4 py-3.5 hover:bg-surface-hover">
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-medium text-ink">{t(item.labelKey)}</span>
-                <span className="mt-0.5 block text-xs text-ink-muted">{t(item.hintKey)}</span>
-              </span>
-              <ChevronRight className="size-4 shrink-0 text-ink-subtle" aria-hidden="true" />
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <HubLinkList items={PROFILE_LINKS} />
 
       <div className="rounded-2xl border border-line bg-surface px-2 py-1">
         <SignOutButton className="text-danger-700 hover:bg-danger-50" />

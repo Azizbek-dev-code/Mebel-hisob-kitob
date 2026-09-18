@@ -40,6 +40,7 @@ const { prismaMock, ensureIdentityForUser } = vi.hoisted(() => ({
     },
     workspaceMembership: { findFirst: vi.fn() },
     user: { findFirst: vi.fn() },
+    identity: { findUnique: vi.fn() },
     personalEntry: { findMany: vi.fn(), create: vi.fn() },
     sale: { findMany: vi.fn(), create: vi.fn() },
   },
@@ -84,6 +85,10 @@ beforeEach(() => {
   );
   prismaMock.platformSettings.findUnique.mockResolvedValue(SETTINGS);
   prismaMock.referralCode.findUnique.mockResolvedValue(CODE);
+  prismaMock.identity.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => ({
+    id: where.id,
+    email: `${where.id}@example.com`,
+  }));
   prismaMock.personalEntry.findMany.mockResolvedValue([]);
   prismaMock.sale.findMany.mockResolvedValue([]);
 });
@@ -139,6 +144,23 @@ describe('click and attribution', () => {
       code: 'ABX7K29Q',
     });
     expect(prismaMock.referralAttribution.create).not.toHaveBeenCalled();
+  });
+
+  it('blocks self-referral when emails match across different identities', async () => {
+    prismaMock.referralAttribution.findUnique.mockResolvedValue(null);
+    prismaMock.identity.findUnique.mockResolvedValue({ email: 'same@example.com' });
+    await attributeRegistration({
+      referredIdentityId: 'idn_other',
+      code: 'ABX7K29Q',
+    });
+    expect(prismaMock.referralAttribution.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a click from the code owner', async () => {
+    await expect(
+      recordReferralClick('ABX7K29Q', 'vid_1', { actorIdentityId: 'idn_referrer' }),
+    ).rejects.toMatchObject({ statusCode: 409 });
+    expect(prismaMock.referralClick.create).not.toHaveBeenCalled();
   });
 });
 
@@ -197,6 +219,23 @@ describe('first payment commission', () => {
       sourceId: 'inv_fail',
       sourceAmountSom: 100000n,
       paid: false,
+    });
+    expect(prismaMock.referralCommission.create).not.toHaveBeenCalled();
+  });
+
+  it('does not commission a self-referral attribution at grant time', async () => {
+    prismaMock.referralCommission.findUnique.mockResolvedValue(null);
+    prismaMock.referralAttribution.findUnique.mockResolvedValue({
+      ...attribution,
+      referrerIdentityId: 'idn_new',
+      referredIdentityId: 'idn_new',
+    });
+    await grantFirstPaymentCommission({
+      referredIdentityId: 'idn_new',
+      sourceType: ReferralPaymentSourceType.PLATFORM_INVOICE,
+      sourceId: 'inv_self',
+      sourceAmountSom: 100000n,
+      paid: true,
     });
     expect(prismaMock.referralCommission.create).not.toHaveBeenCalled();
   });

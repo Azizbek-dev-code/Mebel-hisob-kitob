@@ -293,6 +293,7 @@ describe('payments and blocking', () => {
         sourceAmountSom: 200000n,
         paid: true,
       }),
+      expect.anything(),
     );
     expect(prismaMock.store.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -790,6 +791,7 @@ describe('subscription requests', () => {
         sourceAmountSom: 49000n,
         paid: true,
       }),
+      expect.anything(),
     );
   });
 });

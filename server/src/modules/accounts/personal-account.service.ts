@@ -185,7 +185,10 @@ export async function registerPersonalAccount(
  */
 export async function createPersonalAccountForUser(
   userId: string,
-  input: CreatePersonalAccountRequest,
+  input: CreatePersonalAccountRequest & {
+    referralCode?: string | null;
+    visitorKey?: string | null;
+  },
   db: PrismaClient = defaultPrisma,
 ): Promise<PersonalAccountCreatedResponse> {
   const user = await db.user.findUnique({
@@ -248,6 +251,15 @@ export async function createPersonalAccountForUser(
     return { identity, workspace };
   });
 
+  await attributeRegistration(
+    {
+      referredIdentityId: created.identity.id,
+      referredWorkspaceId: created.workspace.id,
+      code: input.referralCode,
+      visitorKey: input.visitorKey,
+    },
+    db,
+  );
   await markReferralAccountCreated(created.identity.id, created.workspace.id, db);
   await ensureReferralCode(created.identity.id, db);
 

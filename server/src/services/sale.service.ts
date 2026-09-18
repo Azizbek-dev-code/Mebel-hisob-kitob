@@ -1114,7 +1114,10 @@ export async function updateSale(
           deliveryCost: saleForFee.deliveryCost,
           productSummary: saleForFee.items.map((i) => i.productName).join(', '),
           actorId,
-          occurredAt: deliveryDatePatch instanceof Date ? deliveryDatePatch : new Date(),
+          occurredAt:
+            deliveryDatePatch instanceof Date
+              ? deliveryDatePatch
+              : current.deliveryDate ?? current.saleDate,
           client: tx,
         });
       }
@@ -1141,7 +1144,7 @@ export async function updateSale(
           installerFee: saleForFee.installerFee,
           productSummary: saleForFee.items.map((i) => i.productName).join(', '),
           actorId,
-          occurredAt: new Date(),
+          occurredAt: current.installationDate ?? current.saleDate,
           client: tx,
         });
       }

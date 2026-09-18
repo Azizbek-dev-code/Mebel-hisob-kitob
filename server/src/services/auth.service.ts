@@ -10,6 +10,7 @@ import {
   type PersonalAuthUser,
 } from '@furniture-erp/shared';
 
+import { env } from '../config/env.js';
 import {
   type IssuedAccessToken,
   signAccessToken,
@@ -58,39 +59,69 @@ function invalidCredentials(): ApiError {
   return ApiError.unauthorized('Incorrect username or password.');
 }
 
-function signStoreToken(user: AuthUser): IssuedAccessToken {
-  return signAccessToken({ sub: user.id, storeId: user.storeId, role: user.role });
+function tokenTtlOptions(rememberMe: boolean): { expiresIn?: string } | undefined {
+  return rememberMe ? { expiresIn: env.JWT_REFRESH_EXPIRES_IN } : undefined;
 }
 
-function signPersonalToken(user: PersonalAuthUser): IssuedAccessToken {
-  return signAccessToken({
-    sub: user.identityId,
-    ctx: AuthSessionKind.PERSONAL,
-    workspaceId: user.workspaceId,
-  });
+function signStoreToken(user: AuthUser, rememberMe = false): IssuedAccessToken {
+  return signAccessToken(
+    {
+      sub: user.id,
+      storeId: user.storeId,
+      role: user.role,
+      ...(rememberMe ? { rm: true as const } : {}),
+    },
+    tokenTtlOptions(rememberMe),
+  );
+}
+
+function signPersonalToken(user: PersonalAuthUser, rememberMe = false): IssuedAccessToken {
+  return signAccessToken(
+    {
+      sub: user.identityId,
+      ctx: AuthSessionKind.PERSONAL,
+      workspaceId: user.workspaceId,
+      ...(rememberMe ? { rm: true as const } : {}),
+    },
+    tokenTtlOptions(rememberMe),
+  );
 }
 
 export async function issuePersonalSession(
   identityId: string,
   workspaceId: string,
+  rememberMe = false,
 ): Promise<PersonalAuthenticatedSession> {
   const user = await loadPersonalAuthUser(identityId, workspaceId);
-  return { kind: AuthSessionKind.PERSONAL, user, accessToken: signPersonalToken(user) };
+  return {
+    kind: AuthSessionKind.PERSONAL,
+    user,
+    accessToken: signPersonalToken(user, rememberMe),
+  };
 }
 
-export async function issueStoreSession(userId: string): Promise<StoreAuthenticatedSession> {
+export async function issueStoreSession(
+  userId: string,
+  rememberMe = false,
+): Promise<StoreAuthenticatedSession> {
   const record = await findActiveUserById(userId);
   if (!record) {
     throw ApiError.unauthorized('Your session is no longer valid. Please sign in again.');
   }
   const user = toAuthUser(record);
-  return { kind: AuthSessionKind.STORE, user, accessToken: signStoreToken(user) };
+  return {
+    kind: AuthSessionKind.STORE,
+    user,
+    accessToken: signStoreToken(user, rememberMe),
+  };
 }
 
 export async function switchWorkspace(
   identityId: string,
   workspaceId: string,
+  options: { rememberMe?: boolean } = {},
 ): Promise<AuthenticatedSession> {
+  const rememberMe = Boolean(options.rememberMe);
   const membership = await prisma.workspaceMembership.findUnique({
     where: { identityId_workspaceId: { identityId, workspaceId } },
     include: {
@@ -107,7 +138,7 @@ export async function switchWorkspace(
     if (membership.workspace.storeId !== null) {
       throw ApiError.forbidden('Bu ish joyiga o‘tib bo‘lmaydi.');
     }
-    const session = await issuePersonalSession(identityId, workspaceId);
+    const session = await issuePersonalSession(identityId, workspaceId, rememberMe);
     await recordAudit({
       storeId: null,
       actorUserId: null,
@@ -137,7 +168,7 @@ export async function switchWorkspace(
     throw ApiError.forbidden('Bu do‘kon sessiyasiga o‘tib bo‘lmaydi.');
   }
 
-  const session = await issueStoreSession(storeUser.id);
+  const session = await issueStoreSession(storeUser.id, rememberMe);
   await recordAudit({
     storeId: membership.workspace.storeId,
     actorUserId: storeUser.id,
@@ -150,7 +181,11 @@ export async function switchWorkspace(
   return session;
 }
 
-export async function login(identifier: string, password: string): Promise<AuthenticatedSession> {
+export async function login(
+  identifier: string,
+  password: string,
+  rememberMe = false,
+): Promise<AuthenticatedSession> {
   const candidate = await findSignInCandidate(identifier);
 
   if (candidate) {
@@ -185,13 +220,13 @@ export async function login(identifier: string, password: string): Promise<Authe
       entityType: AuditEntityType.SESSION,
       entityId: user.id,
       summary: `Signed in ${user.username ?? user.fullName}`,
-      metadata: { username: user.username },
+      metadata: { username: user.username, rememberMe },
     });
 
     return {
       kind: AuthSessionKind.STORE,
       user,
-      accessToken: signStoreToken(user),
+      accessToken: signStoreToken(user, rememberMe),
     };
   }
 
@@ -214,7 +249,7 @@ export async function login(identifier: string, password: string): Promise<Authe
     throw invalidCredentials();
   }
 
-  const session = await issuePersonalSession(personal.id, personal.workspaceId);
+  const session = await issuePersonalSession(personal.id, personal.workspaceId, rememberMe);
   await recordAudit({
     storeId: null,
     actorUserId: null,
@@ -222,7 +257,7 @@ export async function login(identifier: string, password: string): Promise<Authe
     entityType: AuditEntityType.SESSION,
     entityId: personal.id,
     summary: `Signed in personal ${personal.email}`,
-    metadata: { workspaceId: personal.workspaceId },
+    metadata: { workspaceId: personal.workspaceId, rememberMe },
   });
   return session;
 }
@@ -241,7 +276,7 @@ export async function authenticate(token: string): Promise<ResolvedSession> {
   try {
     claims = verifyAccessToken(token);
   } catch {
-    throw ApiError.unauthorized('Your session has expired. Please sign in again.');
+    throw ApiError.unauthorized('Sessiyangiz muddati tugadi. Iltimos, qayta kiring.');
   }
 
   if (claims.ctx === AuthSessionKind.PERSONAL) {
@@ -263,7 +298,7 @@ export async function authenticate(token: string): Promise<ResolvedSession> {
  * Access tokens are deliberately short-lived, which on its own would sign a
  * cashier out mid-shift. Re-issuing once a token is past halfway keeps someone
  * who is actively working signed in while an abandoned session still dies within
- * one token lifetime.
+ * one token lifetime. Remember-me sessions use the long TTL on each renewal.
  */
 export function isDueForRenewal(claims: VerifiedAccessToken, now = Date.now()): boolean {
   const lifetimeMs = claims.expiresAt.getTime() - claims.issuedAt.getTime();
@@ -271,9 +306,9 @@ export function isDueForRenewal(claims: VerifiedAccessToken, now = Date.now()): 
   return now - claims.issuedAt.getTime() >= lifetimeMs / 2;
 }
 
-export function renewSession(user: AuthPrincipal): IssuedAccessToken {
+export function renewSession(user: AuthPrincipal, rememberMe = false): IssuedAccessToken {
   if (isPersonalAuth(user)) {
-    return signPersonalToken(user);
+    return signPersonalToken(user, rememberMe);
   }
-  return signStoreToken(user);
+  return signStoreToken(user, rememberMe);
 }

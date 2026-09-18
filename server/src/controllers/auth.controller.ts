@@ -15,9 +15,9 @@ import { sendNoContent, sendSuccess } from '../utils/http-response.js';
 import type { LoginBody } from '../validators/auth.validators.js';
 
 export const postLogin = asyncHandler(async (req: Request, res: Response) => {
-  const { identifier, password } = req.body as LoginBody;
+  const { identifier, password, rememberMe } = req.body as LoginBody;
 
-  const { user, accessToken } = await authService.login(identifier, password);
+  const { user, accessToken } = await authService.login(identifier, password, Boolean(rememberMe));
 
   // The token only ever travels in the cookie. Putting it in the body as well
   // would invite the client to store it somewhere script can read.

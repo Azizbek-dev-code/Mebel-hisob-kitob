@@ -1,4 +1,5 @@
 import {
+  PlanAudience,
   PlatformBillingCycle,
   PlatformBillingStatus,
   PlatformDatePreset,
@@ -9,6 +10,15 @@ import { z } from 'zod';
 
 import { paginationQuerySchema } from './common.validators.js';
 
+const planFeaturesSchema = z
+  .object({
+    highlights: z.array(z.string().trim().max(120)).max(12).optional(),
+    maxUsers: z.number().int().positive().nullable().optional(),
+    maxProducts: z.number().int().positive().nullable().optional(),
+    periodDays: z.number().int().positive().max(366).optional(),
+  })
+  .optional();
+
 export const createPlanBodySchema = z.object({
   name: z.string().trim().min(1).max(80),
   description: z.string().max(500).optional(),
@@ -17,6 +27,7 @@ export const createPlanBodySchema = z.object({
   trialDays: z.number().int().min(0).max(90).optional(),
   isDefaultTrial: z.boolean().optional(),
   rank: z.number().int().min(0).max(100).optional(),
+  audience: z.nativeEnum(PlanAudience).optional(),
   featureKeys: z.array(z.string().trim().min(1).max(40)).max(40).optional(),
   limits: z
     .array(
@@ -28,13 +39,7 @@ export const createPlanBodySchema = z.object({
     )
     .max(20)
     .optional(),
-  features: z
-    .object({
-      highlights: z.array(z.string().trim().max(120)).max(12).optional(),
-      maxUsers: z.number().int().positive().nullable().optional(),
-      maxProducts: z.number().int().positive().nullable().optional(),
-    })
-    .optional(),
+  features: planFeaturesSchema,
 });
 
 export const updatePlanBodySchema = z.object({
@@ -56,13 +61,7 @@ export const updatePlanBodySchema = z.object({
     )
     .max(20)
     .optional(),
-  features: z
-    .object({
-      highlights: z.array(z.string().trim().max(120)).max(12).optional(),
-      maxUsers: z.number().int().positive().nullable().optional(),
-      maxProducts: z.number().int().positive().nullable().optional(),
-    })
-    .optional(),
+  features: planFeaturesSchema,
 });
 
 export const assignPlanBodySchema = z.object({

@@ -45,6 +45,7 @@ describe('LoginPage', () => {
     expect(screen.getByLabelText('Login yoki email')).toBeInTheDocument();
     expect(screen.getByLabelText('Parol')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Kirish' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Meni eslab qolish/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Yangi hisob ochish' })).toHaveAttribute(
       'href',
       '/onboarding',
@@ -83,6 +84,29 @@ describe('LoginPage', () => {
     expect(JSON.parse(init.body as string)).toEqual({
       identifier: 'admin',
       password: 'Admin123!',
+      rememberMe: false,
+    });
+  });
+
+  it('sends rememberMe true when the checkbox is checked', async () => {
+    const fetchMock = mockApi({
+      '/auth/login': { status: 200, body: { success: true, data: { user: ADMIN } } },
+    });
+    const user = userEvent.setup();
+    renderLoginPage();
+
+    await user.type(screen.getByLabelText('Login yoki email'), 'admin');
+    await user.type(screen.getByLabelText('Parol'), 'Admin123!');
+    await user.click(screen.getByLabelText(/Meni eslab qolish/));
+    await user.click(screen.getByRole('button', { name: 'Kirish' }));
+
+    expect(await screen.findByText('Workspace')).toBeInTheDocument();
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({
+      identifier: 'admin',
+      password: 'Admin123!',
+      rememberMe: true,
     });
   });
 

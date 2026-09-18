@@ -50,7 +50,17 @@ export const postReferralClick = asyncHandler(async (req: Request, res: Response
   const { code } = req.body as typeof referralClickBodySchema._type;
   const existing = readReferralAttribution(req);
   const visitorKey = existing.visitorKey ?? newVisitorKey();
-  const recorded = await recordReferralClick(code, visitorKey);
+  let actorIdentityId: string | null = null;
+  try {
+    if (req.personalAuth) {
+      actorIdentityId = req.personalAuth.identityId;
+    } else if (req.auth && (req.auth.role === UserRole.ADMIN || req.auth.role === UserRole.PLATFORM_ADMIN)) {
+      actorIdentityId = await ensureIdentityForUser(req.auth.id);
+    }
+  } catch {
+    actorIdentityId = null;
+  }
+  const recorded = await recordReferralClick(code, visitorKey, { actorIdentityId });
   setReferralCookies(res, recorded.code, recorded.visitorKey);
   sendSuccess(res, { code: recorded.code });
 });

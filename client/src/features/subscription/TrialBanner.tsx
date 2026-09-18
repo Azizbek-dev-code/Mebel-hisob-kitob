@@ -32,12 +32,14 @@ export function TrialBanner() {
         )}
       >
         <p className="text-sm font-medium">{copy}</p>
-        <Link
-          to={ROUTES.billing}
-          className="shrink-0 text-sm font-medium underline-offset-2 hover:underline"
-        >
-          Tarifni tanlash
-        </Link>
+        {warning ? (
+          <Link
+            to={ROUTES.billing}
+            className="shrink-0 text-sm font-medium underline-offset-2 hover:underline"
+          >
+            Tarifni tanlash
+          </Link>
+        ) : null}
       </div>
     );
   }

@@ -179,6 +179,12 @@ export function OnboardingPage() {
             persistToken(submission.publicToken);
             setAnswers(submission.answers);
             if (
+              submission.customMonthlyIncomeSom != null &&
+              submission.customMonthlyIncomeSom > 0
+            ) {
+              setCustomIncome(String(submission.customMonthlyIncomeSom));
+            }
+            if (
               submission.answers.purpose === AccountPurpose.PERSONAL &&
               !hasPersonalAccountRef.current
             ) {
@@ -258,7 +264,7 @@ export function OnboardingPage() {
           return;
         }
       }
-      const next = { purpose: nextPurpose } as OnboardingAnswers;
+      const next = { ...answers, purpose: nextPurpose } as OnboardingAnswers;
       await persistAnswers(next);
       setFlowIndex(0);
       setScreen('flow');
@@ -356,7 +362,18 @@ export function OnboardingPage() {
         setFlowIndex(flowIndex + 1);
         return;
       }
-      if (needsAccountStep) setScreen('account');
+      if (answers.purpose === AccountPurpose.BUSINESS) {
+        await completeBusiness.mutateAsync();
+        sessionStorage.removeItem(TOKEN_KEY);
+        const businessType = answers.businessType ?? BUSINESS_TYPES[0];
+        navigate(`${ROUTES.registerStore}?businessType=${encodeURIComponent(String(businessType))}`);
+        return;
+      }
+      if (needsAccountStep) {
+        setScreen('account');
+        return;
+      }
+      await submitAccount();
     } catch (error) {
       setFieldErrors({
         form: error instanceof Error ? error.message : t('onboarding.submitFailed'),
@@ -383,6 +400,11 @@ export function OnboardingPage() {
       if (isSignedIn || hasPersonalAccount) {
         const result = await completeAuthenticated.mutateAsync({});
         sessionStorage.removeItem(TOKEN_KEY);
+        if (result.user) {
+          queryClient.setQueryData(authQueryKeys.currentUser, result.user);
+          navigate(ROUTES.personalDashboard, { replace: true });
+          return;
+        }
         navigate(ROUTES.onboardingComplete, {
           replace: true,
           state: { mode: 'authenticated', workspaceName: result.workspace.name },
@@ -503,6 +525,8 @@ export function OnboardingPage() {
                 onClick={() => void choosePurpose(AccountPurpose.BUSINESS)}
               />
             </div>
+          ) : screen === 'flow' && flowQuestions.length === 0 ? (
+            <p className="text-sm text-danger-700">{t('onboarding.loadFailed')}</p>
           ) : screen === 'flow' && currentQuestion ? (
             <QuestionBlock
               title={promptFor(currentQuestion, language)}

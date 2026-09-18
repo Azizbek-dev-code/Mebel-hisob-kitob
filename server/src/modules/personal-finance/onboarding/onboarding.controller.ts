@@ -135,7 +135,9 @@ export const postCompleteAuthenticated = asyncHandler(async (req: Request, res: 
   const user = requireUser(req);
   const body = (req.body ?? {}) as CompletePersonalOnboardingRequest;
   const created = await completePersonalOnboardingForUser(tokenParam(req), user.id, body);
-  sendCreated(res, created);
+  const session = await issuePersonalSession(created.identity.id, created.workspace.id);
+  setAuthCookie(res, session.accessToken.token, session.accessToken.expiresAt);
+  sendCreated(res, { ...created, user: session.user });
 });
 
 export const postCompleteBusiness = asyncHandler(async (req: Request, res: Response) => {

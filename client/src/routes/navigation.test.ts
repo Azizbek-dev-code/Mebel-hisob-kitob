@@ -49,10 +49,10 @@ describe('PERSONAL_NAV_ITEMS', () => {
   it('keeps five primary destinations on registered paths', () => {
     expect(PERSONAL_NAV_ITEMS.map((item) => item.key)).toEqual([
       'personal-home',
-      'personal-history',
-      'personal-budgets',
-      'personal-goals',
-      'personal-settings',
+      'personal-plan',
+      'personal-growth',
+      'personal-finance',
+      'personal-profile',
     ]);
 
     const registered = Object.values<unknown>(ROUTES).filter(
@@ -250,10 +250,10 @@ describe('navItemsForUser', () => {
     };
     expect(navItemsForUser(personal).map((item) => item.key)).toEqual([
       'personal-home',
-      'personal-history',
-      'personal-budgets',
-      'personal-goals',
-      'personal-settings',
+      'personal-plan',
+      'personal-growth',
+      'personal-finance',
+      'personal-profile',
     ]);
   });
 });
@@ -328,20 +328,24 @@ describe('navItemForPath', () => {
 
   it('names personal finance pages', () => {
     expect(navItemForPath(ROUTES.personalDashboard)?.key).toBe('personal-home');
-    expect(navItemForPath(ROUTES.personalHistory)?.key).toBe('personal-history');
-    expect(navItemForPath(ROUTES.personalIncome)?.key).toBe('personal-history');
-    expect(navItemForPath(ROUTES.personalExpenses)?.key).toBe('personal-history');
-    expect(navItemForPath(ROUTES.personalBudgets)?.key).toBe('personal-budgets');
-    expect(navItemForPath(ROUTES.personalGoals)?.key).toBe('personal-goals');
-    expect(navItemForPath(ROUTES.personalSettings)?.key).toBe('personal-settings');
-    expect(navItemForPath(ROUTES.personalAccounts)?.key).toBe('personal-settings');
-    expect(navItemForPath(ROUTES.personalCategories)?.key).toBe('personal-settings');
-    expect(navItemForPath(ROUTES.personalAnalytics)?.key).toBe('personal-settings');
-    expect(navItemForPath(ROUTES.personalBilling)?.key).toBe('personal-settings');
-    expect(navItemForPath(ROUTES.personalReferral)?.key).toBe('personal-settings');
-    expect(navItemForPath(ROUTES.personalRecurring)?.key).toBe('personal-settings');
-    expect(navItemForPath(ROUTES.personalDebts)?.key).toBe('personal-settings');
-    expect(navItemForPath(ROUTES.personalNotifications)?.key).toBe('personal-settings');
+    expect(navItemForPath(ROUTES.personalPlan)?.key).toBe('personal-plan');
+    expect(navItemForPath(ROUTES.personalGrowth)?.key).toBe('personal-growth');
+    expect(navItemForPath(ROUTES.personalFinance)?.key).toBe('personal-finance');
+    expect(navItemForPath(ROUTES.personalHistory)?.key).toBe('personal-finance');
+    expect(navItemForPath(ROUTES.personalIncome)?.key).toBe('personal-finance');
+    expect(navItemForPath(ROUTES.personalExpenses)?.key).toBe('personal-finance');
+    expect(navItemForPath(ROUTES.personalBudgets)?.key).toBe('personal-finance');
+    expect(navItemForPath(ROUTES.personalGoals)?.key).toBe('personal-finance');
+    expect(navItemForPath(ROUTES.personalAccounts)?.key).toBe('personal-finance');
+    expect(navItemForPath(ROUTES.personalCategories)?.key).toBe('personal-finance');
+    expect(navItemForPath(ROUTES.personalAnalytics)?.key).toBe('personal-finance');
+    expect(navItemForPath(ROUTES.personalRecurring)?.key).toBe('personal-finance');
+    expect(navItemForPath(ROUTES.personalDebts)?.key).toBe('personal-finance');
+    expect(navItemForPath(ROUTES.personalProfile)?.key).toBe('personal-profile');
+    expect(navItemForPath(ROUTES.personalSettings)?.key).toBe('personal-profile');
+    expect(navItemForPath(ROUTES.personalBilling)?.key).toBe('personal-profile');
+    expect(navItemForPath(ROUTES.personalReferral)?.key).toBe('personal-profile');
+    expect(navItemForPath(ROUTES.personalNotifications)?.key).toBe('personal-profile');
     expect(navItemForPath(ROUTES.platformPersonal)?.key).toBe('platform-accounts');
   });
 });

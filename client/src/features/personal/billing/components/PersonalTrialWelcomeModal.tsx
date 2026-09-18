@@ -1,10 +1,9 @@
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import { Dialog } from '@/components/ui/Dialog';
-import { ROUTES } from '@/routes/paths';
 import { formatDate } from '@/utils/format';
 
+/** Trial welcome only — paid purchase is not forced on first open. */
 export function PersonalTrialWelcomeModal({
   open,
   trialEndsAt,
@@ -15,7 +14,6 @@ export function PersonalTrialWelcomeModal({
   onStart: () => void;
 }) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
 
   return (
     <Dialog open={open} title={t('personal.trialWelcomeTitle')} onClose={onStart}>
@@ -26,17 +24,7 @@ export function PersonalTrialWelcomeModal({
             {t('personal.trialWelcomeUntil', { date: formatDate(trialEndsAt) })}
           </p>
         ) : null}
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <button
-            type="button"
-            className="rounded-input px-3 py-2 text-sm font-medium text-ink-muted hover:bg-surface-hover"
-            onClick={() => {
-              onStart();
-              void navigate(ROUTES.personalBilling);
-            }}
-          >
-            {t('personal.choosePlan')}
-          </button>
+        <div className="flex justify-end">
           <button
             type="button"
             className="rounded-input bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600"

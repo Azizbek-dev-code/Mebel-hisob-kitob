@@ -61,6 +61,9 @@ function toSubmissionDto(
     status: row.status as OnboardingSubmissionDto['status'],
     answers: readOnboardingAnswers(row.answers),
     hasCustomIncome: Boolean(row.sensitive?.customMonthlyIncomeSom),
+    customMonthlyIncomeSom: row.sensitive?.customMonthlyIncomeSom
+      ? Number(row.sensitive.customMonthlyIncomeSom)
+      : null,
     identityId: row.identityId,
     workspaceId: row.workspaceId,
     createdAt: row.createdAt.toISOString(),

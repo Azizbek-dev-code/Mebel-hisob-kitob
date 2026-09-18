@@ -29,11 +29,14 @@ const {
   toAdminView,
   provisionStoreSubscription,
   tryEnsureUserOnBusinessWorkspace,
+  attributeRegistration,
+  markReferralAccountCreated,
 } = vi.hoisted(() => ({
   prismaMock: {
     $transaction: vi.fn(),
     identity: { findUnique: vi.fn() },
     user: { findUnique: vi.fn() },
+    workspace: { findUnique: vi.fn() },
   },
   hashPasswordMock: vi.fn(),
   recordAuditMock: vi.fn(),
@@ -53,6 +56,8 @@ const {
   toAdminView: vi.fn(),
   provisionStoreSubscription: vi.fn(),
   tryEnsureUserOnBusinessWorkspace: vi.fn(),
+  attributeRegistration: vi.fn(),
+  markReferralAccountCreated: vi.fn(),
 }));
 
 vi.mock('../lib/prisma.js', () => ({ prisma: prismaMock }));
@@ -63,6 +68,10 @@ vi.mock('./platform-billing.service.js', () => ({
 }));
 vi.mock('../modules/accounts/account-layer.service.js', () => ({
   tryEnsureUserOnBusinessWorkspace,
+}));
+vi.mock('../modules/referrals/referral.service.js', () => ({
+  attributeRegistration,
+  markReferralAccountCreated,
 }));
 vi.mock('../repositories/store-creation.repository.js', () => ({
   createPendingRequest,
@@ -127,6 +136,8 @@ const PENDING_ROW = {
   reviewedById: null,
   createdUserId: null,
   reviewedBy: null,
+  referralCode: 'ABX7K29Q',
+  visitorKey: 'vid_1',
 };
 
 const PUBLIC_VIEW = {
@@ -164,6 +175,10 @@ beforeEach(() => {
   toAdminView.mockReturnValue(ADMIN_VIEW);
   provisionStoreSubscription.mockResolvedValue(undefined);
   tryEnsureUserOnBusinessWorkspace.mockResolvedValue(undefined);
+  attributeRegistration.mockResolvedValue(undefined);
+  markReferralAccountCreated.mockResolvedValue(undefined);
+  prismaMock.user.findUnique.mockResolvedValue({ identityId: 'idn_new', storeId: 'store_new' });
+  prismaMock.workspace.findUnique.mockResolvedValue({ id: 'ws_biz' });
   findPendingByPhone.mockResolvedValue(null);
   findPendingByEmail.mockResolvedValue(null);
   findPendingByUsername.mockResolvedValue(null);
@@ -343,6 +358,14 @@ describe('approveStoreRequest', () => {
     expect(result.owner.storeId).toBe('store_new');
     expect(provisionStoreSubscription).toHaveBeenCalledWith('store_new');
     expect(tryEnsureUserOnBusinessWorkspace).toHaveBeenCalledWith('user_new');
+    expect(attributeRegistration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        referredIdentityId: 'idn_new',
+        referredWorkspaceId: 'ws_biz',
+        code: 'ABX7K29Q',
+        visitorKey: 'vid_1',
+      }),
+    );
     expect(JSON.stringify(result)).not.toContain('$2a$hashed');
     expect(JSON.stringify(result)).not.toContain('Owner123!');
     expect(recordAuditMock).toHaveBeenCalledWith(

@@ -82,8 +82,24 @@ export function PersonalBillingPage() {
           ) : null}
 
           {errorMessage ? <p className="text-sm text-danger-700">{errorMessage}</p> : null}
-          <div className="grid gap-3 sm:grid-cols-2">
-            {billing.data?.plans.map((plan) => {
+          {/*
+            Active trial: show current trial status above and only the paid upgrade
+            path — do not present free trial + paid as two equal purchase CTAs.
+          */}
+          <div
+            className={cn(
+              'grid gap-3',
+              sub?.status === 'TRIAL' && sub.canWrite ? 'sm:grid-cols-1' : 'sm:grid-cols-2',
+            )}
+          >
+            {billing.data?.plans
+              .filter((plan) => {
+                if (sub?.status === 'TRIAL' && sub.canWrite) {
+                  return plan.key === PERSONAL_PLAN_KEY.PAID;
+                }
+                return true;
+              })
+              .map((plan) => {
               const selected = current === plan.key;
               const trialLocked = plan.key === PERSONAL_PLAN_KEY.TRIAL;
               const paidAllowed =

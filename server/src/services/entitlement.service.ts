@@ -248,6 +248,21 @@ export async function attachDefaultEntitlements(
 }
 
 /**
+ * Force catalog presets onto a named paid plan.
+ *
+ * Seed previously used attach-only-if-empty, so a PRO/START plan that was
+ * created with empty or stale PlanFeature rows never healed — ACTIVE paid
+ * subscribers then hit FEATURE_NOT_INCLUDED for modules their plan should grant.
+ */
+export async function syncCatalogPlanEntitlements(
+  planId: string,
+  featureKeys: readonly string[],
+  limits: Array<{ resourceKey: string; unlimited: boolean; limitValue?: number | null }>,
+): Promise<void> {
+  await syncPlanEntitlements(planId, { featureKeys: [...featureKeys], limits });
+}
+
+/**
  * Repair a free/trial plan whose stored entitlements grant too much.
  *
  * Two shapes are unsafe and get rewritten to the shared trial preset:

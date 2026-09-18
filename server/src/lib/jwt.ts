@@ -17,6 +17,8 @@ export type VerifiedAccessToken = {
   sub: string;
   issuedAt: Date;
   expiresAt: Date;
+  /** True when the session was opened with Remember Me (long TTL). */
+  rememberMe: boolean;
 } & (
   | {
       ctx: typeof AuthSessionKind.STORE;
@@ -39,11 +41,15 @@ export class InvalidTokenError extends Error {
   }
 }
 
-export function signAccessToken(payload: AccessTokenPayload): IssuedAccessToken {
+export function signAccessToken(
+  payload: AccessTokenPayload,
+  options?: { expiresIn?: string },
+): IssuedAccessToken {
+  const expiresIn = (options?.expiresIn ?? env.JWT_ACCESS_EXPIRES_IN) as SignOptions['expiresIn'];
   const token = jwt.sign(payload, env.JWT_ACCESS_SECRET, {
     // The env value is a free-form duration string ("15m", "7d"); the published
     // types narrow it to a literal union that a validated string cannot satisfy.
-    expiresIn: env.JWT_ACCESS_EXPIRES_IN as SignOptions['expiresIn'],
+    expiresIn,
     issuer: TOKEN_ISSUER,
     audience: TOKEN_AUDIENCE,
   });
@@ -82,7 +88,7 @@ export function verifyAccessToken(token: string): VerifiedAccessToken {
   }
 
   const raw = claims as Record<string, unknown>;
-  const { sub, storeId, role, iat, exp, ctx, workspaceId } = raw;
+  const { sub, storeId, role, iat, exp, ctx, workspaceId, rm } = raw;
 
   if (typeof sub !== 'string' || typeof iat !== 'number' || typeof exp !== 'number') {
     throw new InvalidTokenError('Access token claims are malformed');
@@ -90,12 +96,20 @@ export function verifyAccessToken(token: string): VerifiedAccessToken {
 
   const issuedAt = new Date(iat * 1000);
   const expiresAt = new Date(exp * 1000);
+  const rememberMe = rm === true;
 
   if (ctx === AuthSessionKind.PERSONAL) {
     if (typeof workspaceId !== 'string' || workspaceId.length === 0) {
       throw new InvalidTokenError('Access token claims are malformed');
     }
-    return { sub, ctx: AuthSessionKind.PERSONAL, workspaceId, issuedAt, expiresAt };
+    return {
+      sub,
+      ctx: AuthSessionKind.PERSONAL,
+      workspaceId,
+      issuedAt,
+      expiresAt,
+      rememberMe,
+    };
   }
 
   if (
@@ -106,7 +120,15 @@ export function verifyAccessToken(token: string): VerifiedAccessToken {
     throw new InvalidTokenError('Access token claims are malformed');
   }
 
-  return { sub, ctx: AuthSessionKind.STORE, storeId, role, issuedAt, expiresAt };
+  return {
+    sub,
+    ctx: AuthSessionKind.STORE,
+    storeId,
+    role,
+    issuedAt,
+    expiresAt,
+    rememberMe,
+  };
 }
 
 function isUserRole(value: string): value is UserRole {

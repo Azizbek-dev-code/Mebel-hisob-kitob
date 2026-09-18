@@ -9,7 +9,7 @@ import {
 } from '@furniture-erp/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { prismaMock, recordAuditMock } = vi.hoisted(() => ({
+const { prismaMock, recordAuditMock, tryAwardXpMock, tryEvaluateAchievementsMock } = vi.hoisted(() => ({
   prismaMock: {
     workspace: { findUnique: vi.fn() },
     personalWallet: {
@@ -46,10 +46,16 @@ const { prismaMock, recordAuditMock } = vi.hoisted(() => ({
     },
   },
   recordAuditMock: vi.fn(),
+  tryAwardXpMock: vi.fn(),
+  tryEvaluateAchievementsMock: vi.fn(),
 }));
 
 vi.mock('../../../lib/prisma.js', () => ({ prisma: prismaMock }));
 vi.mock('../../../services/audit.service.js', () => ({ recordAudit: recordAuditMock }));
+vi.mock('../growth/personal-growth-xp.service.js', () => ({ tryAwardXp: tryAwardXpMock }));
+vi.mock('../growth/personal-growth-achievements.service.js', () => ({
+  tryEvaluateAchievements: tryEvaluateAchievementsMock,
+}));
 
 const {
   cancelPersonalTransfer,
@@ -73,6 +79,8 @@ const WORKSPACE = {
 beforeEach(() => {
   vi.clearAllMocks();
   recordAuditMock.mockResolvedValue(undefined);
+  tryAwardXpMock.mockResolvedValue(undefined);
+  tryEvaluateAchievementsMock.mockResolvedValue(undefined);
   prismaMock.workspace.findUnique.mockResolvedValue(WORKSPACE);
   prismaMock.personalWallet.count.mockResolvedValue(0);
   prismaMock.personalCategory.count.mockResolvedValue(0);
@@ -167,6 +175,14 @@ describe('createPersonalEntry', () => {
     expect(prismaMock.personalEntry.create.mock.calls[0][0].data.amount).toBe(4_000n);
     expect(prismaMock.personalEntry.create.mock.calls[0][0].data).not.toHaveProperty('storeId');
     expect(entry.amount).toBe(4_000);
+    expect(tryAwardXpMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'FINANCE_DISCIPLINE',
+        sourceEntityId: 'finance-log:2026-09-13',
+        dayKey: '2026-09-13',
+      }),
+    );
+    expect(tryEvaluateAchievementsMock).toHaveBeenCalledWith('ws_1', 'idn_1');
   });
 });
 

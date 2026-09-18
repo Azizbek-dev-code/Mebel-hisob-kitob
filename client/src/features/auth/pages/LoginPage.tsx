@@ -17,6 +17,7 @@ import { useLogin } from '../hooks/use-auth';
 type LoginFormValues = {
   identifier: string;
   password: string;
+  rememberMe: boolean;
 };
 
 export function LoginPage() {
@@ -28,12 +29,14 @@ export function LoginPage() {
   const [isPasswordVisible, setPasswordVisible] = useState(false);
   const identifierId = useId();
   const passwordId = useId();
+  const rememberId = useId();
 
   const loginFormSchema = useMemo(
     () =>
       z.object({
         identifier: z.string().trim().min(1, { message: t('auth.enterUsername') }),
         password: z.string().min(1, { message: t('auth.enterPassword') }),
+        rememberMe: z.boolean(),
       }),
     [t],
   );
@@ -44,7 +47,7 @@ export function LoginPage() {
     formState: { errors },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginFormSchema),
-    defaultValues: { identifier: '', password: '' },
+    defaultValues: { identifier: '', password: '', rememberMe: false },
   });
 
   const isSubmitting = login.isPending;
@@ -156,6 +159,20 @@ export function LoginPage() {
                 )}
               </button>
             </Field>
+
+            <label
+              htmlFor={rememberId}
+              className="flex cursor-pointer items-center gap-2.5 text-sm text-ink-soft"
+            >
+              <input
+                {...register('rememberMe')}
+                id={rememberId}
+                type="checkbox"
+                disabled={isSubmitting}
+                className="size-4 rounded border-line-strong text-brand-600 focus:ring-brand-100"
+              />
+              <span>{t('auth.rememberMe')}</span>
+            </label>
 
             <button
               type="submit"

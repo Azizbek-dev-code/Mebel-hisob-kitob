@@ -18,32 +18,34 @@ export function PersonalTrialBanner() {
     return (
       <div
         className={cn(
-          'flex items-center justify-between gap-3 rounded-xl border px-3 py-2',
+          'flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2.5',
           warning
             ? 'border-warning-100 bg-warning-50 text-warning-700'
             : 'border-brand-100 bg-brand-50 text-brand-800',
         )}
       >
-        <p className="min-w-0 text-sm font-medium">
+        <p className="min-w-0 flex-1 text-sm font-medium">
           {days <= 0 ? t('personal.trialEndsToday') : t('personal.trialDays', { count: days })}
         </p>
-        <Link
-          to={ROUTES.personalBilling}
-          className="shrink-0 text-sm font-medium underline-offset-2 hover:underline"
-        >
-          {t('personal.choosePlan')}
-        </Link>
+        {warning ? (
+          <Link
+            to={ROUTES.personalBilling}
+            className="inline-flex min-h-10 shrink-0 items-center text-sm font-medium underline-offset-2 hover:underline"
+          >
+            {t('personal.choosePlan')}
+          </Link>
+        ) : null}
       </div>
     );
   }
 
   if (!sub.canWrite) {
     return (
-      <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-3 py-2">
-        <p className="min-w-0 text-sm font-medium text-ink">{t('personal.trialEnded')}</p>
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-surface px-3 py-2.5">
+        <p className="min-w-0 flex-1 text-sm font-medium text-ink">{t('personal.trialEnded')}</p>
         <Link
           to={ROUTES.personalBilling}
-          className="shrink-0 rounded-input bg-brand-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-600"
+          className="inline-flex min-h-10 shrink-0 items-center rounded-input bg-brand-500 px-3 text-sm font-medium text-white hover:bg-brand-600"
         >
           {t('personal.choosePlan')}
         </Link>

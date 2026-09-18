@@ -39,7 +39,7 @@ export function SegmentedNav({
                   )
                 : isActive;
               return cn(
-                'shrink-0 rounded-[0.4rem] px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors',
+                'inline-flex min-h-10 shrink-0 items-center rounded-[0.4rem] px-3 text-sm font-medium whitespace-nowrap transition-colors',
                 current
                   ? 'bg-surface text-brand-700 shadow-card'
                   : 'text-ink-soft hover:bg-surface-hover hover:text-ink',

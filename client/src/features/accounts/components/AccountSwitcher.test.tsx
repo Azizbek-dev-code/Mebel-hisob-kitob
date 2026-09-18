@@ -149,7 +149,7 @@ describe('AccountSwitcher', () => {
     );
 
     await user.click(await screen.findByTestId('account-switcher'));
-    expect(screen.getByRole('menuitem', { name: 'Profil' })).toHaveAttribute('href', '/personal/settings');
+    expect(screen.getByRole('menuitem', { name: 'Profil' })).toHaveAttribute('href', '/personal/profile');
     expect(screen.getByRole('button', { name: 'Chiqish' })).toBeInTheDocument();
   });
 });

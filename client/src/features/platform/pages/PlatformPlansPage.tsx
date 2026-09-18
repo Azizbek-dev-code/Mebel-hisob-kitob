@@ -1,7 +1,7 @@
 import {
   FEATURE_CATALOG,
   LIMIT_CATALOG,
-  PERSONAL_PLANS,
+  PlanAudience,
   formatMoney,
   type CreateSubscriptionPlanBody,
   type FeatureDto,
@@ -32,10 +32,20 @@ import {
 const fieldClass =
   'w-full rounded-input border border-line bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100';
 
+type EditingState =
+  | null
+  | { mode: 'new'; audience: PlanAudience }
+  | { mode: 'edit'; plan: SubscriptionPlanDto };
+
 export function PlatformPlansPage() {
   const { t } = useTranslation();
   const list = usePlatformPlans();
-  const [editing, setEditing] = useState<SubscriptionPlanDto | null | 'new'>(null);
+  const [editing, setEditing] = useState<EditingState>(null);
+
+  const storePlans = (list.data?.items ?? []).filter((plan) => plan.audience === PlanAudience.STORE);
+  const personalPlans = (list.data?.items ?? []).filter(
+    (plan) => plan.audience === PlanAudience.PERSONAL,
+  );
 
   return (
     <PageContainer className="space-y-6 overflow-x-hidden">
@@ -43,21 +53,21 @@ export function PlatformPlansPage() {
         <div>
           <h2 className="text-lg font-semibold tracking-tight text-ink">Tariflar</h2>
           <p className="mt-1 text-sm text-ink-muted">
-            Nom, narx, funksiyalar va limitlar. Ishlatilayotgan tarif o&apos;chirilmaydi — faqat
-            deaktiv qilinadi.
+            Business va Personal Finance tariflari alohida. Ishlatilayotgan tarif o&apos;chirilmaydi —
+            faqat deaktiv qilinadi.
           </p>
         </div>
         <button
           type="button"
-          onClick={() => setEditing('new')}
+          onClick={() => setEditing({ mode: 'new', audience: PlanAudience.STORE })}
           className="inline-flex shrink-0 items-center gap-1.5 rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
         >
           <Plus className="size-4" />
-          Tarif
+          Business tarif
         </button>
       </div>
 
-      <SectionCard title="Ro'yxat">
+      <SectionCard title="Business tariflar">
         {list.isPending && !list.data ? (
           <div className="space-y-3">
             <Skeleton className="h-16 w-full" />
@@ -70,52 +80,14 @@ export function PlatformPlansPage() {
             onRetry={() => void list.refetch()}
             isRetrying={list.isFetching}
           />
-        ) : (list.data?.items.length ?? 0) === 0 ? (
+        ) : storePlans.length === 0 ? (
           <EmptyState
             icon={Tags}
             title="Tarif yo'q"
-            description="Birinchi platforma tarifini yarating."
+            description="Birinchi business tarifini yarating."
           />
         ) : (
-          <ul className="divide-y divide-line">
-            {list.data?.items.map((plan) => (
-              <li
-                key={plan.id}
-                className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium text-ink">{plan.name}</p>
-                  <p className="mt-0.5 truncate text-xs text-ink-muted">
-                    {plan.description || 'Tavsif yo‘q'} · {formatMoney(plan.monthlyPrice)} / oy
-                    {plan.trialDays > 0 ? ` · ${plan.trialDays} kun sinov` : ''}
-                    {` · daraja ${plan.rank ?? 0}`}
-                  </p>
-                  <p className="mt-1 truncate text-xs text-ink-subtle">
-                    {plan.enabledFeatures?.length
-                      ? `${plan.enabledFeatures
-                          .slice(0, 6)
-                          .map((item) => item.name)
-                          .join(' · ')}${plan.enabledFeatures.length > 6 ? '…' : ''}`
-                      : plan.featuresRestricted
-                        ? 'Funksiya yo‘q'
-                        : 'Barcha funksiyalar'}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Badge tone={plan.isActive ? 'success' : 'neutral'}>
-                    {plan.isActive ? 'Faol' : 'O‘chirilgan'}
-                  </Badge>
-                  <button
-                    type="button"
-                    className="rounded-input border border-line px-2 py-1 text-xs font-medium hover:bg-surface-hover"
-                    onClick={() => setEditing(plan)}
-                  >
-                    Tahrirlash
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <PlanList items={storePlans} onEdit={(plan) => setEditing({ mode: 'edit', plan })} />
         )}
       </SectionCard>
 
@@ -123,43 +95,107 @@ export function PlatformPlansPage() {
         title={t('platformAdmin.subscriptions.personalPlansTitle')}
         description={t('platformAdmin.subscriptions.personalPlansHint')}
       >
-        <ul className="divide-y divide-line">
-          {PERSONAL_PLANS.map((plan) => (
-            <li key={plan.key} className="flex items-baseline justify-between gap-3 py-3 first:pt-0 last:pb-0">
-              <div className="min-w-0">
-                <p className="font-medium text-ink">{t(`personal.plans.${plan.key}`)}</p>
-                <p className="mt-0.5 text-xs text-ink-muted">
-                  {plan.trialDays > 0
-                    ? t('platformAdmin.subscriptions.personalPlanTrial', { days: plan.trialDays })
-                    : t('platformAdmin.subscriptions.personalPlanPrice', {
-                        price: formatMoney(plan.monthlyPriceSom),
-                      })}
-                </p>
-              </div>
-              <p className="shrink-0 tabular-money text-sm font-medium text-ink">
-                {formatMoney(plan.monthlyPriceSom)}
-              </p>
-            </li>
-          ))}
-        </ul>
+        {list.isPending && !list.data ? (
+          <Skeleton className="h-16 w-full" />
+        ) : personalPlans.length === 0 ? (
+          <p className="text-sm text-ink-muted">
+            Shaxsiy tariflar hali seed qilinmagan. Platformani qayta seed qiling yoki yangi PERSONAL
+            tarif yarating.
+          </p>
+        ) : (
+          <PlanList items={personalPlans} onEdit={(plan) => setEditing({ mode: 'edit', plan })} />
+        )}
       </SectionCard>
 
       {editing ? (
-        <PlanDialog plan={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />
+        <PlanDialog
+          plan={editing.mode === 'edit' ? editing.plan : null}
+          audience={editing.mode === 'new' ? editing.audience : editing.plan.audience}
+          onClose={() => setEditing(null)}
+        />
       ) : null}
     </PageContainer>
   );
 }
 
-function PlanDialog({ plan, onClose }: { plan: SubscriptionPlanDto | null; onClose: () => void }) {
+function PlanList({
+  items,
+  onEdit,
+}: {
+  items: SubscriptionPlanDto[];
+  onEdit: (plan: SubscriptionPlanDto) => void;
+}) {
+  return (
+    <ul className="divide-y divide-line">
+      {items.map((plan) => (
+        <li
+          key={plan.id}
+          className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="min-w-0">
+            <p className="font-medium text-ink">{plan.name}</p>
+            <p className="mt-0.5 truncate text-xs text-ink-muted">
+              {plan.description || 'Tavsif yo‘q'} · {formatMoney(plan.monthlyPrice)} / oy
+              {plan.trialDays > 0 ? ` · ${plan.trialDays} kun sinov` : ''}
+              {` · daraja ${plan.rank ?? 0}`}
+            </p>
+            {plan.audience === PlanAudience.STORE ? (
+              <p className="mt-1 truncate text-xs text-ink-subtle">
+                {plan.enabledFeatures?.length
+                  ? `${plan.enabledFeatures
+                      .slice(0, 6)
+                      .map((item) => item.name)
+                      .join(' · ')}${plan.enabledFeatures.length > 6 ? '…' : ''}`
+                  : plan.featuresRestricted
+                    ? 'Funksiya yo‘q'
+                    : 'Barcha funksiyalar'}
+              </p>
+            ) : (
+              <p className="mt-1 text-xs text-ink-subtle">
+                Shaxsiy moliya — yozish huquqi obuna holatiga bog‘liq (TRIAL/ACTIVE)
+              </p>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Badge tone={plan.isActive ? 'success' : 'neutral'}>
+              {plan.isActive ? 'Faol' : 'O‘chirilgan'}
+            </Badge>
+            <button
+              type="button"
+              className="rounded-input border border-line px-2 py-1 text-xs font-medium hover:bg-surface-hover"
+              onClick={() => onEdit(plan)}
+            >
+              Tahrirlash
+            </button>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function PlanDialog({
+  plan,
+  audience,
+  onClose,
+}: {
+  plan: SubscriptionPlanDto | null;
+  audience: PlanAudience;
+  onClose: () => void;
+}) {
   const create = useCreatePlan();
   const update = useUpdatePlan();
-  const catalog = usePlatformFeatures(true);
+  const catalog = usePlatformFeatures(audience === PlanAudience.STORE);
   const features = catalog.data?.items ?? FEATURE_CATALOG.map(toFallbackFeature);
+  const isPersonal = audience === PlanAudience.PERSONAL;
   const [name, setName] = useState(plan?.name ?? '');
   const [description, setDescription] = useState(plan?.description ?? '');
   const [monthlyPrice, setMonthlyPrice] = useState(plan?.monthlyPrice ?? 0);
   const [trialDays, setTrialDays] = useState(plan ? String(plan.trialDays) : '0');
+  const [periodDays, setPeriodDays] = useState(() => {
+    const raw = plan?.features && typeof plan.features === 'object' ? plan.features.periodDays : null;
+    return raw != null ? String(raw) : isPersonal ? '30' : '';
+  });
   const [rank, setRank] = useState(plan ? String(plan.rank ?? 0) : '1');
   const [isActive, setIsActive] = useState(plan?.isActive ?? true);
   const [isDefaultTrial, setIsDefaultTrial] = useState(plan?.isDefaultTrial ?? false);
@@ -205,6 +241,11 @@ function PlanDialog({ plan, onClose }: { plan: SubscriptionPlanDto | null; onClo
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    const period = Number(periodDays) || 0;
+    const featuresPayload =
+      isPersonal && period > 0
+        ? { ...(plan?.features ?? {}), periodDays: period }
+        : plan?.features;
     const limitPayload: PlanLimitInput[] = LIMIT_CATALOG.map((item) => {
       const row = limits[item.key];
       const unlimited = row?.unlimited ?? true;
@@ -219,10 +260,12 @@ function PlanDialog({ plan, onClose }: { plan: SubscriptionPlanDto | null; onClo
       description,
       monthlyPrice,
       trialDays: Number(trialDays) || 0,
-      isDefaultTrial,
+      isDefaultTrial: isPersonal ? false : isDefaultTrial,
       rank: Number(rank) || 0,
-      featureKeys: [...selectedKeys],
-      limits: limitPayload,
+      audience,
+      featureKeys: isPersonal ? [] : [...selectedKeys],
+      limits: isPersonal ? [] : limitPayload,
+      features: featuresPayload,
     };
     try {
       if (plan) {
@@ -239,14 +282,25 @@ function PlanDialog({ plan, onClose }: { plan: SubscriptionPlanDto | null; onClo
   return (
     <Dialog
       open
-      title={plan ? 'Tarifni tahrirlash' : 'Yangi tarif'}
+      title={plan ? 'Tarifni tahrirlash' : isPersonal ? 'Yangi Personal tarif' : 'Yangi Business tarif'}
       onClose={onClose}
       className="sm:max-w-2xl"
     >
       <form className="space-y-4" onSubmit={(event) => void onSubmit(event)}>
+        <p className="rounded-input border border-line bg-surface-muted px-3 py-2 text-xs text-ink-muted">
+          {isPersonal
+            ? 'Personal Finance — narx va sinov kunlari database orqali user billingga tushadi. ERP funksiyalari bu yerda qo‘llanmaydi.'
+            : 'Business (do‘kon) tariflari — funksiya va limitlar ERP ga ta’sir qiladi.'}
+        </p>
         <label className="block space-y-1 text-sm">
-          <span className="font-medium text-ink">Nomi</span>
-          <input className={fieldClass} value={name} onChange={(event) => setName(event.target.value)} required />
+          <span className="font-medium text-ink">Nomi / kodi</span>
+          <input
+            className={fieldClass}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            required
+            disabled={Boolean(plan) && isPersonal}
+          />
         </label>
         <label className="block space-y-1 text-sm">
           <span className="font-medium text-ink">Tavsif</span>
@@ -259,7 +313,9 @@ function PlanDialog({ plan, onClose }: { plan: SubscriptionPlanDto | null; onClo
         </label>
         <MoneyField label="Oylik narx" value={monthlyPrice} onChange={setMonthlyPrice} />
         <label className="block space-y-1 text-sm">
-          <span className="font-medium text-ink">Sinov kunlari</span>
+          <span className="font-medium text-ink">
+            {isPersonal ? 'Sinov / davr kunlari' : 'Sinov kunlari'}
+          </span>
           <input
             className={fieldClass}
             inputMode="numeric"
@@ -267,6 +323,17 @@ function PlanDialog({ plan, onClose }: { plan: SubscriptionPlanDto | null; onClo
             onChange={(event) => setTrialDays(event.target.value)}
           />
         </label>
+        {isPersonal ? (
+          <label className="block space-y-1 text-sm">
+            <span className="font-medium text-ink">Pullik davr (kun)</span>
+            <input
+              className={fieldClass}
+              inputMode="numeric"
+              value={periodDays}
+              onChange={(event) => setPeriodDays(event.target.value)}
+            />
+          </label>
+        ) : null}
         <label className="block space-y-1 text-sm">
           <span className="font-medium text-ink">Daraja (upgrade tartibi)</span>
           <input
@@ -277,113 +344,124 @@ function PlanDialog({ plan, onClose }: { plan: SubscriptionPlanDto | null; onClo
           />
         </label>
 
-        <fieldset className="space-y-2">
-          <legend className="text-sm font-medium text-ink">Funksiyalar</legend>
-          {catalog.isPending && !catalog.data ? <Skeleton className="h-24 w-full" /> : null}
-          <div className="max-h-56 space-y-3 overflow-y-auto rounded-input border border-line p-3">
-            {grouped.map(([category, items]) => (
-              <div key={category}>
-                <p className="mb-1.5 text-xs font-semibold tracking-wide text-ink-muted uppercase">
-                  {category}
-                </p>
-                <ul className="space-y-1.5">
-                  {items.map((feature) => (
-                    <li key={feature.key}>
-                      <label className="flex items-start gap-2 text-sm text-ink">
+        {!isPersonal ? (
+          <>
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium text-ink">Funksiyalar</legend>
+              {catalog.isPending && !catalog.data ? <Skeleton className="h-24 w-full" /> : null}
+              <div className="max-h-56 space-y-3 overflow-y-auto rounded-input border border-line p-3">
+                {grouped.map(([category, items]) => (
+                  <div key={category}>
+                    <p className="mb-1.5 text-xs font-semibold tracking-wide text-ink-muted uppercase">
+                      {category}
+                    </p>
+                    <ul className="space-y-1.5">
+                      {items.map((feature) => (
+                        <li key={feature.key}>
+                          <label className="flex items-start gap-2 text-sm text-ink">
+                            <input
+                              type="checkbox"
+                              className="mt-0.5"
+                              checked={selectedKeys.has(feature.key)}
+                              onChange={() => toggleFeature(feature.key)}
+                            />
+                            <span>
+                              <span className="font-medium">{feature.name}</span>
+                              <span className="mt-0.5 block text-xs text-ink-muted">
+                                {feature.description}
+                              </span>
+                            </span>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </fieldset>
+
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium text-ink">Limitlar</legend>
+              <ul className="space-y-2 rounded-input border border-line p-3">
+                {LIMIT_CATALOG.map((item) => {
+                  const row = limits[item.key];
+                  return (
+                    <li key={item.key} className="flex flex-wrap items-center gap-2 text-sm">
+                      <span className="min-w-[7rem] font-medium text-ink">{item.name}</span>
+                      <label className="flex items-center gap-1.5 text-ink-muted">
                         <input
                           type="checkbox"
-                          className="mt-0.5"
-                          checked={selectedKeys.has(feature.key)}
-                          onChange={() => toggleFeature(feature.key)}
+                          checked={row?.unlimited ?? true}
+                          onChange={(event) =>
+                            setLimits((current) => ({
+                              ...current,
+                              [item.key]: {
+                                unlimited: event.target.checked,
+                                value: current[item.key]?.value ?? '',
+                              },
+                            }))
+                          }
                         />
-                        <span>
-                          <span className="font-medium">{feature.name}</span>
-                          {feature.description ? (
-                            <span className="block text-xs text-ink-muted">{feature.description}</span>
-                          ) : null}
-                        </span>
+                        Cheksiz
                       </label>
+                      {!(row?.unlimited ?? true) ? (
+                        <input
+                          className={`${fieldClass} max-w-[8rem]`}
+                          inputMode="numeric"
+                          value={row?.value ?? ''}
+                          onChange={(event) =>
+                            setLimits((current) => ({
+                              ...current,
+                              [item.key]: {
+                                unlimited: false,
+                                value: event.target.value,
+                              },
+                            }))
+                          }
+                        />
+                      ) : null}
                     </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </fieldset>
+                  );
+                })}
+              </ul>
+            </fieldset>
 
-        <fieldset className="space-y-2">
-          <legend className="text-sm font-medium text-ink">Limitlar</legend>
-          <div className="space-y-2">
-            {LIMIT_CATALOG.map((item) => {
-              const row = limits[item.key] ?? { unlimited: true, value: '' };
-              return (
-                <div
-                  key={item.key}
-                  className="grid grid-cols-1 gap-2 rounded-input border border-line p-3 sm:grid-cols-[1fr_auto_7rem] sm:items-center"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-ink">{item.name}</p>
-                    <p className="text-xs text-ink-muted">{item.description}</p>
-                  </div>
-                  <label className="flex items-center gap-2 text-sm text-ink">
-                    <input
-                      type="checkbox"
-                      checked={row.unlimited}
-                      onChange={(event) =>
-                        setLimits((current) => ({
-                          ...current,
-                          [item.key]: { ...row, unlimited: event.target.checked },
-                        }))
-                      }
-                    />
-                    Cheksiz
-                  </label>
-                  <input
-                    className={fieldClass}
-                    inputMode="numeric"
-                    placeholder="Son"
-                    disabled={row.unlimited}
-                    value={row.unlimited ? '' : row.value}
-                    onChange={(event) =>
-                      setLimits((current) => ({
-                        ...current,
-                        [item.key]: { ...row, value: event.target.value, unlimited: false },
-                      }))
-                    }
-                  />
-                </div>
-              );
-            })}
-          </div>
-        </fieldset>
+            <label className="flex items-center gap-2 text-sm text-ink">
+              <input
+                type="checkbox"
+                checked={isDefaultTrial}
+                onChange={(event) => setIsDefaultTrial(event.target.checked)}
+              />
+              Do‘konlar uchun default sinov tarifi
+            </label>
+          </>
+        ) : null}
 
-        <label className="flex items-center gap-2 text-sm text-ink">
-          <input
-            type="checkbox"
-            checked={isDefaultTrial}
-            onChange={(event) => setIsDefaultTrial(event.target.checked)}
-          />
-          Yangi do‘konlar uchun sinov tarifi
-        </label>
         {plan ? (
           <label className="flex items-center gap-2 text-sm text-ink">
-            <input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} />
-            Faol
+            <input
+              type="checkbox"
+              checked={isActive}
+              onChange={(event) => setIsActive(event.target.checked)}
+            />
+            Faol (yangi to‘lovlar uchun)
           </label>
         ) : null}
-        {error ? (
-          <p role="alert" className="text-sm text-danger-700">
-            {error}
-          </p>
-        ) : null}
-        <div className="flex justify-end gap-2">
-          <button type="button" className="rounded-input px-3 py-2 text-sm" onClick={onClose}>
+
+        {error ? <p className="text-sm text-danger-700">{error}</p> : null}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-input px-3 py-2 text-sm font-medium text-ink-muted hover:bg-surface-hover"
+          >
             Bekor
           </button>
           <button
             type="submit"
             disabled={pending}
-            className="inline-flex items-center gap-1.5 rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
           >
             {pending ? <Loader2 className="size-4 animate-spin" /> : null}
             Saqlash
@@ -394,7 +472,7 @@ function PlanDialog({ plan, onClose }: { plan: SubscriptionPlanDto | null; onClo
   );
 }
 
-function toFallbackFeature(entry: (typeof FEATURE_CATALOG)[number], index: number): FeatureDto {
+function toFallbackFeature(entry: (typeof FEATURE_CATALOG)[number]): FeatureDto {
   return {
     id: entry.key,
     key: entry.key,
@@ -402,6 +480,6 @@ function toFallbackFeature(entry: (typeof FEATURE_CATALOG)[number], index: numbe
     description: entry.description,
     category: entry.category,
     isActive: true,
-    sortOrder: index,
+    sortOrder: 0,
   };
 }

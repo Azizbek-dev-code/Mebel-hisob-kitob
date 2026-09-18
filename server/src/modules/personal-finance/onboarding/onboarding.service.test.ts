@@ -319,7 +319,9 @@ describe('completePersonalOnboardingRegister', () => {
     expect(result.workspace.storeId).toBeNull();
     expect(result.workspace.type).toBe(WorkspaceType.PERSONAL);
     expect(prismaMock.personalProfile.upsert).toHaveBeenCalled();
-    expect(JSON.stringify(result)).not.toContain('customMonthlyIncomeSom');
+    // Token-holder DTO may include customMonthlyIncomeSom (null here); never leak raw sensitive bigint.
+    expect(result.submission.customMonthlyIncomeSom ?? null).toBeNull();
+    expect(result.submission.hasCustomIncome).toBe(false);
   });
 });
 

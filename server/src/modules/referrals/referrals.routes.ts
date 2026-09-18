@@ -3,7 +3,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 
 import { env } from '../../config/env.js';
-import { requireAuth } from '../../middleware/require-auth.js';
+import { requireAuth, optionalAuth } from '../../middleware/require-auth.js';
 import { requirePlatformAdmin } from '../../middleware/require-platform-admin.js';
 import { validate } from '../../middleware/validate.js';
 import { ApiError } from '../../utils/api-error.js';
@@ -54,6 +54,7 @@ referralsRouter.get(
 );
 referralsRouter.post(
   '/click',
+  optionalAuth,
   clickRateLimiter,
   validate({ body: referralClickBodySchema }),
   postReferralClick,

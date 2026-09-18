@@ -14,6 +14,19 @@ import { ExpensesPage } from '@/features/expenses/pages/ExpensesPage';
 import { InventoryPage } from '@/features/inventory/pages/InventoryPage';
 import { PersonalBillingPage } from '@/features/personal/billing/pages/PersonalBillingPage';
 import { PersonalDashboardPage } from '@/features/personal/dashboard/pages/PersonalDashboardPage';
+import { PersonalFinanceHubPage } from '@/features/personal/finance/pages/PersonalFinanceHubPage';
+import { PersonalGrowthFocusPage } from '@/features/personal/growth/pages/PersonalGrowthFocusPage';
+import { PersonalGrowthHabitsPage } from '@/features/personal/growth/pages/PersonalGrowthHabitsPage';
+import { PersonalGrowthLearningPage } from '@/features/personal/growth/pages/PersonalGrowthLearningPage';
+import { PersonalGrowthLevelPage } from '@/features/personal/growth/pages/PersonalGrowthLevelPage';
+import { PersonalGrowthAchievementsPage } from '@/features/personal/growth/pages/PersonalGrowthAchievementsPage';
+import { PersonalGrowthFriendsPage } from '@/features/personal/growth/pages/PersonalGrowthFriendsPage';
+import { PersonalGrowthChallengesPage } from '@/features/personal/growth/pages/PersonalGrowthChallengesPage';
+import { PersonalGrowthSocialPage } from '@/features/personal/growth/pages/PersonalGrowthSocialPage';
+import { PersonalGrowthNotificationsPage } from '@/features/personal/growth/pages/PersonalGrowthNotificationsPage';
+import { PersonalGrowthReviewsPage } from '@/features/personal/growth/pages/PersonalGrowthReviewsPage';
+import { PersonalGrowthHubPage } from '@/features/personal/growth/pages/PersonalGrowthHubPage';
+import { PersonalGrowthTodosPage } from '@/features/personal/growth/pages/PersonalGrowthTodosPage';
 import { PersonalHistoryPage } from '@/features/personal/history/pages/PersonalHistoryPage';
 import { PersonalLayout } from '@/features/personal/layout/PersonalLayout';
 import { PersonalCategoriesPage } from '@/features/personal/ledger/pages/PersonalCategoriesPage';
@@ -21,6 +34,7 @@ import { PersonalEntriesPage } from '@/features/personal/ledger/pages/PersonalEn
 import { PersonalWalletsPage } from '@/features/personal/ledger/pages/PersonalWalletsPage';
 import { PersonalBudgetsPage } from '@/features/personal/planning/pages/PersonalBudgetsPage';
 import { PersonalGoalsPage } from '@/features/personal/planning/pages/PersonalGoalsPage';
+import { PersonalPlanPage } from '@/features/personal/plan/pages/PersonalPlanPage';
 import { PersonalAnalyticsPage } from '@/features/personal/analytics/pages/PersonalAnalyticsPage';
 import { PersonalDebtsPage } from '@/features/personal/lifecycle/pages/PersonalDebtsPage';
 import { PersonalNotificationsPage } from '@/features/personal/lifecycle/pages/PersonalNotificationsPage';
@@ -223,8 +237,32 @@ export const routes: RouteObject[] = [
         element: <PersonalLayout />,
         children: [
           { path: ROUTES.personalDashboard, element: <PersonalDashboardPage /> },
+          { path: ROUTES.personalPlan, element: <PersonalPlanPage /> },
+          { path: ROUTES.personalGrowth, element: <PersonalGrowthHubPage /> },
+          { path: ROUTES.personalGrowthTodos, element: <PersonalGrowthTodosPage /> },
+          { path: ROUTES.personalGrowthFocus, element: <PersonalGrowthFocusPage /> },
+          { path: ROUTES.personalGrowthHabits, element: <PersonalGrowthHabitsPage /> },
+          { path: ROUTES.personalGrowthLearning, element: <PersonalGrowthLearningPage /> },
+          { path: ROUTES.personalGrowthLevel, element: <PersonalGrowthLevelPage /> },
+          {
+            path: ROUTES.personalGrowthAchievements,
+            element: <PersonalGrowthAchievementsPage />,
+          },
+          { path: ROUTES.personalGrowthFriends, element: <PersonalGrowthFriendsPage /> },
+          { path: ROUTES.personalGrowthChallenges, element: <PersonalGrowthChallengesPage /> },
+          { path: ROUTES.personalGrowthSocial, element: <PersonalGrowthSocialPage /> },
+          {
+            path: ROUTES.personalGrowthNotifications,
+            element: <PersonalGrowthNotificationsPage />,
+          },
+          { path: ROUTES.personalGrowthReviews, element: <PersonalGrowthReviewsPage /> },
+          { path: ROUTES.personalFinance, element: <PersonalFinanceHubPage /> },
+          { path: ROUTES.personalProfile, element: <PersonalSettingsPage /> },
+          {
+            path: ROUTES.personalSettings,
+            element: <Navigate to={ROUTES.personalProfile} replace />,
+          },
           { path: ROUTES.personalHistory, element: <PersonalHistoryPage /> },
-          { path: ROUTES.personalSettings, element: <PersonalSettingsPage /> },
           { path: ROUTES.personalAccounts, element: <PersonalWalletsPage /> },
           {
             path: ROUTES.personalIncome,

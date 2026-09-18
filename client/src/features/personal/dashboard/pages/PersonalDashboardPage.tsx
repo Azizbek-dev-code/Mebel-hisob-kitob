@@ -1,4 +1,5 @@
-import { PersonalEntryType, formatMoney, type PersonalActivityItem } from '@furniture-erp/shared';
+import { formatMoney, formatFocusMinutes, GrowthTodoStatus } from '@furniture-erp/shared';
+import { CalendarDays, Check, Flame, Sparkles, Target, Timer } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -6,29 +7,156 @@ import { ErrorState } from '@/components/feedback/ErrorState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { cn } from '@/lib/cn';
 import { ROUTES } from '@/routes/paths';
-import { formatDate } from '@/utils/format';
 
-import { WalletKindIcon } from '../../ledger/components/WalletKindIcon';
+import { useGrowthFocusStats } from '../../growth/hooks/use-growth-focus';
+import { useTodayGrowthProgress } from '../../growth/hooks/use-growth-habits';
+import { useGrowthProgress } from '../../growth/hooks/use-growth-xp';
+import {
+  useTodayGrowthTodos,
+  useUpdateGrowthTodo,
+} from '../../growth/hooks/use-growth-todos';
 import { usePersonalSummary } from '../../ledger/hooks/use-personal-ledger';
-import { usePersonalNotifications, usePersonalRecurring } from '../../lifecycle/hooks/use-personal-lifecycle';
-import { usePersonalBudgets, usePersonalSavingGoals } from '../../planning/hooks/use-personal-planning';
-import { BudgetWarningText } from '../../planning/components/BudgetWarningText';
-import { GoalEtaText } from '../../planning/components/GoalEtaText';
-import { ProgressBar } from '../../planning/components/ProgressBar';
+import { usePersonalPlanDay } from '../../plan/hooks/use-personal-plan';
 
+function utcTodayKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function formatClock(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+}
+
+/**
+ * Command center: answer “Bugun nima qilishim kerak?” in a few seconds.
+ * Growth slots are placeholders until later phases; plan + finance are live.
+ */
 export function PersonalDashboardPage() {
   const { t } = useTranslation();
   const summary = usePersonalSummary();
-  const budgets = usePersonalBudgets();
-  const goals = usePersonalSavingGoals();
-  const recurring = usePersonalRecurring();
-  const notifications = usePersonalNotifications();
+  const todayKey = utcTodayKey();
+  const dayPlan = usePersonalPlanDay(todayKey);
+  const todayTodos = useTodayGrowthTodos();
+  const updateTodo = useUpdateGrowthTodo();
+  const focusStats = useGrowthFocusStats();
+  const todayProgress = useTodayGrowthProgress();
+  const growthProgress = useGrowthProgress();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 overflow-x-hidden">
       <div>
-        <h1 className="text-lg font-semibold tracking-tight text-ink">{t('personal.dashboardTitle')}</h1>
-        <p className="mt-1 text-sm text-ink-muted">{t('personal.dashboardHint')}</p>
+        <h1 className="text-lg font-semibold tracking-tight text-ink">{t('personal.homeTitle')}</h1>
+        <p className="mt-1 text-sm text-ink-muted">{t('personal.homeHint')}</p>
+      </div>
+
+      <section className="rounded-2xl border border-line bg-surface p-4 shadow-card">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <Target className="size-4 text-brand-700" aria-hidden="true" />
+            {t('personal.homeTodayTasks')}
+          </h2>
+          <Link
+            to={ROUTES.personalGrowthTodos}
+            className="text-xs font-medium text-brand-700 hover:underline"
+          >
+            {t('personal.growth.todo')}
+          </Link>
+        </div>
+        {todayTodos.isPending && !todayTodos.data ? (
+          <Skeleton className="mt-3 h-16 w-full" />
+        ) : (todayTodos.data?.focus.length ?? 0) === 0 ? (
+          <p className="mt-3 text-sm text-ink-muted">{t('personal.homeTodayTasksEmpty')}</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {todayTodos.data?.focus.slice(0, 3).map((todo) => (
+              <li key={todo.id} className="flex items-center gap-2.5 text-sm">
+                <button
+                  type="button"
+                  disabled={updateTodo.isPending}
+                  aria-label={t('personal.todoMarkDone')}
+                  className="flex size-11 shrink-0 items-center justify-center rounded-full border border-line-strong text-transparent hover:border-brand-500 hover:text-brand-600"
+                  onClick={() =>
+                    void updateTodo.mutateAsync({
+                      id: todo.id,
+                      body: { status: GrowthTodoStatus.DONE },
+                    })
+                  }
+                >
+                  <Check className="size-4" aria-hidden="true" />
+                </button>
+                <span className="min-w-0 flex-1 truncate text-ink">{todo.title}</span>
+                {todo.estimatedMinutes ? (
+                  <span className="shrink-0 tabular-nums text-xs text-ink-muted">
+                    {todo.estimatedMinutes} {t('personal.plan.minutes')}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-line bg-surface p-4 shadow-card">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <CalendarDays className="size-4 text-brand-700" aria-hidden="true" />
+            {t('personal.homeTodayPlan')}
+          </h2>
+          <Link to={ROUTES.personalPlan} className="text-xs font-medium text-brand-700 hover:underline">
+            {t('personal.navPlan')}
+          </Link>
+        </div>
+        {dayPlan.isPending && !dayPlan.data ? (
+          <Skeleton className="mt-3 h-16 w-full" />
+        ) : (dayPlan.data?.items.length ?? 0) === 0 ? (
+          <p className="mt-3 text-sm text-ink-muted">{t('personal.homeTodayPlanEmpty')}</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {dayPlan.data?.items.slice(0, 5).map((item) => (
+              <li key={item.id} className="flex items-center justify-between gap-3 text-sm">
+                <span className="min-w-0 truncate text-ink">{item.title}</span>
+                <span className="shrink-0 tabular-nums text-ink-muted">
+                  {item.allDay ? t('personal.plan.allDay') : formatClock(item.startsAt)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <div className="grid grid-cols-3 gap-2.5">
+        <Link to={ROUTES.personalGrowthLevel} className="block">
+          <StatChip
+            icon={Flame}
+            label={t('personal.homeStreak')}
+            value={
+              growthProgress.data && growthProgress.data.currentStreak > 0
+                ? String(growthProgress.data.currentStreak)
+                : t('personal.homeStatSoon')
+            }
+          />
+        </Link>
+        <Link to={ROUTES.personalGrowthLevel} className="block">
+          <StatChip
+            icon={Sparkles}
+            label={t('personal.homeLevel')}
+            value={
+              growthProgress.data ? String(growthProgress.data.level) : t('personal.homeStatSoon')
+            }
+          />
+        </Link>
+        <Link to={ROUTES.personalGrowthFocus} className="block">
+          <StatChip
+            icon={Timer}
+            label={t('personal.homeFocus')}
+            value={
+              focusStats.data
+                ? formatFocusMinutes(focusStats.data.stats.todayMinutes)
+                : t('personal.homeStatSoon')
+            }
+          />
+        </Link>
       </div>
 
       {summary.isPending && !summary.data ? (
@@ -40,252 +168,95 @@ export function PersonalDashboardPage() {
           onRetry={() => void summary.refetch()}
         />
       ) : (
-        <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Kpi
-              className="col-span-2 sm:col-span-1"
-              label={t('personal.totalBalance')}
-              value={formatMoney(summary.data?.totalBalanceSom ?? 0)}
-              tone={(summary.data?.totalBalanceSom ?? 0) < 0 ? 'negative' : 'neutral'}
-            />
-            <Kpi
-              label={t('personal.monthIncome')}
-              value={formatMoney(summary.data?.monthIncomeSom ?? 0)}
-              tone="income"
-            />
-            <Kpi
-              label={t('personal.monthExpense')}
-              value={formatMoney(summary.data?.monthExpenseSom ?? 0)}
-              tone="expense"
-            />
-            <Kpi
-              className="col-span-2 sm:col-span-1"
-              label={t('personal.monthNet')}
-              value={formatMoney(summary.data?.monthNetSom ?? 0)}
-              tone={
-                (summary.data?.monthNetSom ?? 0) < 0
-                  ? 'negative'
-                  : (summary.data?.monthNetSom ?? 0) > 0
-                    ? 'income'
-                    : 'neutral'
-              }
-            />
+        <section className="rounded-2xl border border-line bg-surface p-4 shadow-card">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-ink">{t('personal.homeTodayFinance')}</h2>
+            <Link
+              to={ROUTES.personalFinance}
+              className="text-xs font-medium text-brand-700 hover:underline"
+            >
+              {t('personal.navFinance')}
+            </Link>
           </div>
-          {(summary.data?.monthIncomeSom ?? 0) > 0 || (summary.data?.monthExpenseSom ?? 0) > 0 ? (
-            <p className="text-sm text-ink-muted">
-              {(summary.data?.monthNetSom ?? 0) < 0
-                ? t('personal.insightOverspend')
-                : t('personal.insightPositive')}
-              {(summary.data?.monthIncomeSom ?? 0) > 0
-                ? ` ${t('personal.savingsRate')}: ${Math.round(
-                    ((summary.data?.monthNetSom ?? 0) / (summary.data?.monthIncomeSom ?? 1)) * 100,
-                  )}%`
-                : ''}
-            </p>
-          ) : null}
-
-          <section className="rounded-panel border border-line bg-surface p-5 shadow-card">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-ink">{t('personal.wallets')}</h2>
-              <Link to={ROUTES.personalAccounts} className="text-sm text-brand-700 hover:underline">
-                {t('common.edit')}
-              </Link>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs text-ink-muted">{t('personal.monthIncome')}</p>
+              <p className="mt-0.5 text-base font-semibold tabular-nums pf-amount-income">
+                {formatMoney(summary.data?.monthIncomeSom ?? 0)}
+              </p>
             </div>
-            <p className="mt-1 text-xs text-ink-muted">{t('personal.walletsHint')}</p>
-            <ul className="mt-3 space-y-2">
-              {(summary.data?.wallets ?? []).filter((wallet) => !wallet.isArchived).map((wallet) => (
-                <li key={wallet.id} className="flex items-center justify-between text-sm">
-                  <span className="flex min-w-0 items-center gap-2 text-ink">
-                    <WalletKindIcon kind={wallet.kind} className="size-4 shrink-0 text-brand-700" />
-                    <span className="truncate">{wallet.name}</span>
-                  </span>
-                  <span
-                    className={
-                      wallet.balanceSom < 0
-                        ? 'font-medium tabular-nums pf-amount-negative'
-                        : 'font-medium tabular-nums text-ink'
-                    }
-                  >
-                    {formatMoney(wallet.balanceSom)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="rounded-panel border border-line bg-surface p-5 shadow-card">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-ink">{t('personal.recent')}</h2>
-              <Link to={ROUTES.personalHistory} className="text-sm text-brand-700 hover:underline">
-                {t('personal.history')}
-              </Link>
+            <div>
+              <p className="text-xs text-ink-muted">{t('personal.monthExpense')}</p>
+              <p className="mt-0.5 text-base font-semibold tabular-nums pf-amount-expense">
+                {formatMoney(summary.data?.monthExpenseSom ?? 0)}
+              </p>
             </div>
-            {(summary.data?.recentActivity.length ?? 0) === 0 ? (
-              <p className="mt-3 text-sm text-ink-muted">{t('personal.noEntries')}</p>
-            ) : (
-              <ul className="mt-3 space-y-2">
-                {summary.data?.recentActivity.map((item) => (
-                  <ActivityRow key={`${item.kind}-${item.kind === 'ENTRY' ? item.entry.id : item.transfer.id}`} item={item} />
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section className="rounded-panel border border-line bg-surface p-5 shadow-card">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-ink">{t('personal.budgets')}</h2>
-              <Link to={ROUTES.personalBudgets} className="text-sm text-brand-700 hover:underline">
-                {t('common.edit')}
-              </Link>
-            </div>
-            {(budgets.data?.items ?? []).filter((item) => item.isActive).length === 0 ? (
-              <p className="mt-3 text-sm text-ink-muted">{t('personal.noBudgets')}</p>
-            ) : (
-              <ul className="mt-3 space-y-3">
-                {(budgets.data?.items ?? [])
-                  .filter((item) => item.isActive)
-                  .slice(0, 4)
-                  .map((budget) => (
-                    <li key={budget.id} className="space-y-1 text-sm">
-                      <div className="flex justify-between gap-3">
-                        <span className="truncate text-ink">{budget.name}</span>
-                        <span className="text-ink-muted">
-                          {formatMoney(budget.spentSom)} / {formatMoney(budget.limitSom)}
-                        </span>
-                      </div>
-                      <ProgressBar percent={budget.percent} warningLevel={budget.warningLevel} />
-                      <BudgetWarningText budget={budget} />
-                    </li>
-                  ))}
-              </ul>
-            )}
-          </section>
-
-          <section className="rounded-panel border border-line bg-surface p-5 shadow-card">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-ink">{t('personal.goals')}</h2>
-              <Link to={ROUTES.personalGoals} className="text-sm text-brand-700 hover:underline">
-                {t('common.edit')}
-              </Link>
-            </div>
-            {(goals.data?.items.length ?? 0) === 0 ? (
-              <p className="mt-3 text-sm text-ink-muted">{t('personal.noGoals')}</p>
-            ) : (
-              <ul className="mt-3 space-y-3">
-                {goals.data?.items.slice(0, 4).map((goal) => (
-                  <li key={goal.id} className="space-y-1 text-sm">
-                    <div className="flex justify-between gap-3">
-                      <span className="truncate text-ink">{goal.name}</span>
-                      <span className="text-ink-muted">
-                        {formatMoney(goal.savedSom)} / {formatMoney(goal.targetSom)}
-                      </span>
-                    </div>
-                    <ProgressBar percent={goal.percent} over={false} />
-                    <GoalEtaText goal={goal} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          {(notifications.data?.items.length ?? 0) > 0 ? (
-            <section className="rounded-panel border border-line bg-surface p-5 shadow-card">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold text-ink">{t('personal.notifications')}</h2>
-                <Link to={ROUTES.personalNotifications} className="text-sm text-brand-700 hover:underline">
-                  {t('common.edit')}
-                </Link>
-              </div>
-              <ul className="mt-3 space-y-2">
-                {notifications.data?.items.slice(0, 4).map((item) => (
-                  <li key={item.id} className="text-sm text-ink">
-                    <Link to={item.href} className="hover:underline">
-                      {t(`personal.notifyKind.${item.kind}`, { name: item.title })}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          <section className="rounded-panel border border-line bg-surface p-5 shadow-card">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-ink">{t('personal.upcomingPayments')}</h2>
-              <Link to={ROUTES.personalRecurring} className="text-sm text-brand-700 hover:underline">
-                {t('common.edit')}
-              </Link>
-            </div>
-            {(recurring.data?.upcoming.length ?? 0) === 0 ? (
-              <p className="mt-3 text-sm text-ink-muted">{t('personal.noUpcoming')}</p>
-            ) : (
-              <ul className="mt-3 space-y-2">
-                {recurring.data?.upcoming.slice(0, 4).map((rule) => (
-                  <li key={rule.id} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="min-w-0 truncate text-ink">
-                      {rule.name} · {formatDate(rule.nextDueAt)}
-                    </span>
-                    <span className="shrink-0 tabular-nums text-ink">{formatMoney(rule.amountSom)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </>
+          </div>
+          <p className="mt-3 text-xs text-ink-muted">
+            {t('personal.totalBalance')}:{' '}
+            <span
+              className={
+                (summary.data?.totalBalanceSom ?? 0) < 0
+                  ? 'font-medium tabular-nums pf-amount-negative'
+                  : 'font-medium tabular-nums text-ink'
+              }
+            >
+              {formatMoney(summary.data?.totalBalanceSom ?? 0)}
+            </span>
+          </p>
+          <p className="mt-2 text-xs text-ink-muted">
+            {t('personal.homeFinanceXpHint')}{' '}
+            <Link to={ROUTES.personalGrowthLevel} className="font-medium text-brand-700 hover:underline">
+              {t('personal.growth.level')}
+            </Link>
+          </p>
+        </section>
       )}
+
+      <section className="rounded-2xl border border-line bg-surface p-4 shadow-card">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-ink">{t('personal.homeTodayProgress')}</h2>
+          <Link
+            to={ROUTES.personalGrowthHabits}
+            className="text-xs font-medium text-brand-700 hover:underline"
+          >
+            {t('personal.growth.habits')}
+          </Link>
+        </div>
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-muted">
+          <div
+            className="h-full rounded-full bg-brand-500 transition-[width]"
+            style={{ width: `${todayProgress.data?.percent ?? 0}%` }}
+          />
+        </div>
+        <p className="mt-2 text-xs text-ink-muted">
+          {todayProgress.data &&
+          todayProgress.data.habitsDue +
+            todayProgress.data.dailyGoalsTotal +
+            todayProgress.data.focusTodosTotal >
+            0
+            ? t('personal.homeTodayProgressValue', { percent: todayProgress.data.percent })
+            : t('personal.homeTodayProgressEmpty')}
+        </p>
+      </section>
     </div>
   );
 }
 
-function Kpi({
+function StatChip({
+  icon: Icon,
   label,
   value,
-  tone = 'neutral',
-  className,
 }: {
+  icon: typeof Flame;
   label: string;
   value: string;
-  tone?: 'neutral' | 'income' | 'expense' | 'negative';
-  className?: string;
 }) {
-  const valueClass =
-    tone === 'income'
-      ? 'pf-amount-income'
-      : tone === 'expense'
-        ? 'pf-amount-expense'
-        : tone === 'negative'
-          ? 'pf-amount-negative'
-          : 'text-ink';
   return (
-    <div className={cn('rounded-2xl border border-line bg-surface p-4', className)}>
-      <p className="text-xs text-ink-muted">{label}</p>
-      <p className={`mt-1 text-lg font-semibold tabular-nums tracking-tight ${valueClass}`}>{value}</p>
+    <div className={cn('rounded-2xl border border-line bg-surface px-2.5 py-3 text-center')}>
+      <Icon className="mx-auto size-4 text-brand-700" aria-hidden="true" />
+      <p className="mt-1.5 text-[10px] leading-tight text-ink-muted">{label}</p>
+      <p className="mt-0.5 text-xs font-semibold text-ink">{value}</p>
     </div>
-  );
-}
-
-export function ActivityRow({ item }: { item: PersonalActivityItem }) {
-  const { t } = useTranslation();
-  if (item.kind === 'TRANSFER') {
-    return (
-      <li className="flex items-center justify-between gap-3 text-sm">
-        <span className="min-w-0 truncate text-ink">
-          {t('personal.transfer')} · {item.transfer.fromWallet.name} → {item.transfer.toWallet.name} ·{' '}
-          {formatDate(item.occurredAt)}
-        </span>
-        <span className="shrink-0 tabular-nums text-ink">{formatMoney(item.transfer.amount)}</span>
-      </li>
-    );
-  }
-  const income = item.entry.type === PersonalEntryType.INCOME;
-  return (
-    <li className="flex items-center justify-between gap-3 text-sm">
-      <span className="min-w-0 truncate text-ink">
-        {item.entry.category.name} · {formatDate(item.occurredAt)}
-      </span>
-      <span className={income ? 'shrink-0 tabular-nums pf-amount-income' : 'shrink-0 tabular-nums pf-amount-expense'}>
-        {income ? '+' : '−'}
-        {formatMoney(item.entry.amount)}
-      </span>
-    </li>
   );
 }

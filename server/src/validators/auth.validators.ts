@@ -15,6 +15,7 @@ export const loginBodySchema = z.object({
     .string({ required_error: 'Enter your password' })
     .min(1, 'Enter your password')
     .max(128, 'Password is too long'),
+  rememberMe: z.boolean().optional().default(false),
 });
 
 export type LoginBody = z.infer<typeof loginBodySchema>;

@@ -22,6 +22,8 @@ const publicSelect = {
   address: true,
   businessType: true,
   identityId: true,
+  referralCode: true,
+  visitorKey: true,
   status: true,
   rejectionReason: true,
   reviewedAt: true,
@@ -88,6 +90,8 @@ export async function createPendingRequest(data: {
   address: string;
   businessType: BusinessType;
   identityId?: string | null;
+  referralCode?: string | null;
+  visitorKey?: string | null;
 }): Promise<StoreCreationRequestRecord> {
   return prisma.storeCreationRequest.create({
     data: {
@@ -103,6 +107,8 @@ export async function createPendingRequest(data: {
       address: data.address,
       businessType: data.businessType,
       identityId: data.identityId ?? null,
+      referralCode: data.referralCode ?? null,
+      visitorKey: data.visitorKey ?? null,
       status: StoreCreationRequestStatus.PENDING,
     },
     select: publicSelect,
@@ -228,6 +234,8 @@ export function loadPendingForUpdate(
   address: string;
   businessType: BusinessType;
   identityId: string | null;
+  referralCode: string | null;
+  visitorKey: string | null;
 } | null> {
   return tx.storeCreationRequest.findUnique({
     where: { id },
@@ -246,6 +254,8 @@ export function loadPendingForUpdate(
       address: true,
       businessType: true,
       identityId: true,
+      referralCode: true,
+      visitorKey: true,
     },
   });
 }

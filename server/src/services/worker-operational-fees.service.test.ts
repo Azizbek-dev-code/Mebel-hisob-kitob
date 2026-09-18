@@ -224,6 +224,41 @@ describe('worker-operational-fees', () => {
     expect(financialRepoMock.createTransaction).toHaveBeenCalledTimes(1);
   });
 
+  it('reverses seller commission on the original transactionDate (not wall clock)', async () => {
+    const augustSaleDate = new Date('2026-08-15T12:00:00.000Z');
+    financialRepoMock.findOpenSaleOperationalFeeCommissions.mockResolvedValue([
+      {
+        id: 'tx_hist_seller',
+        workerId: 'seller_1',
+        amount: 500_000n,
+        type: WorkerFinancialTransactionType.COMMISSION,
+        description: 'Komissiya · Sotuv #42',
+        referenceId: 'sale_42:PERCENT_OF_SALE',
+        responsibility: 'SELLER',
+        transactionDate: augustSaleDate,
+      },
+    ]);
+
+    await reverseSaleOperationalFees({
+      storeId: 'store_1',
+      saleId: 'sale_42',
+      saleNumber: 42,
+      completion: NOTHING_COMPLETED,
+      actorId: 'admin_1',
+      client: TX,
+    });
+
+    expect(financialRepoMock.createTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: WorkerFinancialTransactionType.REVERSAL,
+        referenceId: 'tx_hist_seller',
+        amount: 500_000,
+        transactionDate: augustSaleDate,
+      }),
+      TX,
+    );
+  });
+
   it('reverses settled seller compensation commissions for the sale', async () => {
     financialRepoMock.findOpenSaleOperationalFeeCommissions.mockResolvedValue([
       {

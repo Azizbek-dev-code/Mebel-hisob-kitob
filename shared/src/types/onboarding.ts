@@ -53,6 +53,11 @@ export interface OnboardingSubmissionDto {
   status: OnboardingSubmissionStatus;
   answers: OnboardingAnswers;
   hasCustomIncome: boolean;
+  /**
+   * Whole so'm. Returned to the token holder so refresh mid-flow can restore
+   * CUSTOM income input; never expose via admin list endpoints without care.
+   */
+  customMonthlyIncomeSom?: number | null;
   identityId: string | null;
   workspaceId: string | null;
   createdAt: IsoDateString;

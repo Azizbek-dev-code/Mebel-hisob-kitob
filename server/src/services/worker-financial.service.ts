@@ -346,7 +346,7 @@ export async function reverseTransaction(
 
     const transactionDate = input.transactionDate
       ? parseTransactionDateOrThrow(input.transactionDate)
-      : new Date();
+      : originalRecord.transactionDate;
 
     const description =
       normaliseDescription(input.description) ??

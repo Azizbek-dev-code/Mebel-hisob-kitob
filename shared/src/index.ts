@@ -11,6 +11,8 @@ export * from './personal-ledger/index.js';
 export * from './personal-planning/index.js';
 export * from './personal-analytics/index.js';
 export * from './personal-lifecycle/index.js';
+export * from './personal-plan/index.js';
+export * from './personal-growth/index.js';
 export * from './referral/index.js';
 export * from './types/index.js';
 export * from './utils/index.js';

@@ -423,6 +423,129 @@ enum PersonalDebtDirection {
   BORROWED
 }
 
+/// O'sish calendar / plan event priority.
+enum GrowthEventPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+/// Recurrence for plan events. NONE = single occurrence.
+enum GrowthEventRecurrence {
+  NONE
+  DAILY
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+/// O'sish todo status.
+enum GrowthTodoStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+/// Pomodoro / focus session kind.
+enum GrowthFocusKind {
+  FOCUS
+  BREAK
+}
+
+/// Focus session lifecycle.
+enum GrowthFocusStatus {
+  RUNNING
+  COMPLETED
+  INTERRUPTED
+  DISCARDED
+}
+
+/// How often an O'sish habit is expected.
+enum GrowthHabitFrequency {
+  DAILY
+  WEEKLY
+  CUSTOM
+}
+
+/// Learning / study category.
+enum GrowthLearningCategory {
+  READING
+  COURSE
+  BOOK
+  IELTS
+  PROGRAMMING
+  LANGUAGE
+  SKILL
+  CUSTOM
+}
+
+enum GrowthLearningGoalStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+/// XP ledger source. Financial XP lands in a later phase.
+enum GrowthXpSource {
+  TODO_COMPLETED
+  HABIT_CHECK_IN
+  FOCUS_COMPLETED
+  LEARNING_SESSION
+  DAILY_GOAL_DONE
+  MILESTONE_REACHED
+  ACHIEVEMENT_UNLOCKED
+  /// Flat discipline XP — never proportional to money amount.
+  FINANCE_DISCIPLINE
+}
+
+/// Friendship lifecycle between two Identities (social — not workspace-scoped).
+enum GrowthFriendshipStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  BLOCKED
+}
+
+/// Fight = 1v1; Group = shared target (3–10 people).
+enum GrowthChallengeKind {
+  FIGHT
+  GROUP
+}
+
+/// What the challenge scores during the active window.
+enum GrowthChallengeMetric {
+  FOCUS_MINUTES
+  TASKS_COMPLETED
+  LEARNING_MINUTES
+  XP_GAINED
+}
+
+enum GrowthChallengeStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum GrowthChallengeParticipantStatus {
+  INVITED
+  ACCEPTED
+  DECLINED
+  LEFT
+}
+
+/// In-app Growth inbox kinds (finance notifications stay separate).
+enum GrowthNotificationKind {
+  REMINDER
+  ACHIEVEMENT
+  FRIEND
+  FIGHT
+  STREAK
+  RESULT
+}
+
 // ---------------------------------------------------------------------------
 // Tenancy
 // ---------------------------------------------------------------------------
@@ -579,6 +702,14 @@ model Identity {
   referralAttributions  ReferralAttribution[]  @relation("ReferredIdentity")
   referralCommissions   ReferralCommission[]   @relation("ReferrerCommissions")
   referralWithdrawals   ReferralWithdrawal[]
+  friendshipsRequested  GrowthFriendship[] @relation("FriendshipRequester")
+  friendshipsReceived   GrowthFriendship[] @relation("FriendshipAddressee")
+  socialProfile         GrowthSocialProfile?
+  challengesCreated     GrowthChallenge[] @relation("ChallengeCreator")
+  challengeParticipations GrowthChallengeParticipant[]
+  friendStreaksAsA      GrowthFriendStreak[] @relation("FriendStreakA")
+  friendStreaksAsB      GrowthFriendStreak[] @relation("FriendStreakB")
+  growthNotifications   GrowthNotification[]
 
   @@index([email])
   @@map("identities")
@@ -610,6 +741,20 @@ model Workspace {
   personalSavingGoals    PersonalSavingGoal[]
   personalRecurringRules PersonalRecurringRule[]
   personalDebts          PersonalDebt[]
+  growthCalendarEvents   GrowthCalendarEvent[]
+  growthTodos            GrowthTodo[]
+  growthFocusSessions    GrowthFocusSession[]
+  growthHabits           GrowthHabit[]
+  growthHabitCheckIns    GrowthHabitCheckIn[]
+  growthDailyGoals       GrowthDailyGoal[]
+  growthLearningGoals    GrowthLearningGoal[]
+  growthLearningSessions GrowthLearningSession[]
+  growthProgress         GrowthProgress?
+  growthXpEvents         GrowthXpEvent[]
+  growthAchievementUnlocks GrowthAchievementUnlock[]
+  growthNotifications    GrowthNotification[]
+  growthWeeklyReviews    GrowthWeeklyReview[]
+  growthMonthlyReports   GrowthMonthlyReport[]
   subscriptionRequests   SubscriptionRequest[]
 
   @@index([type, status])
@@ -1036,6 +1181,502 @@ model PersonalDebtPayment {
   @@map("personal_debt_payments")
 }
 
+/// O'sish plan / calendar event. PERSONAL workspace only — never storeId / ERP.
+model GrowthCalendarEvent {
+  id                   String                @id @default(cuid())
+  workspaceId          String
+  title                String
+  note                 String?
+  /// Free-text category label (O'qish, Gym, …). Structured catalog comes later.
+  category             String?
+  priority             GrowthEventPriority   @default(MEDIUM)
+  startsAt             DateTime
+  endsAt               DateTime?
+  allDay               Boolean               @default(false)
+  recurrence           GrowthEventRecurrence @default(NONE)
+  /// Used when recurrence = CUSTOM (days between repeats).
+  intervalDays         Int?
+  /// Minutes before startsAt to remind. Null = no reminder.
+  remindMinutesBefore  Int?
+  isCancelled          Boolean               @default(false)
+  /// Optional forward link to a future GrowthGoal / todo (no FK yet).
+  linkedGoalId         String?
+  linkedTodoId         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, startsAt])
+  @@index([workspaceId, isCancelled, startsAt])
+  @@map("growth_calendar_events")
+}
+
+/// O'sish todo / task. PERSONAL workspace only — never AssemblyTask / ERP.
+model GrowthTodo {
+  id                  String                @id @default(cuid())
+  workspaceId         String
+  title               String
+  description         String?
+  priority            GrowthEventPriority   @default(MEDIUM)
+  status              GrowthTodoStatus      @default(TODO)
+  category            String?
+  dueAt               DateTime?
+  /// Minutes before dueAt to remind. Null = no reminder.
+  remindMinutesBefore Int?
+  estimatedMinutes    Int?
+  actualMinutes       Int                   @default(0)
+  recurrence          GrowthEventRecurrence @default(NONE)
+  intervalDays        Int?
+  /// Marked as one of today's top focus tasks (max 3 enforced in service).
+  isDailyFocus        Boolean               @default(false)
+  completedAt         DateTime?
+  linkedGoalId        String?
+  linkedCalendarEventId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace     Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  focusSessions GrowthFocusSession[]
+
+  @@index([workspaceId, status, dueAt])
+  @@index([workspaceId, isDailyFocus, status])
+  @@map("growth_todos")
+}
+
+/// Pomodoro / focus session. Credited minutes are anti-cheat capped — never trust client duration alone.
+model GrowthFocusSession {
+  id                   String            @id @default(cuid())
+  workspaceId          String
+  /// Identity who ran the timer (same person across workspaces).
+  identityId           String
+  todoId               String?
+  linkedGoalId         String?
+  kind                 GrowthFocusKind   @default(FOCUS)
+  status               GrowthFocusStatus @default(RUNNING)
+  plannedMinutes       Int
+  startedAt            DateTime
+  endedAt              DateTime?
+  /// Wall-clock seconds between start and end.
+  durationSeconds      Int?
+  /// Minutes that count toward stats / todo.actualMinutes after anti-cheat.
+  creditedMinutes      Int               @default(0)
+  /// Optional client heartbeat claim — never used as sole credit source.
+  clientReportedSeconds Int?
+  discardReason        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  todo      GrowthTodo?  @relation(fields: [todoId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, status, startedAt])
+  @@index([workspaceId, identityId, startedAt])
+  @@index([todoId])
+  @@map("growth_focus_sessions")
+}
+
+/// Recurring habit definition. PERSONAL workspace only — not ERP / finance.
+model GrowthHabit {
+  id                  String               @id @default(cuid())
+  workspaceId         String
+  title               String
+  description         String?
+  category            String?
+  frequency           GrowthHabitFrequency @default(DAILY)
+  /// Used when frequency = CUSTOM (every N days).
+  intervalDays        Int?
+  /// How much counts as “done” for the period (e.g. 20 words, 30 minutes).
+  targetValue         Float                @default(1)
+  /// Unit label: times | minutes | words | liters | pages | custom text.
+  targetUnit          String               @default("times")
+  remindMinutesBefore Int?
+  linkedGoalId        String?
+  isArchived          Boolean              @default(false)
+  sortOrder           Int                  @default(0)
+  /// Cached streak — recomputed on check-in (Asia/Tashkent-safe via UTC dayKey).
+  currentStreak       Int                  @default(0)
+  bestStreak          Int                  @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  checkIns  GrowthHabitCheckIn[]
+
+  @@index([workspaceId, isArchived, sortOrder])
+  @@map("growth_habits")
+}
+
+/// One check-in per habit per UTC calendar day.
+model GrowthHabitCheckIn {
+  id          String   @id @default(cuid())
+  workspaceId String
+  habitId     String
+  /// YYYY-MM-DD (UTC).
+  dayKey      String
+  value       Float    @default(1)
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  habit     GrowthHabit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, dayKey])
+  @@index([workspaceId, dayKey])
+  @@map("growth_habit_check_ins")
+}
+
+/// Soft daily goals (max 3 / day). Distinct from GrowthTodo.isDailyFocus.
+model GrowthDailyGoal {
+  id               String    @id @default(cuid())
+  workspaceId      String
+  /// YYYY-MM-DD (UTC).
+  dayKey           String
+  title            String
+  estimatedMinutes Int?
+  isDone           Boolean   @default(false)
+  sortOrder        Int       @default(0)
+  completedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, dayKey, sortOrder])
+  @@map("growth_daily_goals")
+}
+
+/// Learning / study goal (IELTS, course, book…). ≠ PersonalSavingGoal.
+model GrowthLearningGoal {
+  id                String                   @id @default(cuid())
+  workspaceId       String
+  title             String
+  description       String?
+  category          GrowthLearningCategory   @default(CUSTOM)
+  status            GrowthLearningGoalStatus @default(ACTIVE)
+  /// Target score / hours / pages / percent depending on targetUnit.
+  targetValue       Float
+  targetUnit        String                   @default("score")
+  /// Manual progress marker (e.g. current IELTS mock score).
+  currentValue      Float                    @default(0)
+  deadline          DateTime?
+  /// Cached from study sessions (anti-cheat credited minutes).
+  totalStudyMinutes Int                      @default(0)
+  sortOrder         Int                      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace  Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  milestones GrowthLearningMilestone[]
+  sessions   GrowthLearningSession[]
+
+  @@index([workspaceId, status, sortOrder])
+  @@map("growth_learning_goals")
+}
+
+model GrowthLearningMilestone {
+  id          String    @id @default(cuid())
+  workspaceId String
+  goalId      String
+  title       String
+  /// Reach when currentValue or study hours hit this mark.
+  targetValue Float
+  isReached   Boolean   @default(false)
+  reachedAt   DateTime?
+  sortOrder   Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  goal GrowthLearningGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@index([goalId, sortOrder])
+  @@map("growth_learning_milestones")
+}
+
+/// Credited study time. Wall-clock / caps — never trust client minutes alone.
+model GrowthLearningSession {
+  id                    String    @id @default(cuid())
+  workspaceId           String
+  identityId            String
+  goalId                String?
+  status                GrowthFocusStatus @default(COMPLETED)
+  plannedMinutes        Int?
+  startedAt             DateTime
+  endedAt               DateTime?
+  durationSeconds       Int?
+  creditedMinutes       Int       @default(0)
+  clientReportedSeconds Int?
+  note                  String?
+  discardReason         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  goal      GrowthLearningGoal? @relation(fields: [goalId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, startedAt])
+  @@index([workspaceId, identityId, startedAt])
+  @@index([goalId, startedAt])
+  @@map("growth_learning_sessions")
+}
+
+/// Workspace XP / level / productivity streak (PERSONAL only).
+model GrowthProgress {
+  id                 String  @id @default(cuid())
+  workspaceId        String  @unique
+  identityId         String
+  totalXp            Int     @default(0)
+  level              Int     @default(1)
+  currentStreak      Int     @default(0)
+  bestStreak         Int     @default(0)
+  /// Last UTC day that earned streak-eligible XP.
+  lastActivityDayKey String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([identityId])
+  @@map("growth_progress")
+}
+
+/// Immutable XP awards. Idempotent via (workspaceId, source, sourceEntityId).
+model GrowthXpEvent {
+  id             String         @id @default(cuid())
+  workspaceId    String
+  identityId     String
+  source         GrowthXpSource
+  amount         Int
+  /// Dedup key — todo id, check-in id, session id, etc.
+  sourceEntityId String
+  dayKey         String
+  summary        String?
+
+  createdAt DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, source, sourceEntityId])
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, dayKey])
+  @@map("growth_xp_events")
+}
+
+/// Unlocked achievement badges. Catalog lives in shared code — easy to extend.
+model GrowthAchievementUnlock {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  identityId     String
+  /// Stable key from GROWTH_ACHIEVEMENT_CATALOG (e.g. FIRST_TASK).
+  achievementKey String
+  rewardXp       Int      @default(0)
+  unlockedAt     DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, achievementKey])
+  @@index([workspaceId, unlockedAt])
+  @@map("growth_achievement_unlocks")
+}
+
+/// Bidirectional friendship (Identity ↔ Identity). Referral ≠ friend.
+model GrowthFriendship {
+  id          String                @id @default(cuid())
+  requesterId String
+  addresseeId String
+  /// Sorted `${lowId}:${highId}` so A→B and B→A share one row.
+  pairKey     String                @unique
+  status      GrowthFriendshipStatus @default(PENDING)
+  blockedById String?
+  respondedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  requester Identity @relation("FriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee Identity @relation("FriendshipAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  @@index([requesterId, status])
+  @@index([addresseeId, status])
+  @@map("growth_friendships")
+}
+
+/// Optional social prefs for friend search / visibility / Growth inbox.
+model GrowthSocialProfile {
+  id                  String  @id @default(cuid())
+  identityId          String  @unique
+  handle              String? @unique
+  bio                 String?
+  showLevel           Boolean @default(true)
+  showActivity        Boolean @default(true)
+  allowFriendRequests Boolean @default(true)
+  notifyReminder      Boolean @default(true)
+  notifyAchievement   Boolean @default(true)
+  notifyFriend        Boolean @default(true)
+  notifyFight         Boolean @default(true)
+  notifyStreak        Boolean @default(true)
+  notifyResult        Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@map("growth_social_profiles")
+}
+
+/// Persisted Growth in-app inbox. Finance alerts stay derived under /personal/notifications.
+model GrowthNotification {
+  id          String                 @id @default(cuid())
+  identityId  String
+  /// Recipient PERSONAL workspace when known (navigation context).
+  workspaceId String?
+  kind        GrowthNotificationKind
+  title       String
+  body        String?
+  href        String?
+  entityType  String?
+  entityId    String?
+  /// Idempotency: one row per identity + dedupeKey.
+  dedupeKey   String?
+  readAt      DateTime?
+  dismissedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  identity  Identity   @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([identityId, dedupeKey])
+  @@index([identityId, createdAt])
+  @@index([identityId, readAt])
+  @@index([workspaceId, createdAt])
+  @@map("growth_notifications")
+}
+
+/// Weekly reflection notes. Metrics are computed live on read.
+model GrowthWeeklyReview {
+  id              String  @id @default(cuid())
+  workspaceId     String
+  identityId      String
+  /// Monday UTC day key for the week (YYYY-MM-DD).
+  weekStartDayKey String
+  wentWell        String?
+  wasHard         String?
+  nextWeekChange  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, weekStartDayKey])
+  @@index([workspaceId, identityId])
+  @@map("growth_weekly_reviews")
+}
+
+/// Monthly life-report reflection. Metrics computed live on read.
+model GrowthMonthlyReport {
+  id              String  @id @default(cuid())
+  workspaceId     String
+  identityId      String
+  /// YYYY-MM
+  yearMonth       String
+  highlight       String?
+  lesson          String?
+  nextMonthIntent String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, yearMonth])
+  @@index([workspaceId, identityId])
+  @@map("growth_monthly_reports")
+}
+
+/// Social Fight (1v1) or Group Challenge. Identity-scoped; scores from PERSONAL activity.
+model GrowthChallenge {
+  id           String               @id @default(cuid())
+  kind         GrowthChallengeKind
+  title        String
+  metric       GrowthChallengeMetric
+  /// Shared GROUP target (minutes / tasks / XP). Null for FIGHT (highest wins).
+  targetValue  Int?
+  durationDays Int
+  status       GrowthChallengeStatus @default(PENDING)
+  createdById  String
+  rewardXp     Int                   @default(50)
+  startAt      DateTime?
+  endAt        DateTime?
+  winnerId     String?
+  completedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy    Identity                     @relation("ChallengeCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  participants GrowthChallengeParticipant[]
+
+  @@index([createdById, status])
+  @@index([status, endAt])
+  @@map("growth_challenges")
+}
+
+model GrowthChallengeParticipant {
+  id          String                          @id @default(cuid())
+  challengeId String
+  identityId  String
+  status      GrowthChallengeParticipantStatus @default(INVITED)
+  /// Last computed score for the active window (refreshed on read / complete).
+  score       Int                             @default(0)
+  respondedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  challenge GrowthChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  identity  Identity        @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, identityId])
+  @@index([identityId, status])
+  @@map("growth_challenge_participants")
+}
+
+/// Shared productivity streak between two accepted friends (both must be active that day).
+model GrowthFriendStreak {
+  id                String  @id @default(cuid())
+  /// Same canonical key as GrowthFriendship.pairKey.
+  pairKey           String  @unique
+  identityAId       String
+  identityBId       String
+  currentStreak     Int     @default(0)
+  bestStreak        Int     @default(0)
+  /// Last UTC day both identities had growth activity.
+  lastSharedDayKey  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  identityA Identity @relation("FriendStreakA", fields: [identityAId], references: [id], onDelete: Cascade)
+  identityB Identity @relation("FriendStreakB", fields: [identityBId], references: [id], onDelete: Cascade)
+
+  @@index([identityAId])
+  @@index([identityBId])
+  @@map("growth_friend_streaks")
+}
+
 /// Application to open a new store. Not store-scoped until approval links
 /// `createdStoreId`. Password is stored only as a bcrypt hash and is cleared
 /// once the request is resolved so leftover credentials do not sit in the inbox.
@@ -1058,6 +1699,9 @@ model StoreCreationRequest {
   businessType BusinessType @default(FURNITURE)
   /// When set, approve attaches the new store User to this Identity (same person, extra business).
   identityId String?
+  /// Referral cookie snapshot so guest business signup still attributes after admin approve.
+  referralCode String?
+  visitorKey   String?
 
   status StoreCreationRequestStatus @default(PENDING)
 

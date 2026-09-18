@@ -39,6 +39,10 @@ import {
   canReviewStoreCreationRequests,
 } from './platform-authorization.js';
 import { tryEnsureUserOnBusinessWorkspace } from '../modules/accounts/account-layer.service.js';
+import {
+  attributeRegistration,
+  markReferralAccountCreated,
+} from '../modules/referrals/referral.service.js';
 import { provisionStoreSubscription } from './platform-billing.service.js';
 
 export { assertCanReviewStoreCreationRequests, canReviewStoreCreationRequests };
@@ -83,6 +87,7 @@ async function allocateStoreUsername(email: string, storeName: string): Promise<
 
 export async function createStoreRequest(
   input: CreateStoreRequestBody,
+  referral?: { code?: string | null; visitorKey?: string | null },
 ): Promise<StoreCreationRequestPublic> {
   const fieldErrors = validateStoreCreationDraft(input);
   if (fieldErrors.length > 0) {
@@ -143,6 +148,8 @@ export async function createStoreRequest(
     address,
     businessType: parseBusinessType(input.businessType),
     identityId: null,
+    referralCode: referral?.code ?? null,
+    visitorKey: referral?.visitorKey ?? null,
   });
 
   await recordAudit({
@@ -435,6 +442,27 @@ export async function approveStoreRequest(
 
   await provisionStoreSubscription(result.store.id);
   await tryEnsureUserOnBusinessWorkspace(result.owner.id);
+
+  const owner = await prisma.user.findUnique({
+    where: { id: result.owner.id },
+    select: { identityId: true, storeId: true },
+  });
+  const workspace = owner?.storeId
+    ? await prisma.workspace.findUnique({
+        where: { storeId: owner.storeId },
+        select: { id: true },
+      })
+    : null;
+  if (owner?.identityId && result.request.referralCode) {
+    await attributeRegistration({
+      referredIdentityId: owner.identityId,
+      referredWorkspaceId: workspace?.id ?? null,
+      code: result.request.referralCode,
+      visitorKey: result.request.visitorKey,
+    });
+  } else if (owner?.identityId && workspace?.id) {
+    await markReferralAccountCreated(owner.identityId, workspace.id);
+  }
 
   return {
     request: storeCreationRepository.toAdminView({

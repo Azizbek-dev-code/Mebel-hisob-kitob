@@ -4,6 +4,7 @@ import {
   DEFAULT_PERSONAL_CATEGORIES,
   DEFAULT_PERSONAL_WALLETS,
   ExpenseStatus,
+  GrowthXpSource,
   PersonalEntryType,
   PersonalHistoryKind,
   WorkspaceStatus,
@@ -11,6 +12,7 @@ import {
   buildPaginationMeta,
   comparePersonalActivity,
   normalisePagination,
+  toDayKey,
   type CreatePersonalCategoryRequest,
   type PersonalCategoryKind,
   type CreatePersonalEntryRequest,
@@ -37,6 +39,8 @@ import { fromDbMoney, fromDbMoneySum, toDbMoney } from '../../../lib/money-mappe
 import { prisma as defaultPrisma } from '../../../lib/prisma.js';
 import { recordAudit } from '../../../services/audit.service.js';
 import { ApiError } from '../../../utils/api-error.js';
+import { tryEvaluateAchievements } from '../growth/personal-growth-achievements.service.js';
+import { tryAwardXp } from '../growth/personal-growth-xp.service.js';
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -512,6 +516,19 @@ export async function createPersonalEntry(
     summary: `Personal ${row.type.toLowerCase()} recorded`,
     metadata: { workspaceId, identityId, type: row.type, amount: input.amount },
   });
+
+  // Flat daily discipline XP — never scaled by amount (anti-cheat).
+  const dayKey = toDayKey(occurredAt);
+  await tryAwardXp({
+    workspaceId,
+    identityId,
+    source: GrowthXpSource.FINANCE_DISCIPLINE,
+    sourceEntityId: `finance-log:${dayKey}`,
+    summary: 'Finance daily log',
+    dayKey,
+  });
+  await tryEvaluateAchievements(workspaceId, identityId).catch(() => undefined);
+
   return toEntryDto(row);
 }
 

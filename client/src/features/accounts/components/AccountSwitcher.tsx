@@ -105,7 +105,7 @@ export function AccountSwitcher({
               <div className="my-1 h-px bg-line" />
               <Link
                 role="menuitem"
-                to={isPersonalAuth(user) ? ROUTES.personalSettings : ROUTES.profile}
+                to={isPersonalAuth(user) ? ROUTES.personalProfile : ROUTES.profile}
                 onClick={() => setOpen(false)}
                 className="flex w-full items-center rounded-input px-2.5 py-2 text-sm text-ink-soft hover:bg-surface-hover hover:text-ink"
               >

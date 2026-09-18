@@ -89,7 +89,7 @@ export const requireAuth: RequestHandler = asyncHandler(async (req, res, next) =
   }
 
   if (isDueForRenewal(session.claims)) {
-    const renewed = renewSession(session.user);
+    const renewed = renewSession(session.user, session.claims.rememberMe);
     setAuthCookie(res, renewed.token, renewed.expiresAt);
   }
 
@@ -123,6 +123,31 @@ export const requireAuth: RequestHandler = asyncHandler(async (req, res, next) =
     !session.user.subscription.canWrite
   ) {
     throw ApiError.subscriptionRequired();
+  }
+
+  next();
+});
+
+/**
+ * Attach a session when a cookie is present, but never fail for anonymous callers.
+ * Used by public referral click so self-referral can be blocked for signed-in owners.
+ */
+export const optionalAuth: RequestHandler = asyncHandler(async (req, res, next) => {
+  const token = readAuthCookie(req);
+  if (!token) {
+    next();
+    return;
+  }
+
+  try {
+    const session = await authenticate(token);
+    if (session.kind === AuthSessionKind.PERSONAL) {
+      req.personalAuth = session.user;
+    } else {
+      req.auth = session.user;
+    }
+  } catch {
+    /* keep the route public — invalid cookies must not block referral click */
   }
 
   next();

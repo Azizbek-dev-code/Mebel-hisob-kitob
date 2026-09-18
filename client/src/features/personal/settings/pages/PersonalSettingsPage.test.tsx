@@ -69,26 +69,23 @@ afterEach(() => {
 });
 
 describe('PersonalSettingsPage', () => {
-  it('shows the current account, business CTA and settings links', async () => {
+  it('shows profile account controls without burying finance modules', async () => {
     mockApi({ '/auth/me': ME, '/accounts': ACCOUNTS });
     renderWithProviders(
       <MemoryRouter>
-        <PersonalSettingsPage />
+        <div className="w-[390px] overflow-x-hidden">
+          <PersonalSettingsPage />
+        </div>
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('heading', { name: 'Sozlamalar' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Profil' })).toBeInTheDocument();
     expect(screen.getByText('Joriy hisob')).toBeInTheDocument();
     expect(screen.getByTestId('add-account')).toHaveAttribute('href', '/onboarding');
     expect(screen.getAllByText('Yangi hisob ochish').length).toBeGreaterThan(0);
-    expect(screen.getByRole('link', { name: /Hisoblar/ })).toHaveAttribute('href', '/personal/accounts');
-    expect(screen.getByRole('link', { name: /Kategoriyalar/ })).toHaveAttribute(
-      'href',
-      '/personal/categories',
-    );
-    expect(screen.getByRole('link', { name: /Tahlil/ })).toHaveAttribute('href', '/personal/analytics');
-    expect(screen.getByRole('link', { name: /Takroriy/ })).toHaveAttribute('href', '/personal/recurring');
-    expect(screen.getByRole('link', { name: /Qarzlar/ })).toHaveAttribute('href', '/personal/debts');
+    expect(screen.queryByRole('link', { name: /Hisoblar/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Kategoriyalar/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Tahlil/ })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Bildirishnomalar/ })).toHaveAttribute(
       'href',
       '/personal/notifications',

@@ -47,4 +47,28 @@ describe('access tokens', () => {
     ].join('.');
     expect(() => verifyAccessToken(forged)).toThrow();
   });
+
+  it('preserves remember-me claim and longer expiry', () => {
+    const short = signAccessToken({
+      sub: 'user_1',
+      storeId: 'store_1',
+      role: UserRole.ADMIN,
+    });
+    const long = signAccessToken(
+      {
+        sub: 'user_1',
+        storeId: 'store_1',
+        role: UserRole.ADMIN,
+        rm: true,
+      },
+      { expiresIn: '7d' },
+    );
+    const shortClaims = verifyAccessToken(short.token);
+    const longClaims = verifyAccessToken(long.token);
+    expect(shortClaims.rememberMe).toBe(false);
+    expect(longClaims.rememberMe).toBe(true);
+    expect(long.expiresAt.getTime() - longClaims.issuedAt.getTime()).toBeGreaterThan(
+      short.expiresAt.getTime() - shortClaims.issuedAt.getTime(),
+    );
+  });
 });

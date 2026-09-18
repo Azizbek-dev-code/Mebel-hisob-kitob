@@ -763,6 +763,180 @@ export const PersonalDebtDirection = {
 export type PersonalDebtDirection =
   (typeof PersonalDebtDirection)[keyof typeof PersonalDebtDirection];
 
+/** Plan / calendar event priority (O'sish). */
+export const GrowthEventPriority = {
+  LOW: 'LOW',
+  MEDIUM: 'MEDIUM',
+  HIGH: 'HIGH',
+} as const;
+export type GrowthEventPriority = (typeof GrowthEventPriority)[keyof typeof GrowthEventPriority];
+
+export const GROWTH_EVENT_PRIORITIES = Object.values(GrowthEventPriority);
+
+/** Plan event recurrence. NONE = one-shot. */
+export const GrowthEventRecurrence = {
+  NONE: 'NONE',
+  DAILY: 'DAILY',
+  WEEKLY: 'WEEKLY',
+  MONTHLY: 'MONTHLY',
+  CUSTOM: 'CUSTOM',
+} as const;
+export type GrowthEventRecurrence =
+  (typeof GrowthEventRecurrence)[keyof typeof GrowthEventRecurrence];
+
+export const GROWTH_EVENT_RECURRENCES = Object.values(GrowthEventRecurrence);
+
+/** O'sish todo lifecycle. */
+export const GrowthTodoStatus = {
+  TODO: 'TODO',
+  IN_PROGRESS: 'IN_PROGRESS',
+  DONE: 'DONE',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type GrowthTodoStatus = (typeof GrowthTodoStatus)[keyof typeof GrowthTodoStatus];
+
+export const GROWTH_TODO_STATUSES = Object.values(GrowthTodoStatus);
+
+/** Pomodoro block type. */
+export const GrowthFocusKind = {
+  FOCUS: 'FOCUS',
+  BREAK: 'BREAK',
+} as const;
+export type GrowthFocusKind = (typeof GrowthFocusKind)[keyof typeof GrowthFocusKind];
+
+export const GROWTH_FOCUS_KINDS = Object.values(GrowthFocusKind);
+
+export const GrowthFocusStatus = {
+  RUNNING: 'RUNNING',
+  COMPLETED: 'COMPLETED',
+  INTERRUPTED: 'INTERRUPTED',
+  DISCARDED: 'DISCARDED',
+} as const;
+export type GrowthFocusStatus = (typeof GrowthFocusStatus)[keyof typeof GrowthFocusStatus];
+
+export const GROWTH_FOCUS_STATUSES = Object.values(GrowthFocusStatus);
+
+/** How often a habit is expected. */
+export const GrowthHabitFrequency = {
+  DAILY: 'DAILY',
+  WEEKLY: 'WEEKLY',
+  CUSTOM: 'CUSTOM',
+} as const;
+export type GrowthHabitFrequency =
+  (typeof GrowthHabitFrequency)[keyof typeof GrowthHabitFrequency];
+
+export const GROWTH_HABIT_FREQUENCIES = Object.values(GrowthHabitFrequency);
+
+/** Learning / study category for O'sish. */
+export const GrowthLearningCategory = {
+  READING: 'READING',
+  COURSE: 'COURSE',
+  BOOK: 'BOOK',
+  IELTS: 'IELTS',
+  PROGRAMMING: 'PROGRAMMING',
+  LANGUAGE: 'LANGUAGE',
+  SKILL: 'SKILL',
+  CUSTOM: 'CUSTOM',
+} as const;
+export type GrowthLearningCategory =
+  (typeof GrowthLearningCategory)[keyof typeof GrowthLearningCategory];
+
+export const GROWTH_LEARNING_CATEGORIES = Object.values(GrowthLearningCategory);
+
+export const GrowthLearningGoalStatus = {
+  ACTIVE: 'ACTIVE',
+  PAUSED: 'PAUSED',
+  COMPLETED: 'COMPLETED',
+  ARCHIVED: 'ARCHIVED',
+} as const;
+export type GrowthLearningGoalStatus =
+  (typeof GrowthLearningGoalStatus)[keyof typeof GrowthLearningGoalStatus];
+
+export const GROWTH_LEARNING_GOAL_STATUSES = Object.values(GrowthLearningGoalStatus);
+
+/** XP ledger source for O'sish gamification. */
+export const GrowthXpSource = {
+  TODO_COMPLETED: 'TODO_COMPLETED',
+  HABIT_CHECK_IN: 'HABIT_CHECK_IN',
+  FOCUS_COMPLETED: 'FOCUS_COMPLETED',
+  LEARNING_SESSION: 'LEARNING_SESSION',
+  DAILY_GOAL_DONE: 'DAILY_GOAL_DONE',
+  MILESTONE_REACHED: 'MILESTONE_REACHED',
+  ACHIEVEMENT_UNLOCKED: 'ACHIEVEMENT_UNLOCKED',
+  FINANCE_DISCIPLINE: 'FINANCE_DISCIPLINE',
+} as const;
+export type GrowthXpSource = (typeof GrowthXpSource)[keyof typeof GrowthXpSource];
+
+export const GROWTH_XP_SOURCES = Object.values(GrowthXpSource);
+
+export const GrowthFriendshipStatus = {
+  PENDING: 'PENDING',
+  ACCEPTED: 'ACCEPTED',
+  DECLINED: 'DECLINED',
+  BLOCKED: 'BLOCKED',
+} as const;
+export type GrowthFriendshipStatus =
+  (typeof GrowthFriendshipStatus)[keyof typeof GrowthFriendshipStatus];
+
+export const GROWTH_FRIENDSHIP_STATUSES = Object.values(GrowthFriendshipStatus);
+
+export const GrowthChallengeKind = {
+  FIGHT: 'FIGHT',
+  GROUP: 'GROUP',
+} as const;
+export type GrowthChallengeKind =
+  (typeof GrowthChallengeKind)[keyof typeof GrowthChallengeKind];
+
+export const GROWTH_CHALLENGE_KINDS = Object.values(GrowthChallengeKind);
+
+export const GrowthChallengeMetric = {
+  FOCUS_MINUTES: 'FOCUS_MINUTES',
+  TASKS_COMPLETED: 'TASKS_COMPLETED',
+  LEARNING_MINUTES: 'LEARNING_MINUTES',
+  XP_GAINED: 'XP_GAINED',
+} as const;
+export type GrowthChallengeMetric =
+  (typeof GrowthChallengeMetric)[keyof typeof GrowthChallengeMetric];
+
+export const GROWTH_CHALLENGE_METRICS = Object.values(GrowthChallengeMetric);
+
+export const GrowthChallengeStatus = {
+  PENDING: 'PENDING',
+  ACTIVE: 'ACTIVE',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type GrowthChallengeStatus =
+  (typeof GrowthChallengeStatus)[keyof typeof GrowthChallengeStatus];
+
+export const GROWTH_CHALLENGE_STATUSES = Object.values(GrowthChallengeStatus);
+
+export const GrowthChallengeParticipantStatus = {
+  INVITED: 'INVITED',
+  ACCEPTED: 'ACCEPTED',
+  DECLINED: 'DECLINED',
+  LEFT: 'LEFT',
+} as const;
+export type GrowthChallengeParticipantStatus =
+  (typeof GrowthChallengeParticipantStatus)[keyof typeof GrowthChallengeParticipantStatus];
+
+export const GROWTH_CHALLENGE_PARTICIPANT_STATUSES = Object.values(
+  GrowthChallengeParticipantStatus,
+);
+
+export const GrowthNotificationKind = {
+  REMINDER: 'REMINDER',
+  ACHIEVEMENT: 'ACHIEVEMENT',
+  FRIEND: 'FRIEND',
+  FIGHT: 'FIGHT',
+  STREAK: 'STREAK',
+  RESULT: 'RESULT',
+} as const;
+export type GrowthNotificationKind =
+  (typeof GrowthNotificationKind)[keyof typeof GrowthNotificationKind];
+
+export const GROWTH_NOTIFICATION_KINDS = Object.values(GrowthNotificationKind);
+
 /** Derived from principal, payments and due date. Not stored. */
 export const PersonalDebtStatus = {
   ACTIVE: 'ACTIVE',

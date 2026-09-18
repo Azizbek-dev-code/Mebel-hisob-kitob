@@ -9,8 +9,8 @@ import type {
 } from '@furniture-erp/shared';
 import type { Request, Response } from 'express';
 
-import { setAuthCookie } from '../../lib/auth-cookie.js';
-import { switchWorkspace } from '../../services/auth.service.js';
+import { readAuthCookie, setAuthCookie } from '../../lib/auth-cookie.js';
+import { authenticate, switchWorkspace } from '../../services/auth.service.js';
 import { createAuthenticatedBusinessRequest } from '../../services/store-creation.service.js';
 import { ApiError } from '../../utils/api-error.js';
 import { asyncHandler } from '../../utils/async-handler.js';
@@ -49,7 +49,12 @@ export const postRegisterPersonalAccount = asyncHandler(async (req: Request, res
 export const postCreatePersonalAccount = asyncHandler(async (req: Request, res: Response) => {
   const user = requireUser(req);
   const body = req.body as CreatePersonalAccountRequest;
-  const created = await createPersonalAccountForUser(user.id, body);
+  const attribution = readReferralAttribution(req);
+  const created = await createPersonalAccountForUser(user.id, {
+    ...body,
+    referralCode: attribution.code,
+    visitorKey: attribution.visitorKey,
+  });
   sendCreated<PersonalAccountCreatedResponse>(res, created);
 });
 
@@ -67,7 +72,17 @@ export const getAccounts = asyncHandler(async (req: Request, res: Response) => {
 export const postSwitchWorkspace = asyncHandler(async (req: Request, res: Response) => {
   const identityId = await requireIdentityId(req);
   const body = req.body as SwitchWorkspaceRequest;
-  const session = await switchWorkspace(identityId, body.workspaceId);
+  let rememberMe = false;
+  const token = readAuthCookie(req);
+  if (token) {
+    try {
+      const session = await authenticate(token);
+      rememberMe = session.claims.rememberMe;
+    } catch {
+      rememberMe = false;
+    }
+  }
+  const session = await switchWorkspace(identityId, body.workspaceId, { rememberMe });
   setAuthCookie(res, session.accessToken.token, session.accessToken.expiresAt);
   sendSuccess<LoginResponse>(res, { user: session.user });
 });

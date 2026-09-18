@@ -2,6 +2,7 @@ import {
   AuditEntityType,
   AuditEventType,
   AuthSessionKind,
+  PERSONAL_PAID_PERIOD_DAYS,
   PERSONAL_PLAN_KEY,
   PERSONAL_PLANS,
   PERSONAL_TRIAL_DAYS,
@@ -13,12 +14,15 @@ import {
   addCalendarDays,
   canWriteWithSubscription,
   effectiveSubscriptionStatus,
+  isPersonalPlanKey,
   persistedExpiredStatus,
   personalPlanByKey,
   trialDaysRemaining,
   type AuthSubscriptionSnapshot,
   type PersonalAuthUser,
   type PersonalBillingResponse,
+  type PersonalPlanCatalogEntry,
+  type PersonalPlanKey,
   type RequestPersonalSubscriptionBody,
   type SelectPersonalPlanRequest,
   type SubscriptionRequestDto,
@@ -37,6 +41,75 @@ import {
 import { ApiError } from '../../../utils/api-error.js';
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
+
+function periodDaysFromFeatures(features: unknown, fallback: number): number {
+  if (features && typeof features === 'object' && !Array.isArray(features)) {
+    const raw = (features as Record<string, unknown>).periodDays;
+    const days = typeof raw === 'number' ? raw : Number(raw);
+    if (Number.isFinite(days) && days > 0) return Math.floor(days);
+  }
+  return fallback;
+}
+
+async function loadPersonalPlanCatalog(
+  db: DbClient,
+  opts?: { includeInactive?: boolean; currentPlanKey?: string | null },
+): Promise<PersonalPlanCatalogEntry[]> {
+  const rows = await db.subscriptionPlan.findMany({
+    where: { audience: PlanAudience.PERSONAL },
+    orderBy: [{ rank: 'asc' }, { monthlyPrice: 'asc' }],
+    select: {
+      name: true,
+      monthlyPrice: true,
+      trialDays: true,
+      rank: true,
+      isActive: true,
+      features: true,
+    },
+  });
+
+  const mapped: PersonalPlanCatalogEntry[] = [];
+  for (const row of rows) {
+    if (!isPersonalPlanKey(row.name)) continue;
+    if (
+      !opts?.includeInactive &&
+      !row.isActive &&
+      row.name !== opts?.currentPlanKey
+    ) {
+      continue;
+    }
+    const key = row.name as PersonalPlanKey;
+    const fallbackPeriod =
+      key === PERSONAL_PLAN_KEY.TRIAL ? PERSONAL_TRIAL_DAYS : PERSONAL_PAID_PERIOD_DAYS;
+    const periodDays =
+      key === PERSONAL_PLAN_KEY.TRIAL
+        ? row.trialDays > 0
+          ? row.trialDays
+          : periodDaysFromFeatures(row.features, fallbackPeriod)
+        : periodDaysFromFeatures(row.features, fallbackPeriod);
+    mapped.push({
+      key,
+      trialDays: key === PERSONAL_PLAN_KEY.TRIAL ? periodDays : 0,
+      periodDays,
+      monthlyPriceSom: Number(row.monthlyPrice),
+      rank: row.rank ?? (key === PERSONAL_PLAN_KEY.TRIAL ? 0 : 1),
+    });
+  }
+
+  if (mapped.length === 0) {
+    return [...PERSONAL_PLANS];
+  }
+  return mapped;
+}
+
+export async function resolvePersonalTrialDays(db: DbClient = defaultPrisma): Promise<number> {
+  const plan = await db.subscriptionPlan.findFirst({
+    where: { name: PERSONAL_PLAN_KEY.TRIAL, audience: PlanAudience.PERSONAL },
+    select: { trialDays: true, features: true },
+  });
+  if (plan?.trialDays && plan.trialDays > 0) return plan.trialDays;
+  return periodDaysFromFeatures(plan?.features, PERSONAL_TRIAL_DAYS);
+}
 
 function planDisplayName(planKey: string): string {
   if (planKey === PERSONAL_PLAN_KEY.PAID) return 'Pullik';
@@ -79,8 +152,8 @@ export function toPersonalSubscriptionSnapshot(
   };
 }
 
-export function trialSubscriptionCreateData(workspaceId: string, now = new Date()) {
-  const periodEnd = addCalendarDays(now, PERSONAL_TRIAL_DAYS);
+export function trialSubscriptionCreateData(workspaceId: string, now = new Date(), trialDays = PERSONAL_TRIAL_DAYS) {
+  const periodEnd = addCalendarDays(now, trialDays);
   return {
     workspaceId,
     planKey: PERSONAL_PLAN_KEY.TRIAL,
@@ -126,7 +199,10 @@ export async function ensurePersonalTrial(
     select: { id: true },
   });
   if (existing) return;
-  await db.personalSubscription.create({ data: trialSubscriptionCreateData(workspaceId) });
+  const trialDays = await resolvePersonalTrialDays(db);
+  await db.personalSubscription.create({
+    data: trialSubscriptionCreateData(workspaceId, new Date(), trialDays),
+  });
 }
 
 export async function loadPersonalAuthUser(
@@ -230,12 +306,13 @@ export async function getPersonalBilling(
   const sub = await persistPersonalSubscription(workspaceId, db);
   if (!sub) throw ApiError.notFound('Obuna topilmadi');
   const pending = await findPendingPersonalRequest(workspaceId, db);
+  const plans = await loadPersonalPlanCatalog(db, { currentPlanKey: sub.planKey });
   return {
     subscription: toPersonalSubscriptionSnapshot(sub, {
       hasPendingPaymentRequest: Boolean(pending),
     }),
     currentPlanKey: sub.planKey,
-    plans: [...PERSONAL_PLANS],
+    plans,
     pendingRequest: pending ? toRequestDto(pending) : null,
   };
 }

@@ -95,6 +95,11 @@ export interface LoginRequest {
   /** Username or email — whichever the operator remembers. */
   identifier: string;
   password: string;
+  /**
+   * When true, the HTTP-only session cookie lasts up to 7 days (env
+   * `JWT_REFRESH_EXPIRES_IN`). Never stores the password on the client.
+   */
+  rememberMe?: boolean;
 }
 
 export interface LoginResponse {
@@ -112,6 +117,7 @@ export interface CurrentUserResponse {
  *
  * Legacy store tokens omit `ctx` and always carry `storeId` + `role`.
  * Personal tokens set `ctx: 'PERSONAL'` and never include `storeId`.
+ * `rm: true` marks a remember-me session so sliding renewal keeps the long TTL.
  */
 export type AccessTokenPayload =
   | {
@@ -120,6 +126,8 @@ export type AccessTokenPayload =
       role: UserRole;
       ctx?: typeof AuthSessionKind.STORE;
       workspaceId?: never;
+      /** Remember-me: long-lived session (see JWT_REFRESH_EXPIRES_IN). */
+      rm?: boolean;
     }
   | {
       sub: string;
@@ -127,4 +135,5 @@ export type AccessTokenPayload =
       workspaceId: string;
       storeId?: never;
       role?: never;
+      rm?: boolean;
     };

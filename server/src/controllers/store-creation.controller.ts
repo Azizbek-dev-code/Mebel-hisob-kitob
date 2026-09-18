@@ -19,6 +19,7 @@ import type {
   RejectStoreCreationBody,
   StoreCreationRequestListQuery,
 } from '../validators/store-creation.validators.js';
+import { readReferralAttribution } from '../modules/referrals/referral-cookie.js';
 
 function requireUser(req: Request) {
   if (!req.auth) throw ApiError.unauthorized();
@@ -27,7 +28,11 @@ function requireUser(req: Request) {
 
 export const postStoreRequest = asyncHandler(async (req: Request, res: Response) => {
   const body = req.body as CreateStoreRequestBody;
-  const request = await storeCreationService.createStoreRequest(body);
+  const attribution = readReferralAttribution(req);
+  const request = await storeCreationService.createStoreRequest(body, {
+    code: attribution.code,
+    visitorKey: attribution.visitorKey,
+  });
   sendCreated<CreateStoreRequestResponse>(res, { request });
 });
 
