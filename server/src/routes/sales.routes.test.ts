@@ -17,6 +17,7 @@ const { prismaMock, saleServiceMock, deliveryOpsMock } = vi.hoisted(() => ({
     listMyAssemblyTasks: vi.fn(),
     cancelSale: vi.fn(),
     deleteCancelledSale: vi.fn(),
+    recalculateSaleSellerCommission: vi.fn(),
   },
   deliveryOpsMock: {
     listMyDeliveries: vi.fn(),
@@ -147,6 +148,25 @@ describe('sales routes auth', () => {
       .send({ reason: '' })
       .expect(422);
     expect(saleServiceMock.cancelSale).not.toHaveBeenCalled();
+  });
+
+  it('recalculates seller commission through the signed-in admin', async () => {
+    saleServiceMock.recalculateSaleSellerCommission.mockResolvedValue({
+      sale: { id: 'cjld2sale0000qzrmn831i7rn', sellerCommissionEstimate: 50_000 },
+      previousAmount: 40_000,
+      newAmount: 50_000,
+    });
+
+    const agent = await signedInAgent();
+    await agent
+      .post('/api/sales/cjld2sale0000qzrmn831i7rn/recalculate-commission')
+      .expect(200);
+
+    expect(saleServiceMock.recalculateSaleSellerCommission).toHaveBeenCalledWith(
+      'store_1',
+      expect.objectContaining({ id: 'user_admin', role: UserRole.ADMIN }),
+      'cjld2sale0000qzrmn831i7rn',
+    );
   });
 
   it('permanently deletes a cancelled sale', async () => {

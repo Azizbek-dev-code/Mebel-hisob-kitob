@@ -168,6 +168,8 @@ export async function computeLinesForSale(options: {
   storeId: string;
   saleId: string;
   client?: WorkerFinancialTxClient;
+  /** True only for the explicit Recalculate button. */
+  preferCurrentOpenRule?: boolean;
 }): Promise<{
   sale: NonNullable<Awaited<ReturnType<typeof loadSaleForSync>>>;
   workerId: string | null;
@@ -201,25 +203,59 @@ export async function computeLinesForSale(options: {
     totalSalePrice: fromDbMoney(sale.totalSalePrice),
     grossProfit: fromDbMoney(sale.grossProfit),
     manualAmount: manual ? fromDbMoney(manual.amount) : null,
+    preferCurrentOpenRule: options.preferCurrentOpenRule,
   });
 
   return { sale, workerId, lines, productSummary };
 }
 
+export function rateLabelFromCommissionDescription(
+  description: string | null | undefined,
+): string | null {
+  if (!description) return null;
+  const stavka = description.match(/Stavka\s+([^\s·]+)/);
+  if (stavka?.[1]) return stavka[1];
+  if (/Qat['']iy/i.test(description)) return "qat'iy";
+  if (/qo['']lda/i.test(description)) return "qo'lda";
+  return null;
+}
+
+/** Posted (open) seller commission — GET/View never recomputes from current rules. */
+export async function getPostedSellerCommissionForSale(
+  storeId: string,
+  saleId: string,
+  client?: WorkerFinancialTxClient,
+): Promise<{ amount: number; rateLabel: string | null }> {
+  const rows = await findOpenSellerCommissionsForSale(storeId, saleId, client);
+  const amount = rows.reduce((sum, row) => {
+    const value = typeof row.amount === 'bigint' ? fromDbMoney(row.amount) : Number(row.amount);
+    return sum + value;
+  }, 0);
+  const rateLabel =
+    rows
+      .map((row) => rateLabelFromCommissionDescription(row.description))
+      .find((label): label is string => Boolean(label)) ?? null;
+  return { amount, rateLabel };
+}
+
 /**
  * Post or refresh seller COMMISSION for a sale. Idempotent per COMPENSATION ref.
  * Different amount / worker / rule type → reverse old, post new (audit trail).
+ * Calling this N times with the same desired amount never stacks duplicates
+ * (open-row unique index + skip-if-same-amount-and-date).
  */
 export async function syncSellerCommissionForSale(options: {
   storeId: string;
   saleId: string;
   actorId: string;
   client?: WorkerFinancialTxClient;
-}): Promise<{ posted: number; reversed: number }> {
+  preferCurrentOpenRule?: boolean;
+}): Promise<{ posted: number; reversed: number; amount: number }> {
   const computed = await computeLinesForSale(options);
-  if (!computed) return { posted: 0, reversed: 0 };
+  if (!computed) return { posted: 0, reversed: 0, amount: 0 };
 
   const { sale, workerId, lines, productSummary } = computed;
+  const amount = lines.reduce((sum, line) => sum + line.amount, 0);
   const existing = await findOpenSellerCommissionsForSale(
     options.storeId,
     options.saleId,
@@ -289,7 +325,35 @@ export async function syncSellerCommissionForSale(options: {
     }
   }
 
-  return { posted, reversed };
+  return { posted, reversed, amount };
+}
+
+/**
+ * Explicit "Qayta hisoblash" — the only path that refreshes an existing sale's
+ * seller commission. Uses the current open-ended active rule so a historical
+ * saleDate is not left at 0. Reverse + re-post; never stacks duplicates.
+ */
+export async function recalculateSellerCommissionForSale(options: {
+  storeId: string;
+  saleId: string;
+  actorId: string;
+  client?: WorkerFinancialTxClient;
+}): Promise<{ previousAmount: number; newAmount: number; posted: number; reversed: number }> {
+  const previous = await getPostedSellerCommissionForSale(
+    options.storeId,
+    options.saleId,
+    options.client,
+  );
+  const result = await syncSellerCommissionForSale({
+    ...options,
+    preferCurrentOpenRule: true,
+  });
+  return {
+    previousAmount: previous.amount,
+    newAmount: result.amount,
+    posted: result.posted,
+    reversed: result.reversed,
+  };
 }
 
 export function deriveSellerCommissionStatus(input: {

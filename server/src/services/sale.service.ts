@@ -7,7 +7,6 @@ import {
   calculateSaleTotals,
   deriveInstallmentStatus,
   deriveSalePaymentStatus,
-  estimateSellerCommission,
   FulfilmentStatus,
   generateInstallmentSchedule,
   FeatureKey,
@@ -50,7 +49,6 @@ import * as customerRepository from '../repositories/customer.repository.js';
 import { toAssemblyTaskDto, toSaleDetail, toSaleListItem } from '../repositories/mappers/sale.mapper.js';
 import * as productRepository from '../repositories/product.repository.js';
 import * as saleRepository from '../repositories/sale.repository.js';
-import * as workerCompensationRepository from '../repositories/worker-compensation.repository.js';
 import * as workerFinancialRepository from '../repositories/worker-financial.repository.js';
 import * as workerRepository from '../repositories/worker.repository.js';
 import { ApiError } from '../utils/api-error.js';
@@ -134,36 +132,13 @@ async function buildSaleDetailResponse(storeId: string, saleId: string): Promise
   const workerCompensationLocked =
     await workerFinancialRepository.hasSettledManualSaleWorkerPay(storeId, saleId);
 
-  let sellerCommissionEstimate = 0;
-  let sellerCommissionRateLabel: string | null = null;
-
-  if (sale.sellerId) {
-    const rules = await workerCompensationRepository.listRulesForWorker(
-      storeId,
-      sale.sellerId,
-      { isActive: true },
-    );
-    const estimate = estimateSellerCommission({
-      rules: rules.map((rule) => ({
-        id: rule.id,
-        type: rule.type,
-        value: rule.value,
-        isActive: rule.isActive,
-        effectiveFrom: new Date(rule.effectiveFrom),
-        effectiveTo: rule.effectiveTo ? new Date(rule.effectiveTo) : null,
-      })),
-      saleDate: sale.saleDate,
-      totalSalePrice: fromDbMoney(sale.totalSalePrice),
-      grossProfit: fromDbMoney(sale.grossProfit),
-    });
-    sellerCommissionEstimate = estimate.amount;
-    sellerCommissionRateLabel = estimate.rateLabel;
-  }
+  // View: posted ledger only. Never reselect a rule or rewrite commission.
+  const posted = await sellerCommissionService.getPostedSellerCommissionForSale(storeId, saleId);
 
   return toSaleDetail(sale, {
     workerCompensationLocked,
-    sellerCommissionEstimate,
-    sellerCommissionRateLabel,
+    sellerCommissionEstimate: posted.amount,
+    sellerCommissionRateLabel: posted.rateLabel,
   });
 }
 
@@ -663,6 +638,8 @@ export async function createSale(
       });
     }
 
+    // New sale: always calculate, even when saleDate is historical.
+    // createdAt today + saleDate 01.08 still uses current open-ended rule fallback.
     await sellerCommissionService.syncSellerCommissionForSale({
       storeId,
       saleId: sale.id,
@@ -1150,12 +1127,8 @@ export async function updateSale(
       }
     }
 
-    await sellerCommissionService.syncSellerCommissionForSale({
-      storeId,
-      saleId,
-      actorId,
-      client: tx,
-    });
+    // Edit → Save never recalculates seller commission, ledger, or attributed fees.
+    // The only explicit trigger is recalculateSaleSellerCommission ("Qayta hisoblash").
   });
 
   const sale = await getSale(storeId, saleId);
@@ -1168,6 +1141,59 @@ export async function updateSale(
     summary: `Sale #${sale.saleNumber} updated`,
   });
   return sale;
+}
+
+/**
+ * Explicit "Qayta hisoblash" for one existing sale.
+ * Save / View / new compensation rules must never call this.
+ */
+export async function recalculateSaleSellerCommission(
+  storeId: string,
+  actor: { id: string; role: string },
+  saleId: string,
+): Promise<{
+  sale: SaleDetail;
+  previousAmount: number;
+  newAmount: number;
+}> {
+  assertCanEditSaleCostFees(actor.role);
+
+  const existing = await saleRepository.findSaleDetail(storeId, saleId);
+  if (!existing) {
+    throw ApiError.notFound('Sale not found');
+  }
+  if (existing.status === 'CANCELLED') {
+    throw ApiError.badRequest('Cancelled sales cannot be recalculated');
+  }
+
+  const result = await prisma.$transaction(async (tx) =>
+    sellerCommissionService.recalculateSellerCommissionForSale({
+      storeId,
+      saleId,
+      actorId: actor.id,
+      client: tx,
+    }),
+  );
+
+  const sale = await getSale(storeId, saleId);
+  await recordAudit({
+    storeId,
+    actorUserId: actor.id,
+    eventType: AuditEventType.SALE_UPDATED,
+    entityType: AuditEntityType.SALE,
+    entityId: sale.id,
+    summary: `Sale #${sale.saleNumber} seller commission recalculated`,
+    metadata: {
+      previousAmount: result.previousAmount,
+      newAmount: result.newAmount,
+    },
+  });
+
+  return {
+    sale,
+    previousAmount: result.previousAmount,
+    newAmount: result.newAmount,
+  };
 }
 
 export async function addPayment(

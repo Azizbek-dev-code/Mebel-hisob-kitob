@@ -79,11 +79,19 @@ vi.mock('./entitlement.service.js', () => ({
 }));
 
 vi.mock('./seller-commission.service.js', () => ({
-  syncSellerCommissionForSale: vi.fn(async () => ({ posted: 0, reversed: 0 })),
+  syncSellerCommissionForSale: vi.fn(async () => ({ posted: 0, reversed: 0, amount: 0 })),
   decorateSellerSales: vi.fn(async () => []),
+  getPostedSellerCommissionForSale: vi.fn(async () => ({ amount: 0, rateLabel: null })),
+  recalculateSellerCommissionForSale: vi.fn(async () => ({
+    previousAmount: 0,
+    newAmount: 0,
+    posted: 0,
+    reversed: 0,
+  })),
 }));
 
 import * as saleService from './sale.service.js';
+import * as sellerCommissionService from './seller-commission.service.js';
 
 const STORE_ID = 'store_1';
 const OTHER_STORE = 'store_2';
@@ -1443,5 +1451,98 @@ describe('sale cost fees (usta / shopir)', () => {
         }),
       }),
     );
+  });
+});
+
+describe('seller commission lifecycle', () => {
+  const admin = { id: ADMIN_ID, role: UserRole.ADMIN };
+
+  it('TEST 1: new sale with historical saleDate still calculates commission', async () => {
+    (prismaMock.sale.findFirst as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ saleNumber: 122 })
+      .mockResolvedValue(detailSale({ saleDate: new Date('2026-08-01T12:00:00.000Z') }));
+    (prismaMock.sale.create as ReturnType<typeof vi.fn>).mockResolvedValue({ id: SALE_ID });
+    (prismaMock.payment.create as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'pay_1' });
+    (prismaMock.workerActivity.create as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'act_1' });
+
+    await saleService.createSale(STORE_ID, ADMIN_ID, {
+      customerId: CUSTOMER_ID,
+      sellerId: SELLER_ID,
+      saleDate: '2026-08-01',
+      items: [{ productId: PRODUCT_ID, quantity: 1, unitCostPrice: 7_000_000, unitSalePrice: 9_500_000 }],
+      paymentType: PaymentType.DEPOSIT,
+      depositAmount: 2_000_000,
+      depositMethod: PaymentMethod.CASH,
+    });
+
+    expect(sellerCommissionService.syncSellerCommissionForSale).toHaveBeenCalledWith(
+      expect.objectContaining({ storeId: STORE_ID, saleId: SALE_ID, actorId: ADMIN_ID }),
+    );
+  });
+
+  it('TEST 2: viewing an existing sale does not recalculate commission', async () => {
+    (prismaMock.sale.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(detailSale());
+
+    await saleService.getSale(STORE_ID, SALE_ID);
+
+    expect(sellerCommissionService.syncSellerCommissionForSale).not.toHaveBeenCalled();
+    expect(sellerCommissionService.recalculateSellerCommissionForSale).not.toHaveBeenCalled();
+    expect(sellerCommissionService.getPostedSellerCommissionForSale).toHaveBeenCalledWith(
+      STORE_ID,
+      SALE_ID,
+    );
+  });
+
+  it('TEST 3: Edit → Save does not recalculate commission', async () => {
+    (prismaMock.sale.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(detailSale());
+    (prismaMock.sale.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+
+    await saleService.updateSale(STORE_ID, admin, SALE_ID, { notes: 'check' });
+
+    expect(sellerCommissionService.syncSellerCommissionForSale).not.toHaveBeenCalled();
+    expect(sellerCommissionService.recalculateSellerCommissionForSale).not.toHaveBeenCalled();
+  });
+
+  it('TEST 4: Edit → Save with a new saleDate still does not recalculate commission', async () => {
+    (prismaMock.sale.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(detailSale());
+    (prismaMock.sale.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+
+    await saleService.updateSale(STORE_ID, admin, SALE_ID, { saleDate: '2026-09-01' });
+
+    expect(sellerCommissionService.syncSellerCommissionForSale).not.toHaveBeenCalled();
+    expect(sellerCommissionService.recalculateSellerCommissionForSale).not.toHaveBeenCalled();
+  });
+
+  it('TEST 5 / 11: Recalculate posts current-rule commission and syncs ledger', async () => {
+    (prismaMock.sale.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(detailSale());
+    vi.mocked(sellerCommissionService.recalculateSellerCommissionForSale).mockResolvedValueOnce({
+      previousAmount: 0,
+      newAmount: 50_000,
+      posted: 1,
+      reversed: 0,
+    });
+    vi.mocked(sellerCommissionService.getPostedSellerCommissionForSale).mockResolvedValueOnce({
+      amount: 50_000,
+      rateLabel: '10%',
+    });
+
+    const result = await saleService.recalculateSaleSellerCommission(STORE_ID, admin, SALE_ID);
+
+    expect(sellerCommissionService.recalculateSellerCommissionForSale).toHaveBeenCalledWith(
+      expect.objectContaining({ storeId: STORE_ID, saleId: SALE_ID, actorId: ADMIN_ID }),
+    );
+    expect(result.previousAmount).toBe(0);
+    expect(result.newAmount).toBe(50_000);
+    expect(result.sale.sellerCommissionEstimate).toBe(50_000);
+  });
+
+  it('TEST 10: Edit → Save does not touch financial ledger commission rows', async () => {
+    (prismaMock.sale.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(detailSale());
+    (prismaMock.sale.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+
+    await saleService.updateSale(STORE_ID, admin, SALE_ID, { notes: 'no commission' });
+
+    expect(prismaMock.workerFinancialTransaction.create).not.toHaveBeenCalled();
+    expect(sellerCommissionService.syncSellerCommissionForSale).not.toHaveBeenCalled();
   });
 });

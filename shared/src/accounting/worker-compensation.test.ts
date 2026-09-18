@@ -6,6 +6,7 @@ import {
   calculateWorkerCompensation,
   compensationDateRangesOverlap,
   findCompensationRuleForTypeOnDate,
+  findSellerCompensationRuleForRecalculation,
   findSellerCompensationRuleForSaleDate,
   isCompensationRuleEffectiveOn,
   MAX_COMPENSATION_BASIS_POINTS,
@@ -242,5 +243,55 @@ describe('findSellerCompensationRuleForSaleDate', () => {
         d('2026-08-01'),
       ),
     ).toBeNull();
+  });
+});
+
+describe('findSellerCompensationRuleForRecalculation', () => {
+  const d = (iso: string) => new Date(`${iso}T12:00:00.000Z`);
+
+  it('prefers the current open-ended active rule over a historical covering window', () => {
+    const historical = {
+      id: 'r-old',
+      type: WorkerCompensationType.PERCENT_OF_SALE,
+      value: 500,
+      isActive: true,
+      effectiveFrom: d('2026-01-01'),
+      effectiveTo: d('2026-08-31'),
+    };
+    const current = {
+      id: 'r-new',
+      type: WorkerCompensationType.PERCENT_OF_SALE,
+      value: 1000,
+      isActive: true,
+      effectiveFrom: d('2026-09-18'),
+      effectiveTo: null,
+    };
+    expect(
+      findSellerCompensationRuleForRecalculation(
+        [historical, current],
+        WorkerCompensationType.PERCENT_OF_SALE,
+        d('2026-08-01'),
+        d('2026-09-18'),
+      )?.id,
+    ).toBe('r-new');
+  });
+
+  it('falls back to the saleDate covering rule when no current open rule exists', () => {
+    const historical = {
+      id: 'r-old',
+      type: WorkerCompensationType.PERCENT_OF_SALE,
+      value: 500,
+      isActive: true,
+      effectiveFrom: d('2026-01-01'),
+      effectiveTo: d('2026-08-31'),
+    };
+    expect(
+      findSellerCompensationRuleForRecalculation(
+        [historical],
+        WorkerCompensationType.PERCENT_OF_SALE,
+        d('2026-08-01'),
+        d('2026-09-18'),
+      )?.id,
+    ).toBe('r-old');
   });
 });

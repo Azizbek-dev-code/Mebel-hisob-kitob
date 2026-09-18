@@ -152,6 +152,16 @@ export function useUpdateSale(saleId: string) {
   });
 }
 
+export function useRecalculateSaleCommission(saleId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => salesService.recalculateCommission(saleId),
+    onSuccess: async () => {
+      await invalidateAfterSaleMutation(queryClient, { saleId });
+    },
+  });
+}
+
 export function useMyAssemblyTasks(status?: AssemblyTaskStatus) {
   return useQuery({
     queryKey: salesKeys.assemblyMine(status),

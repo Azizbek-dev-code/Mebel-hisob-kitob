@@ -1,5 +1,5 @@
 import { SalePaymentStatus } from '@furniture-erp/shared';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,12 +14,14 @@ function moneyMatcher(amount: number): RegExp {
 const getMock = vi.fn();
 const addPaymentMock = vi.fn();
 const updateMock = vi.fn();
+const recalculateCommissionMock = vi.fn();
 
 vi.mock('@/services/sales.service', () => ({
   salesService: {
     get: (...args: unknown[]) => getMock(...args),
     addPayment: (...args: unknown[]) => addPaymentMock(...args),
     update: (...args: unknown[]) => updateMock(...args),
+    recalculateCommission: (...args: unknown[]) => recalculateCommissionMock(...args),
   },
 }));
 
@@ -155,6 +157,7 @@ beforeEach(() => {
   getMock.mockReset();
   addPaymentMock.mockReset();
   updateMock.mockReset();
+  recalculateCommissionMock.mockReset();
   getMock.mockResolvedValue(SALE);
   addPaymentMock.mockResolvedValue({
     sale: { ...SALE, paidAmount: 5_000_000, remainingAmount: 4_500_000 },
@@ -170,6 +173,11 @@ beforeEach(() => {
     },
   });
   updateMock.mockResolvedValue(SALE);
+  recalculateCommissionMock.mockResolvedValue({
+    sale: { ...SALE, sellerCommissionEstimate: 50_000 },
+    previousAmount: 40_000,
+    newAmount: 50_000,
+  });
 });
 
 describe('SaleDetailPage', () => {
@@ -240,5 +248,29 @@ describe('SaleDetailPage', () => {
       );
     });
     expect(updateMock.mock.calls[0]?.[1]?.installerFee).toBeUndefined();
+  });
+
+  it('asks for confirmation before recalculating seller commission', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByTestId('sale-recalculate-commission'));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(
+      within(dialog).getByText(
+        /Ushbu sotuv uchun sotuvchi komissiyasi hozirgi faol qoida asosida qayta hisoblanadi/i,
+      ),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Bekor qilish' })).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Qayta hisoblash' }));
+
+    await waitFor(() => {
+      expect(recalculateCommissionMock).toHaveBeenCalledWith('sale_1');
+    });
+    expect(await screen.findByTestId('sale-recalculate-success')).toHaveTextContent(
+      /Seller komissiyasi muvaffaqiyatli qayta hisoblandi/i,
+    );
+    expect(screen.getByTestId('sale-recalculate-success')).toHaveTextContent(/40/);
+    expect(screen.getByTestId('sale-recalculate-success')).toHaveTextContent(/50/);
   });
 });

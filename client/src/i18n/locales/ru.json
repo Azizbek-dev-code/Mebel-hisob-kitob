@@ -268,7 +268,15 @@
     "cancelledAt": "Время отмены",
     "deleteConfirm": "Удалить продажу {{number}} навсегда? Это действие нельзя отменить.",
     "deleteFailed": "Не удалось удалить продажу.",
-    "deletedMessage": "Продажа полностью удалена."
+    "deletedMessage": "Продажа полностью удалена.",
+    "recalculateCommission": "Пересчитать",
+    "recalculateCommissionTitle": "Пересчёт комиссии",
+    "recalculateCommissionConfirm": "Комиссия продавца по этой продаже будет пересчитана по текущему действующему правилу. Продолжить?",
+    "recalculateCommissionCancel": "Отмена",
+    "recalculateCommissionSuccess": "Комиссия продавца успешно пересчитана.",
+    "recalculateCommissionPrevious": "Было: {{amount}}",
+    "recalculateCommissionNew": "Стало: {{amount}}",
+    "recalculateCommissionFailed": "Не удалось пересчитать комиссию."
   },
   "products": {
     "title": "Мебель",

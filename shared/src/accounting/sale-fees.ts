@@ -5,6 +5,7 @@ import {
 import type { Money } from '../types/api.js';
 import {
   calculateWorkerCompensation,
+  findSellerCompensationRuleForRecalculation,
   findSellerCompensationRuleForSaleDate,
   isPercentCompensationType,
 } from './worker-compensation.js';
@@ -116,6 +117,11 @@ export function computeSellerCommissionLines(input: {
   grossProfit: Money;
   /** SaleWorkerCompensation SELLER override; skips rule engine when > 0. */
   manualAmount?: Money | null;
+  /**
+   * True only for the explicit Recalculate action.
+   * New sales keep saleDate matching + current-open fallback.
+   */
+  preferCurrentOpenRule?: boolean;
 }): SellerCommissionLine[] {
   if (input.manualAmount != null && input.manualAmount > 0) {
     return [
@@ -134,11 +140,15 @@ export function computeSellerCommissionLines(input: {
   const active = input.rules;
   const commissionBase = Math.max(0, input.grossProfit);
   const lines: SellerCommissionLine[] = [];
+  const matchRule = input.preferCurrentOpenRule
+    ? findSellerCompensationRuleForRecalculation
+    : findSellerCompensationRuleForSaleDate;
 
   for (const type of SELLER_SALE_COMPENSATION_TYPES) {
-    // Match on saleDate (business date), not createdAt / today. Backdated sales
-    // still receive the current open-ended rate when no earlier window exists.
-    const rule = findSellerCompensationRuleForSaleDate(active, type, input.saleDate);
+    // New sale: match saleDate, then current open-ended rule.
+    // Recalculate: prefer the current open-ended active rule so historical
+    // sales are not left at 0.
+    const rule = matchRule(active, type, input.saleDate);
     if (!rule) continue;
 
     const baseAmount =

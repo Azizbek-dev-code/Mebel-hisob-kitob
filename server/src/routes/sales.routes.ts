@@ -12,6 +12,7 @@ import {
   listMyDeliveries,
   listPayments,
   listSales,
+  recalculateSaleCommission,
   updateAssemblyTask,
   updatePurchaseDeliveryStatus,
   updateSale,
@@ -60,6 +61,11 @@ salesRouter.patch(
   '/:id/delivery',
   validate({ params: idParamsSchema, body: updateSaleDeliveryStatusBodySchema }),
   updateSaleDeliveryStatus,
+);
+salesRouter.post(
+  '/:id/recalculate-commission',
+  validate({ params: idParamsSchema }),
+  recalculateSaleCommission,
 );
 salesRouter.post(
   '/:id/cancel',

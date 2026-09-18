@@ -268,7 +268,15 @@
     "cancelledAt": "Bekor qilingan vaqt",
     "deleteConfirm": "{{number}} sotuvini butunlay o‘chirasizmi? Bu amalni qaytarib bo‘lmaydi.",
     "deleteFailed": "Sotuvni o‘chirib bo‘lmadi.",
-    "deletedMessage": "Sotuv butunlay o‘chirildi."
+    "deletedMessage": "Sotuv butunlay o‘chirildi.",
+    "recalculateCommission": "Qayta hisoblash",
+    "recalculateCommissionTitle": "Komissiyani qayta hisoblash",
+    "recalculateCommissionConfirm": "Ushbu sotuv uchun sotuvchi komissiyasi hozirgi faol qoida asosida qayta hisoblanadi. Davom etasizmi?",
+    "recalculateCommissionCancel": "Bekor qilish",
+    "recalculateCommissionSuccess": "Seller komissiyasi muvaffaqiyatli qayta hisoblandi.",
+    "recalculateCommissionPrevious": "Oldingi: {{amount}}",
+    "recalculateCommissionNew": "Yangi: {{amount}}",
+    "recalculateCommissionFailed": "Komissiyani qayta hisoblab bo‘lmadi."
   },
   "products": {
     "title": "Mebellar",

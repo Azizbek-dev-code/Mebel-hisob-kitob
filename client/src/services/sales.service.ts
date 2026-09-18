@@ -14,6 +14,7 @@ import type {
   SaleListItem,
   SaleListQuery,
   SaleListResponse,
+  RecalculateSellerCommissionResponse,
   UpdateAssemblyTaskRequest,
   UpdateSaleDeliveryStatusRequest,
   UpdateSaleDeliveryStatusResponse,
@@ -56,6 +57,12 @@ export const salesService = {
   async update(id: string, body: UpdateSaleRequest): Promise<SaleDetail> {
     const { sale } = await apiClient.patch<SaleDetailResponse>(`/sales/${id}`, { body });
     return sale;
+  },
+
+  async recalculateCommission(id: string): Promise<RecalculateSellerCommissionResponse> {
+    return apiClient.post<RecalculateSellerCommissionResponse>(
+      `/sales/${id}/recalculate-commission`,
+    );
   },
 
   async cancel(id: string, body: CancelSaleRequest): Promise<SaleDetail> {

@@ -154,9 +154,8 @@ export interface SaleDetail extends SaleListItem {
   grossProfit: number;
   netProfit: number;
   /**
-   * Read-only estimate from the seller's active WorkerCompensationRule
-   * (PERCENT_OF_SALE / PERCENT_OF_GROSS_PROFIT / FIXED_PER_SALE). Not stored.
-   * PERCENT_OF_GROSS_PROFIT is always `max(0, grossProfit) × rate` (sale − cost).
+   * Posted (earned) seller commission from the worker ledger for this sale.
+   * GET never recomputes from current rules — 0 stays 0 until Recalculate.
    */
   sellerCommissionEstimate: Money;
   /** e.g. "10%" or null when no active rule ("qoida yo'q"). */
@@ -358,6 +357,12 @@ export interface SaleDetailResponse {
 
 export interface CreateSaleResponse {
   sale: SaleDetail;
+}
+
+export interface RecalculateSellerCommissionResponse {
+  sale: SaleDetail;
+  previousAmount: Money;
+  newAmount: Money;
 }
 
 export interface AddPaymentResponse {

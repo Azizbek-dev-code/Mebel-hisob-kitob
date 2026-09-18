@@ -192,17 +192,20 @@ export interface SellerCompensationRuleMatchInput extends CompensationRuleMatchI
 }
 
 /**
- * Seller sale commission rule for a business `saleDate`.
+ * Seller sale commission rule for a **new** sale (POST /sales).
  *
- * 1. Prefer a rule whose effective window covers `saleDate` (unchanged).
- * 2. If none — and the sale is *before* an open-ended active rate — backfill that
- *    current rate onto the historical sale.
+ * 1. Prefer a rule whose effective window covers `saleDate`.
+ * 2. If none — and an open-ended active rate exists (`effectiveTo = null`) —
+ *    use that current rule even when `saleDate` is before `effectiveFrom`.
  *
- * Why (2): the add-rule UI defaults `effectiveFrom` to today, so backdated sales
- * (e.g. 01.08 when the rule starts 18.09) otherwise get 0 while today's sales work.
+ * Why (2): a new sale entered today with a historical `saleDate` (createdAt today,
+ * saleDate 01.08) must still earn commission under the current open rule.
  * Closed windows (`effectiveTo` set) are never extended — intentional end stays 0.
  *
  * Ledger attribution still uses `saleDate` (not `createdAt` / wall clock).
+ *
+ * Existing sales are NOT matched here on View / Edit → Save. Recalculate uses
+ * `findSellerCompensationRuleForRecalculation` instead.
  */
 export function findSellerCompensationRuleForSaleDate(
   rules: readonly SellerCompensationRuleMatchInput[],
@@ -225,4 +228,38 @@ export function findSellerCompensationRuleForSaleDate(
       utcCalendarDay(b.effectiveFrom).localeCompare(utcCalendarDay(a.effectiveFrom)),
     );
   return backfill[0] ?? null;
+}
+
+/**
+ * Seller commission rule for the explicit **"Qayta hisoblash"** action.
+ *
+ * 1. Prefer the current open-ended active rule (`effectiveTo = null`).
+ *    A historical saleDate must not stay at 0 when a current 10% rule exists.
+ * 2. Else a window that covers `asOf` (typically today).
+ * 3. Else the exact window covering `saleDate` (legacy closed rate).
+ *
+ * Never used by View or Edit → Save.
+ */
+export function findSellerCompensationRuleForRecalculation(
+  rules: readonly SellerCompensationRuleMatchInput[],
+  type: WorkerCompensationTypeValue,
+  saleDate: Date,
+  asOf: Date = new Date(),
+): CompensationRuleMatchInput | null {
+  const currentOpen = rules
+    .filter(
+      (rule) =>
+        rule.type === type &&
+        rule.isActive !== false &&
+        rule.effectiveTo == null,
+    )
+    .sort((a, b) =>
+      utcCalendarDay(b.effectiveFrom).localeCompare(utcCalendarDay(a.effectiveFrom)),
+    );
+  if (currentOpen[0]) return currentOpen[0];
+
+  return (
+    findCompensationRuleForTypeOnDate(rules, type, asOf) ??
+    findCompensationRuleForTypeOnDate(rules, type, saleDate)
+  );
 }

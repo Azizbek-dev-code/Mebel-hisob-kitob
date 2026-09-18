@@ -9,7 +9,7 @@ import {
   type SaleWorkerCompensationInput,
   type SaleWorkerPayRole,
 } from '@furniture-erp/shared';
-import { ArrowLeft, Loader2, Trash2 } from 'lucide-react';
+import { ArrowLeft, Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -47,6 +47,7 @@ import {
   useAddPayment,
   useCancelSale,
   useDeleteCancelledSale,
+  useRecalculateSaleCommission,
   useSale,
   useUpdateSale,
   useUpdateSaleDeliveryStatus,
@@ -66,6 +67,7 @@ export function SaleDetailPage() {
   const deleteCancelledSale = useDeleteCancelledSale();
   const updateSale = useUpdateSale(id ?? '');
   const updateDeliveryStatus = useUpdateSaleDeliveryStatus();
+  const recalculateCommission = useRecalculateSaleCommission(id ?? '');
 
   const [amount, setAmount] = useState(0);
   const [method, setMethod] = useState<PaymentMethod>(PaymentMethod.CASH);
@@ -84,6 +86,9 @@ export function SaleDetailPage() {
   const [assemblerFeeDraft, setAssemblerFeeDraft] = useState(0);
   const [driverFeeDraft, setDriverFeeDraft] = useState(0);
   const [feeError, setFeeError] = useState<string | null>(null);
+  const [recalculateOpen, setRecalculateOpen] = useState(false);
+  const [recalculateError, setRecalculateError] = useState<string | null>(null);
+  const [recalculateSuccess, setRecalculateSuccess] = useState<string | null>(null);
 
   const saleData = saleQuery.data;
   useEffect(() => {
@@ -124,6 +129,7 @@ export function SaleDetailPage() {
   const allowCancel = canCancelSale(currentUser) && !isCancelled;
   const allowDelete = canCancelSale(currentUser) && isCancelled;
   const canEditFees = canManageStoreSettings(currentUser) && !isCancelled;
+  const canRecalculateCommission = canManageStoreSettings(currentUser) && !isCancelled;
   const canEditWorkerPay =
     canManageStoreSettings(currentUser) && !isCancelled && !sale.workerCompensationLocked;
 
@@ -308,6 +314,27 @@ export function SaleDetailPage() {
     }
   }
 
+  async function handleConfirmRecalculateCommission() {
+    setRecalculateError(null);
+    setRecalculateSuccess(null);
+    try {
+      const result = await recalculateCommission.mutateAsync();
+      const previous = result.previousAmount;
+      const next = result.newAmount;
+      const changed = previous !== next;
+      setRecalculateSuccess(
+        changed
+          ? `${t('sales.recalculateCommissionSuccess')} ${t('sales.recalculateCommissionPrevious', { amount: formatMoney(previous) })} · ${t('sales.recalculateCommissionNew', { amount: formatMoney(next) })}`
+          : t('sales.recalculateCommissionSuccess'),
+      );
+      setRecalculateOpen(false);
+    } catch (error) {
+      setRecalculateError(
+        mutationErrorMessage(error, t('sales.recalculateCommissionFailed')),
+      );
+    }
+  }
+
   const workerCompensation: SaleWorkerCompensationDto[] = sale.workerCompensation ?? [];
 
   return (
@@ -342,6 +369,20 @@ export function SaleDetailPage() {
             >
               {t('sales.editSale')}
             </Link>
+          ) : null}
+          {canRecalculateCommission ? (
+            <button
+              type="button"
+              onClick={() => {
+                setRecalculateError(null);
+                setRecalculateOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-input border border-line px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-hover"
+              data-testid="sale-recalculate-commission"
+            >
+              <RefreshCw className="size-4" />
+              {t('sales.recalculateCommission')}
+            </button>
           ) : null}
           <Badge tone={saleStatusTone(sale.status)}>{saleStatusLabel(sale.status)}</Badge>
           <Badge tone={paymentStatusTone(sale.paymentStatus)}>
@@ -492,6 +533,16 @@ export function SaleDetailPage() {
               ) : null}
             </dd>
           </div>
+          {recalculateSuccess ? (
+            <p className="text-sm text-success-700" data-testid="sale-recalculate-success" role="status">
+              {recalculateSuccess}
+            </p>
+          ) : null}
+          {recalculateError && !recalculateOpen ? (
+            <p className="text-sm text-danger-600" role="alert">
+              {recalculateError}
+            </p>
+          ) : null}
 
           {canEditFees ? (
             <form onSubmit={handleSaveFees} className="space-y-3 border-t border-line pt-3">
@@ -971,6 +1022,29 @@ export function SaleDetailPage() {
         </ModalPortal>
       ) : null}
 
+      <ConfirmDialog
+        open={recalculateOpen}
+        title={t('sales.recalculateCommissionTitle')}
+        message={
+          <>
+            <p>{t('sales.recalculateCommissionConfirm')}</p>
+            {recalculateError ? (
+              <p role="alert" className="mt-2 text-danger-600">
+                {recalculateError}
+              </p>
+            ) : null}
+          </>
+        }
+        confirmLabel={t('sales.recalculateCommission')}
+        cancelLabel={t('sales.recalculateCommissionCancel')}
+        busy={recalculateCommission.isPending}
+        onConfirm={() => void handleConfirmRecalculateCommission()}
+        onCancel={() => {
+          if (recalculateCommission.isPending) return;
+          setRecalculateOpen(false);
+          setRecalculateError(null);
+        }}
+      />
       <ConfirmDialog
         open={deliveryCompleteOpen}
         title={t('sales.completeDelivery')}

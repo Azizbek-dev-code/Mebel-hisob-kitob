@@ -244,6 +244,40 @@ describe('estimateSellerCommission', () => {
     expect(result.amount).toBe(6_000);
     expect(result.amount).toBeGreaterThan(0);
   });
+
+  it('Recalculate prefers current 10% over a historical covering 5% rule', () => {
+    const historical = {
+      id: 'r-old',
+      type: WorkerCompensationType.PERCENT_OF_SALE,
+      value: 500,
+      isActive: true,
+      effectiveFrom: new Date('2026-01-01T12:00:00.000Z'),
+      effectiveTo: new Date('2026-08-31T12:00:00.000Z'),
+    };
+    const current = {
+      id: 'r-new',
+      type: WorkerCompensationType.PERCENT_OF_SALE,
+      value: 1000,
+      isActive: true,
+      effectiveFrom: new Date('2026-09-18T12:00:00.000Z'),
+      effectiveTo: null,
+    };
+    const created = estimateSellerCommission({
+      rules: [historical, current],
+      saleDate: new Date('2026-08-01T12:00:00.000Z'),
+      totalSalePrice: 500_000,
+      grossProfit: 100_000,
+    });
+    const recalculated = computeSellerCommissionLines({
+      rules: [historical, current],
+      saleDate: new Date('2026-08-01T12:00:00.000Z'),
+      totalSalePrice: 500_000,
+      grossProfit: 100_000,
+      preferCurrentOpenRule: true,
+    });
+    expect(created.amount).toBe(25_000);
+    expect(recalculated[0]?.amount).toBe(50_000);
+  });
 });
 
 describe('formatBasisPointsAsPercentLabel', () => {

@@ -5,6 +5,7 @@ import type {
   CancelSaleResponse,
   CreateSaleResponse,
   MyDeliveriesResponse,
+  RecalculateSellerCommissionResponse,
   SaleDetailResponse,
   UpdatePurchaseDeliveryStatusResponse,
   UpdateSaleDeliveryStatusResponse,
@@ -84,6 +85,14 @@ export const updateSale = asyncHandler(async (req: Request, res: Response) => {
 
   const sale = await saleService.updateSale(user.storeId, user, id, body);
   sendSuccess<SaleDetailResponse>(res, { sale });
+});
+
+export const recalculateSaleCommission = asyncHandler(async (req: Request, res: Response) => {
+  const user = requireUser(req);
+  const { id } = req.params as IdParams;
+
+  const result = await saleService.recalculateSaleSellerCommission(user.storeId, user, id);
+  sendSuccess<RecalculateSellerCommissionResponse>(res, result);
 });
 
 export const cancelSale = asyncHandler(async (req: Request, res: Response) => {

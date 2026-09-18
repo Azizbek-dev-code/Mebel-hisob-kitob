@@ -394,7 +394,7 @@ describe('worker-compensation.service', () => {
     expect(items[0]?.isActive).toBe(false);
   });
 
-  it('does not create WorkerFinancialTransaction when creating a rule', async () => {
+  it('TEST 9: creating a compensation rule does not post commission or touch existing sales', async () => {
     await createCompensationRule(STORE_ID, { id: ADMIN_ID, role: UserRole.ADMIN }, WORKER_ID, {
       responsibility: WorkerResponsibility.SELLER,
       type: WorkerCompensationType.PERCENT_OF_SALE,
@@ -403,6 +403,7 @@ describe('worker-compensation.service', () => {
     });
 
     expect(repoMock.countWorkerFinancialTransactions).not.toHaveBeenCalled();
+    expect(financeRepoMock.createTransaction).not.toHaveBeenCalled();
     expect(repoMock.createRule).toHaveBeenCalledTimes(1);
   });
 });

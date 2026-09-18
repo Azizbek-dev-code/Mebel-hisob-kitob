@@ -30,9 +30,12 @@ vi.mock('../repositories/worker-financial.repository.js', () => financialRepoMoc
 vi.mock('../repositories/worker-compensation.repository.js', () => compensationRepoMock);
 vi.mock('../lib/prisma.js', () => ({ prisma: prismaMock }));
 
-const { deriveSellerCommissionStatus, syncSellerCommissionForSale } = await import(
-  './seller-commission.service.js'
-);
+const {
+  deriveSellerCommissionStatus,
+  syncSellerCommissionForSale,
+  recalculateSellerCommissionForSale,
+  computeLinesForSale,
+} = await import('./seller-commission.service.js');
 
 describe('deriveSellerCommissionStatus', () => {
   it('marks cancelled sales as CANCELLED', () => {
@@ -310,5 +313,165 @@ describe('syncSellerCommissionForSale historical saleDate', () => {
       }),
       undefined,
     );
+  });
+});
+
+describe('recalculateSellerCommissionForSale', () => {
+  const augustSaleDate = new Date('2026-08-01T12:00:00.000Z');
+
+  function saleRow(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'sale_aug',
+      saleNumber: 7,
+      saleDate: augustSaleDate,
+      status: SaleStatus.ACTIVE,
+      sellerId: 'seller_1',
+      totalSalePrice: 500_000n,
+      grossProfit: 100_000n,
+      netProfit: 50_000n,
+      items: [{ productName: 'Divan' }],
+      workerCompensations: [],
+      ...overrides,
+    };
+  }
+
+  function currentTenPercentRule() {
+    return {
+      id: 'rule_today',
+      type: 'PERCENT_OF_SALE',
+      value: 1000,
+      isActive: true,
+      effectiveFrom: new Date('2026-09-18T12:00:00.000Z'),
+      effectiveTo: null,
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    financialRepoMock.findReversalOf.mockResolvedValue(null);
+    financialRepoMock.createTransaction.mockResolvedValue({ id: 'tx_new' });
+    financialRepoMock.closeOpenCommission.mockResolvedValue(undefined);
+    prismaMock.sale.findFirst.mockResolvedValue(saleRow());
+    compensationRepoMock.listRulesForWorker.mockResolvedValue([currentTenPercentRule()]);
+  });
+
+  it('TEST 5: Recalculate applies current open rule to a historical sale', async () => {
+    prismaMock.workerFinancialTransaction.findMany.mockResolvedValue([]);
+
+    const result = await recalculateSellerCommissionForSale({
+      storeId: 'store_1',
+      saleId: 'sale_aug',
+      actorId: 'admin_1',
+    });
+
+    expect(result.previousAmount).toBe(0);
+    expect(result.newAmount).toBe(50_000);
+    expect(result.posted).toBe(1);
+    expect(financialRepoMock.createTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: WorkerFinancialTransactionType.COMMISSION,
+        amount: 50_000,
+        transactionDate: augustSaleDate,
+      }),
+      undefined,
+    );
+  });
+
+  it('TEST 6 / 7: Recalculate twice does not duplicate commission or ledger rows', async () => {
+    const openRow = {
+      id: 'tx_50',
+      workerId: 'seller_1',
+      amount: 50_000n,
+      type: WorkerFinancialTransactionType.COMMISSION,
+      description: 'Komissiya · Sotuv #7 · Divan · Stavka 10%',
+      referenceId: 'sale_aug:PERCENT_OF_SALE',
+      responsibility: WorkerResponsibility.SELLER,
+      transactionDate: augustSaleDate,
+      isOpen: true,
+      referenceType: WorkerFinancialReferenceType.COMPENSATION,
+    };
+    prismaMock.workerFinancialTransaction.findMany.mockResolvedValue([openRow]);
+
+    const first = await recalculateSellerCommissionForSale({
+      storeId: 'store_1',
+      saleId: 'sale_aug',
+      actorId: 'admin_1',
+    });
+    let lastPosted = first.posted;
+    for (let i = 0; i < 4; i += 1) {
+      const again = await recalculateSellerCommissionForSale({
+        storeId: 'store_1',
+        saleId: 'sale_aug',
+        actorId: 'admin_1',
+      });
+      lastPosted += again.posted;
+      expect(again.newAmount).toBe(50_000);
+    }
+
+    expect(first.newAmount).toBe(50_000);
+    expect(lastPosted).toBe(0);
+    expect(financialRepoMock.createTransaction).not.toHaveBeenCalled();
+  });
+
+  it('TEST 8: Recalculate replaces 40,000 with 50,000 instead of stacking', async () => {
+    prismaMock.workerFinancialTransaction.findMany.mockResolvedValue([
+      {
+        id: 'tx_40',
+        workerId: 'seller_1',
+        amount: 40_000n,
+        type: WorkerFinancialTransactionType.COMMISSION,
+        description: 'old',
+        referenceId: 'sale_aug:PERCENT_OF_SALE',
+        responsibility: WorkerResponsibility.SELLER,
+        transactionDate: augustSaleDate,
+        isOpen: true,
+        referenceType: WorkerFinancialReferenceType.COMPENSATION,
+      },
+    ]);
+
+    const result = await recalculateSellerCommissionForSale({
+      storeId: 'store_1',
+      saleId: 'sale_aug',
+      actorId: 'admin_1',
+    });
+
+    expect(result.previousAmount).toBe(40_000);
+    expect(result.newAmount).toBe(50_000);
+    expect(result.reversed).toBe(1);
+    expect(result.posted).toBe(1);
+    expect(financialRepoMock.createTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: WorkerFinancialTransactionType.REVERSAL,
+        referenceId: 'tx_40',
+      }),
+      undefined,
+    );
+    expect(financialRepoMock.createTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: WorkerFinancialTransactionType.COMMISSION,
+        amount: 50_000,
+      }),
+      undefined,
+    );
+  });
+
+  it('TEST 12: no seller → commission 0 and no crash', async () => {
+    prismaMock.sale.findFirst.mockResolvedValue(saleRow({ sellerId: null }));
+    prismaMock.workerFinancialTransaction.findMany.mockResolvedValue([]);
+
+    const computed = await computeLinesForSale({
+      storeId: 'store_1',
+      saleId: 'sale_aug',
+    });
+    const result = await recalculateSellerCommissionForSale({
+      storeId: 'store_1',
+      saleId: 'sale_aug',
+      actorId: 'admin_1',
+    });
+
+    expect(computed?.workerId).toBeNull();
+    expect(computed?.lines).toEqual([]);
+    expect(result.newAmount).toBe(0);
+    expect(financialRepoMock.createTransaction).not.toHaveBeenCalled();
   });
 });
