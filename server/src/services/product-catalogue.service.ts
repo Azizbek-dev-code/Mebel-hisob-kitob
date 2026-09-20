@@ -130,6 +130,17 @@ export async function createProduct(
       summary: `Product created: ${product.name}`,
       metadata: { sku: product.sku },
     });
+    void import('../modules/usage-analytics/try-track-activity.js')
+      .then(({ tryTrackBusinessEvent }) =>
+        tryTrackBusinessEvent({
+          actorUserId: actorUserId ?? null,
+          storeId,
+          eventType: 'product_created',
+          entityId: product.id,
+          feature: 'products',
+        }),
+      )
+      .catch(() => undefined);
     return product;
   } catch (error) {
     return mapUniqueViolation(error, 'sku');

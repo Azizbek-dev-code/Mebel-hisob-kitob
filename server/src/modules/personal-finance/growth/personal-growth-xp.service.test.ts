@@ -90,7 +90,7 @@ describe('awardXp', () => {
       NOW,
     );
 
-    expect(result?.awarded).toBe(15);
+    expect(result?.awarded).toBe(10);
     expect(result?.progress.level).toBe(2);
     expect(result?.progress.currentStreak).toBe(3);
     expect(prismaMock.growthXpEvent.create).toHaveBeenCalled();
@@ -121,9 +121,10 @@ describe('awardXp', () => {
 describe('getGrowthProgress', () => {
   it('returns level band and today XP', async () => {
     prismaMock.growthXpEvent.aggregate.mockResolvedValue({ _sum: { amount: 55 } });
+    prismaMock.growthProgress.update.mockResolvedValue({ ...PROGRESS, level: 2 });
     const progress = await getGrowthProgress('ws_1', 'idn_1', prismaMock as never, NOW);
     expect(progress.totalXp).toBe(90);
     expect(progress.todayXp).toBe(55);
-    expect(progress.level).toBe(1);
+    expect(progress.level).toBe(2);
   });
 });

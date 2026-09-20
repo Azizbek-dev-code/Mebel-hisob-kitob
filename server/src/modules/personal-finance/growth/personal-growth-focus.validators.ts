@@ -7,6 +7,7 @@ export const startFocusBodySchema = z.object({
   plannedMinutes: z.number().int().min(1).max(90),
   kind: z.nativeEnum(GrowthFocusKind).optional(),
   todoId: cuidSchema.nullable().optional(),
+  habitId: cuidSchema.nullable().optional(),
   linkedGoalId: cuidSchema.nullable().optional(),
 });
 

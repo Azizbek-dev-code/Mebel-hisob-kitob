@@ -42,7 +42,7 @@ afterEach(() => {
 });
 
 describe('PersonalGrowthHabitsPage', () => {
-  it('shows habits and daily goals on 390px layout', async () => {
+  it('shows habits without daily goals on 390px layout', async () => {
     mockApi({
       '/auth/me': { status: 200, body: { success: true, data: { user: PERSONAL } } },
       '/personal/growth/habits': {
@@ -67,7 +67,26 @@ describe('PersonalGrowthHabitsPage', () => {
                 currentStreak: 5,
                 bestStreak: 12,
                 todayCheckIn: null,
+                todayValue: 0,
+                todayProgress: 0,
+                todayStatus: 'NONE',
                 dueToday: true,
+                kind: 'GOOD',
+                badMode: null,
+                icon: 'flame',
+                color: '#4f46e5',
+                scheduleKind: 'EVERY_DAY',
+                weekdays: [],
+                startDayKey: '2026-09-01',
+                endDayKey: null,
+                timeOfDay: 'ANY',
+                reminderEnabled: false,
+                reminderTime: null,
+                goalPeriod: 'DAY',
+                notes: null,
+                stackAfterHabitId: null,
+                stackCue: null,
+                checklist: [],
                 createdAt: '2026-09-17T00:00:00.000Z',
                 updatedAt: '2026-09-17T00:00:00.000Z',
               },
@@ -113,7 +132,7 @@ describe('PersonalGrowthHabitsPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Odatlar' })).toBeInTheDocument();
     expect(await screen.findByText('20 English words')).toBeInTheDocument();
-    expect(screen.getByText('IELTS — 1h')).toBeInTheDocument();
-    expect(screen.getByText(/0\/1/)).toBeInTheDocument();
+    expect(screen.queryByText('IELTS — 1h')).not.toBeInTheDocument();
+    expect(screen.queryByText('Bugungi 3 maqsad')).not.toBeInTheDocument();
   });
 });

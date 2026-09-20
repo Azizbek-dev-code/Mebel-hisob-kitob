@@ -128,7 +128,23 @@ export async function tryEmitGrowthNotification(
   db: DbClient = defaultPrisma,
 ): Promise<void> {
   try {
-    await emitGrowthNotification(input, db);
+    const dto = await emitGrowthNotification(input, db);
+    if (dto) {
+      void import('../../telegram/telegram.delivery.js')
+        .then(({ tryDeliverTelegramNotification }) =>
+          tryDeliverTelegramNotification(input.identityId, {
+            type: 'GROWTH',
+            title: `🌱 ${dto.title}`,
+            message: dto.body ?? '',
+            accountType: 'PERSONAL',
+            accountId: input.workspaceId ?? undefined,
+            entityType: 'GROWTH',
+            entityId: dto.id,
+            ctaPath: dto.href || '/personal/growth',
+          }),
+        )
+        .catch(() => undefined);
+    }
   } catch (err) {
     logger.error('Failed to emit growth notification', {
       identityId: input.identityId,

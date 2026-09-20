@@ -315,6 +315,61 @@ enum PlatformBillingCycle {
   MONTHLY
 }
 
+enum TelegramMediaKind {
+  NONE
+  IMAGE
+  VIDEO
+  DOCUMENT
+}
+
+enum TelegramBroadcastStatus {
+  PENDING
+  SENDING
+  COMPLETED
+  FAILED
+  DRAFT
+  SCHEDULED
+  CANCELLED
+}
+
+enum TelegramBroadcastRecipientStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum TelegramBroadcastAudience {
+  ALL
+  PERSONAL
+  BUSINESS
+  PERSONAL_AND_BUSINESS
+}
+
+enum TelegramMenuButtonAction {
+  URL
+  MENU
+  BACK
+}
+
+enum TelegramAutomationKind {
+  PERSONAL_MORNING
+  PERSONAL_EVENING
+  PERSONAL_WEEKLY
+  PERSONAL_MONTHLY
+  BUSINESS_MORNING
+  BUSINESS_EVENING
+  BUSINESS_WEEKLY
+  BUSINESS_MONTHLY
+}
+
+enum TelegramAutomationLogStatus {
+  SENT
+  FAILED
+  SKIPPED
+}
+
 enum ReferralCommissionStatus {
   PENDING
   AVAILABLE
@@ -466,6 +521,7 @@ enum GrowthHabitFrequency {
   DAILY
   WEEKLY
   CUSTOM
+  MONTHLY
 }
 
 /// Learning / study category.
@@ -477,6 +533,8 @@ enum GrowthLearningCategory {
   PROGRAMMING
   LANGUAGE
   SKILL
+  WORK
+  SPORT
   CUSTOM
 }
 
@@ -506,6 +564,20 @@ enum GrowthFriendshipStatus {
   ACCEPTED
   DECLINED
   BLOCKED
+}
+
+/// Who can see online status / last seen. Default FRIENDS.
+enum PresenceVisibility {
+  EVERYONE
+  FRIENDS
+  NOBODY
+}
+
+/// Analytics overlay (not a financial account).
+enum AnalyticsAccountType {
+  PERSONAL
+  BUSINESS
+  PLATFORM
 }
 
 /// Fight = 1v1; Group = shared target (3–10 people).
@@ -664,8 +736,15 @@ model User {
   requestedPlatformInvoices     PlatformInvoice[]        @relation("PlatformInvoiceRequestedBy")
   platformExpensesCreated       PlatformExpense[]        @relation("PlatformExpenseCreatedBy")
   platformExpensesCancelled     PlatformExpense[]        @relation("PlatformExpenseCancelledBy")
+  telegramBroadcastsCreated     TelegramBroadcast[]      @relation("TelegramBroadcastCreatedBy")
   reviewedSubscriptionRequests  SubscriptionRequest[]    @relation("SubscriptionRequestReviewedBy")
   accountDeletions              AccountDeletion[]
+  authSessions                  AuthSession[]
+
+  /// Business notification toggles. Isolated from PersonalProfile prefs.
+  bizNotifyPrefs Json?
+  /// Derived business notification keys this user has marked read in this store.
+  bizNotifyReads Json?
 
   // Unique per store, not globally: two stores may each employ an "admin@".
   @@unique([storeId, email])
@@ -690,6 +769,11 @@ model Identity {
   /// Set on Personal self-registration. Backfilled ERP identities stay null —
   /// those accounts still authenticate against User.passwordHash.
   passwordHash String?
+  /// Null until the owner confirms a code sent to this email.
+  emailVerifiedAt DateTime?
+  /// In-app feedback prompts — dismissed without submitting still counts as seen.
+  feedbackOnboardingDismissedAt DateTime?
+  feedbackOutcomeDismissedAt    DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -711,8 +795,116 @@ model Identity {
   friendStreaksAsB      GrowthFriendStreak[] @relation("FriendStreakB")
   growthNotifications   GrowthNotification[]
 
+  authEmailCodes        AuthEmailCode[]
+  authSessions          AuthSession[]
+  appFeedbacks          AppFeedback[]
+  appFeedbackReactions  AppFeedbackReaction[]
+  appFeedbackViews      AppFeedbackView[]
+  telegramConnection    TelegramConnection?
+  telegramLinkTokens    TelegramLinkToken[]
+  telegramPendingLinks  TelegramPendingLink[]
+  presence              IdentityPresence?
+  analyticsSessions     AnalyticsSession[]
+  analyticsEvents       AnalyticsEvent[]
+  dailyActivities       DailyUserActivity[]
+  platformXpTransactions PlatformXpTransaction[]
+
   @@index([email])
   @@map("identities")
+}
+
+/// Server-side session row so a user can list/revoke devices. JWT `sid` points here.
+/// Legacy tokens without `sid` still authenticate until they expire.
+model AuthSession {
+  id           String    @id @default(cuid())
+  identityId   String?
+  userId       String?
+  deviceLabel  String?
+  userAgent    String?
+  ipAddress    String?
+  rememberMe   Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  lastActiveAt DateTime  @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+
+  identity Identity? @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  user     User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([identityId, revokedAt])
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+/// In-app product feedback. Public rows may appear on Global Reyting profiles.
+model AppFeedback {
+  id         String   @id @default(cuid())
+  identityId String
+  /// ONBOARDING_EXPECTATION | SUBSCRIPTION_OUTCOME | VOLUNTARY
+  kind       String
+  body       String
+  rating     Int?
+  isPublic   Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  identity  Identity               @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  reactions AppFeedbackReaction[]
+  views     AppFeedbackView[]
+
+  @@index([identityId, kind, createdAt])
+  @@index([isPublic, createdAt])
+  @@map("app_feedbacks")
+}
+
+model AppFeedbackReaction {
+  id         String   @id @default(cuid())
+  feedbackId String
+  identityId String
+  createdAt  DateTime @default(now())
+
+  feedback AppFeedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  identity Identity    @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@unique([feedbackId, identityId])
+  @@map("app_feedback_reactions")
+}
+
+model AppFeedbackView {
+  id         String   @id @default(cuid())
+  feedbackId String
+  identityId String
+  createdAt  DateTime @default(now())
+
+  feedback AppFeedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  identity Identity    @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@unique([feedbackId, identityId])
+  @@map("app_feedback_views")
+}
+
+/// One-time hashed email codes for password reset / email change. Never store plaintext.
+model AuthEmailCode {
+  id           String    @id @default(cuid())
+  email        String
+  purpose      String
+  codeHash     String
+  /// Optional target email when purpose = EMAIL_CHANGE.
+  newEmail     String?
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  attemptCount Int       @default(0)
+  identityId   String?
+
+  createdAt DateTime @default(now())
+
+  identity Identity? @relation(fields: [identityId], references: [id], onDelete: SetNull)
+
+  @@index([email, purpose, createdAt])
+  @@index([expiresAt])
+  @@map("auth_email_codes")
 }
 
 /// Account/workspace overlay. BUSINESS is 1:1 with Store via storeId.
@@ -746,7 +938,12 @@ model Workspace {
   growthFocusSessions    GrowthFocusSession[]
   growthHabits           GrowthHabit[]
   growthHabitCheckIns    GrowthHabitCheckIn[]
+  growthHabitLogs        GrowthHabitLog[]
+  growthHabitChecklistItems GrowthHabitChecklistItem[]
+  growthHabitChecklistTicks GrowthHabitChecklistTick[]
+  growthHabitConfigVersions GrowthHabitConfigVersion[]
   growthDailyGoals       GrowthDailyGoal[]
+  growthAims             GrowthAim[]
   growthLearningGoals    GrowthLearningGoal[]
   growthLearningSessions GrowthLearningSession[]
   growthProgress         GrowthProgress?
@@ -756,6 +953,7 @@ model Workspace {
   growthWeeklyReviews    GrowthWeeklyReview[]
   growthMonthlyReports   GrowthMonthlyReport[]
   subscriptionRequests   SubscriptionRequest[]
+  telegramAccountPreferences TelegramAccountPreference[]
 
   @@index([type, status])
   @@index([type, createdAt])
@@ -921,6 +1119,8 @@ model PersonalProfile {
   notifyGoals        Boolean @default(true)
   notifyRecurring    Boolean @default(true)
   notifyDebts        Boolean @default(true)
+  /// IANA timezone for personal day/streak/statistics (default Asia/Tashkent).
+  timezone           String  @default("Asia/Tashkent")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -987,6 +1187,14 @@ model PersonalCategory {
   key         String?
   name        String
   color       String               @default("slate")
+  /// Optional emoji / short glyph. Null falls back to catalog key mapping in the UI.
+  icon        String?
+  /// Lucide icon component name (e.g. UtensilsCrossed). Null keeps emoji `icon` fallback.
+  iconName    String?
+  /// Hex color for the lucide glyph, e.g. #0D9488.
+  iconColor   String?
+  /// Null = top-level category. One level of children only.
+  parentId    String?
   sortOrder   Int                  @default(0)
   isActive    Boolean              @default(true)
 
@@ -994,12 +1202,15 @@ model PersonalCategory {
   updatedAt DateTime @updatedAt
 
   workspace      Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parent         PersonalCategory?       @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children       PersonalCategory[]      @relation("CategoryTree")
   entries        PersonalEntry[]
   budgets        PersonalBudget[]
   recurringRules PersonalRecurringRule[]
 
   @@unique([workspaceId, kind, name])
   @@index([workspaceId, kind, isActive])
+  @@index([parentId])
   @@map("personal_categories")
 }
 
@@ -1253,6 +1464,7 @@ model GrowthFocusSession {
   /// Identity who ran the timer (same person across workspaces).
   identityId           String
   todoId               String?
+  habitId              String?
   linkedGoalId         String?
   kind                 GrowthFocusKind   @default(FOCUS)
   status               GrowthFocusStatus @default(RUNNING)
@@ -1272,10 +1484,12 @@ model GrowthFocusSession {
 
   workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   todo      GrowthTodo?  @relation(fields: [todoId], references: [id], onDelete: SetNull)
+  habit     GrowthHabit? @relation(fields: [habitId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, status, startedAt])
   @@index([workspaceId, identityId, startedAt])
   @@index([todoId])
+  @@index([habitId])
   @@map("growth_focus_sessions")
 }
 
@@ -1286,49 +1500,164 @@ model GrowthHabit {
   title               String
   description         String?
   category            String?
+  /// GOOD | BAD
+  kind                String               @default("GOOD")
+  /// QUIT | LIMIT — only when kind = BAD
+  badMode             String?
+  icon                String?
+  color               String?
   frequency           GrowthHabitFrequency @default(DAILY)
-  /// Used when frequency = CUSTOM (every N days).
+  /// EVERY_DAY | WEEKDAYS | WEEKLY | MONTHLY | INTERVAL
+  scheduleKind        String               @default("EVERY_DAY")
+  /// Used when frequency = CUSTOM / scheduleKind = INTERVAL (every N days).
   intervalDays        Int?
+  /// ISO weekdays 1=Mon … 7=Sun. Used when scheduleKind = WEEKDAYS.
+  weekdays            Int[]                @default([])
+  startDayKey         String?
+  endDayKey           String?
+  /// ANY | MORNING | AFTERNOON | EVENING | NIGHT
+  timeOfDay           String               @default("ANY")
+  reminderEnabled     Boolean              @default(false)
+  /// HH:mm local time
+  reminderTime        String?
   /// How much counts as “done” for the period (e.g. 20 words, 30 minutes).
   targetValue         Float                @default(1)
-  /// Unit label: times | minutes | words | liters | pages | custom text.
+  /// Unit label: count | duration | volume | distance | pages | custom text.
   targetUnit          String               @default("times")
+  /// DAY | WEEK | MONTH
+  goalPeriod          String               @default("DAY")
+  notes               String?
+  stackAfterHabitId   String?
+  stackCue            String?
   remindMinutesBefore Int?
   linkedGoalId        String?
   isArchived          Boolean              @default(false)
   sortOrder           Int                  @default(0)
-  /// Cached streak — recomputed on check-in (Asia/Tashkent-safe via UTC dayKey).
+  /// Cached streak — recomputed on log (workspace timezone dayKey).
   currentStreak       Int                  @default(0)
   bestStreak          Int                  @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  workspace Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  checkIns  GrowthHabitCheckIn[]
+  workspace      Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  stackAfter     GrowthHabit?              @relation("HabitStack", fields: [stackAfterHabitId], references: [id], onDelete: SetNull)
+  stackedHabits  GrowthHabit[]             @relation("HabitStack")
+  checkIns       GrowthHabitCheckIn[]
+  logs           GrowthHabitLog[]
+  checklistItems GrowthHabitChecklistItem[]
+  checklistTicks GrowthHabitChecklistTick[]
+  configVersions GrowthHabitConfigVersion[]
+  focusSessions  GrowthFocusSession[]
 
   @@index([workspaceId, isArchived, sortOrder])
+  @@index([stackAfterHabitId])
   @@map("growth_habits")
 }
 
-/// One check-in per habit per UTC calendar day.
+/// Daily rollup per habit (one row per local calendar day). Historical logs stay if the habit is archived.
 model GrowthHabitCheckIn {
-  id          String   @id @default(cuid())
-  workspaceId String
-  habitId     String
-  /// YYYY-MM-DD (UTC).
-  dayKey      String
-  value       Float    @default(1)
-  note        String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  workspaceId        String
+  habitId            String
+  /// YYYY-MM-DD in the workspace timezone.
+  dayKey             String
+  value              Float    @default(1)
+  note               String?
+  /// COMPLETED | PARTIAL | FAILED | SKIPPED
+  status             String   @default("COMPLETED")
+  skipped            Boolean  @default(false)
+  goalValueSnapshot  Float?
+  goalUnitSnapshot   String?
+  goalPeriodSnapshot String?
+  checklistDone      Int      @default(0)
+  checklistTotal     Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   habit     GrowthHabit @relation(fields: [habitId], references: [id], onDelete: Cascade)
 
   @@unique([habitId, dayKey])
   @@index([workspaceId, dayKey])
+  @@index([habitId, status])
   @@map("growth_habit_check_ins")
+}
+
+/// Individual log entries. Multiple per day; the daily check-in is the rollup.
+model GrowthHabitLog {
+  id          String   @id @default(cuid())
+  workspaceId String
+  habitId     String
+  dayKey      String
+  value       Float
+  note        String?
+  loggedAt    DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  habit     GrowthHabit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  @@index([habitId, dayKey])
+  @@index([habitId, loggedAt])
+  @@index([workspaceId, dayKey])
+  @@index([workspaceId, loggedAt])
+  @@map("growth_habit_logs")
+}
+
+model GrowthHabitChecklistItem {
+  id          String   @id @default(cuid())
+  workspaceId String
+  habitId     String
+  title       String
+  sortOrder   Int      @default(0)
+  isArchived  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  habit     GrowthHabit               @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  ticks     GrowthHabitChecklistTick[]
+
+  @@index([habitId, sortOrder])
+  @@map("growth_habit_checklist_items")
+}
+
+model GrowthHabitChecklistTick {
+  id          String   @id @default(cuid())
+  workspaceId String
+  habitId     String
+  itemId      String
+  dayKey      String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  habit     GrowthHabit               @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  item      GrowthHabitChecklistItem  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, dayKey])
+  @@index([habitId, dayKey])
+  @@index([workspaceId, dayKey])
+  @@map("growth_habit_checklist_ticks")
+}
+
+/// Snapshot of schedule/goal so later edits do not rewrite historical statistics.
+model GrowthHabitConfigVersion {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  habitId       String
+  effectiveFrom String
+  effectiveTo   String?
+  snapshot      Json
+  createdAt     DateTime @default(now())
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  habit     GrowthHabit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  @@index([habitId, effectiveFrom])
+  @@index([workspaceId])
+  @@map("growth_habit_config_versions")
 }
 
 /// Soft daily goals (max 3 / day). Distinct from GrowthTodo.isDailyFocus.
@@ -1352,6 +1681,25 @@ model GrowthDailyGoal {
   @@map("growth_daily_goals")
 }
 
+/// Long-horizon O‘sish aims (IELTS, sport, books). Not money (PersonalSavingGoal) and not daily todos.
+model GrowthAim {
+  id          String    @id @default(cuid())
+  workspaceId String
+  title       String
+  note        String?
+  status      String    @default("ACTIVE")
+  targetDate  DateTime?
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status, createdAt])
+  @@map("growth_aims")
+}
+
 /// Learning / study goal (IELTS, course, book…). ≠ PersonalSavingGoal.
 model GrowthLearningGoal {
   id                String                   @id @default(cuid())
@@ -1366,6 +1714,11 @@ model GrowthLearningGoal {
   /// Manual progress marker (e.g. current IELTS mock score).
   currentValue      Float                    @default(0)
   deadline          DateTime?
+  startDate         DateTime?
+  /// Planned minutes per day for this goal. Null = no daily target.
+  dailyMinutes      Int?
+  /// JSON array of GrowthTodo ids counted toward this goal.
+  linkedTodoIds     String?
   /// Cached from study sessions (anti-cheat credited minutes).
   totalStudyMinutes Int                      @default(0)
   sortOrder         Int                      @default(0)
@@ -1447,6 +1800,7 @@ model GrowthProgress {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([identityId])
+  @@index([totalXp])
   @@map("growth_progress")
 }
 
@@ -1469,6 +1823,7 @@ model GrowthXpEvent {
   @@unique([workspaceId, source, sourceEntityId])
   @@index([workspaceId, createdAt])
   @@index([workspaceId, dayKey])
+  @@index([identityId, createdAt])
   @@map("growth_xp_events")
 }
 
@@ -1526,6 +1881,9 @@ model GrowthSocialProfile {
   notifyFight         Boolean @default(true)
   notifyStreak        Boolean @default(true)
   notifyResult        Boolean @default(true)
+  onlineStatusVisibility PresenceVisibility @default(FRIENDS)
+  lastSeenVisibility     PresenceVisibility @default(FRIENDS)
+  showInGlobalRanking    Boolean            @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1618,6 +1976,10 @@ model GrowthChallenge {
   status       GrowthChallengeStatus @default(PENDING)
   createdById  String
   rewardXp     Int                   @default(50)
+  /// JSON array of GrowthTodo ids. Empty/null = all completed todos (legacy).
+  todoIds      String?
+  /// Daily learning/reading target in minutes when metric = LEARNING_MINUTES.
+  dailyTargetMinutes Int?
   startAt      DateTime?
   endAt        DateTime?
   winnerId     String?
@@ -2367,6 +2729,11 @@ model Expense {
   cancelledById        String?
   cancellationReason   String?
 
+  /// WorkerFinancialTransaction PAYMENT id. Application-level link (no FK) so
+  /// backup insert order stays expenses-before-ledger and cash-flow can skip
+  /// double-counting the same outflow.
+  workerPaymentId String? @unique
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2925,4 +3292,375 @@ model ReferralWithdrawal {
   @@index([identityId, status])
   @@index([status, createdAt])
   @@map("referral_withdrawals")
+}
+
+/// One Telegram chat linked to one Identity (Business and/or Personal via channel prefs).
+model TelegramConnection {
+  id             String    @id @default(cuid())
+  identityId     String    @unique
+  /// Telegram user id as string (Bot API uses large integers).
+  telegramUserId String
+  telegramChatId String
+  username       String?
+  firstName      String?
+  isActive       Boolean   @default(true)
+  connectedAt    DateTime  @default(now())
+  disconnectedAt DateTime?
+  lastUsedAt     DateTime?
+  /// Master channel switches — Business ERP vs Personal Finance isolation.
+  notifyBusiness Boolean   @default(true)
+  notifyPersonal Boolean   @default(true)
+  /// Telegram-only copies of business in-app prefs (do not replace User.bizNotifyPrefs).
+  bizNotifySales     Boolean @default(true)
+  bizNotifyInventory Boolean @default(true)
+  bizNotifyDelivery  Boolean @default(true)
+  bizNotifyAssembly  Boolean @default(true)
+  bizNotifyWorkers   Boolean @default(true)
+  bizNotifyBilling   Boolean @default(true)
+  bizNotifyImportant Boolean @default(true)
+  /// Telegram-only copies of personal finance prefs.
+  personalNotifyBudget    Boolean @default(true)
+  personalNotifyGoals     Boolean @default(true)
+  personalNotifyRecurring Boolean @default(true)
+  personalNotifyDebts     Boolean @default(true)
+  /// Daily summary toggles (Vercel Cron).
+  notifyDailySummaryBusiness Boolean @default(true)
+  notifyDailySummaryPersonal Boolean @default(true)
+  notifyWeeklySummaryBusiness  Boolean @default(true)
+  notifyWeeklySummaryPersonal  Boolean @default(true)
+  notifyMonthlySummaryBusiness Boolean @default(true)
+  notifyMonthlySummaryPersonal Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  broadcastRecipients TelegramBroadcastRecipient[]
+  accountPreferences  TelegramAccountPreference[]
+
+  /// Active telegramUserId uniqueness is a partial SQL index
+  /// (`telegram_connections_telegram_user_id_active_key` WHERE isActive = true).
+  @@index([telegramUserId])
+  @@index([telegramChatId])
+  @@index([isActive])
+  @@map("telegram_connections")
+}
+
+/// Singleton bot secret + public identity. Token is AES-GCM encrypted at rest.
+model TelegramBotConfig {
+  id                String    @id @default("default")
+  botUsername       String?
+  botFirstName      String?
+  encryptedBotToken String?
+  isActive          Boolean   @default(true)
+  lastValidatedAt   DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@map("telegram_bot_config")
+}
+
+/// Admin-editable /start payload. Seeded with default copy; never hard-coded in the bot handler.
+model TelegramStartMessage {
+  id         String            @id @default("default")
+  text       String
+  mediaKind  TelegramMediaKind @default(NONE)
+  imageUrl   String?
+  buttonText String?
+  buttonUrl  String?
+  /// [{ text, action: URL|MENU|BACK, url?, targetSlug? }]
+  buttons    Json              @default("[]")
+  isActive   Boolean           @default(true)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  @@map("telegram_start_messages")
+}
+
+/// Nested /start menus (details, personal, business categories). Slug is stable for callbacks.
+model TelegramMenuScreen {
+  id          String            @id @default(cuid())
+  slug        String            @unique
+  title       String            @default("")
+  text        String
+  mediaKind   TelegramMediaKind @default(NONE)
+  imageUrl    String?
+  categoryKey String?
+  isActive    Boolean           @default(true)
+  sortOrder   Int               @default(0)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  buttons TelegramMenuButton[]
+
+  @@index([isActive, sortOrder])
+  @@map("telegram_menu_screens")
+}
+
+model TelegramMenuButton {
+  id         String                  @id @default(cuid())
+  screenId   String
+  text       String
+  action     TelegramMenuButtonAction
+  url        String?
+  targetSlug String?
+  isActive   Boolean                 @default(true)
+  sortOrder  Int                     @default(0)
+  createdAt  DateTime                @default(now())
+  updatedAt  DateTime                @updatedAt
+
+  screen TelegramMenuScreen @relation(fields: [screenId], references: [id], onDelete: Cascade)
+
+  @@index([screenId, sortOrder])
+  @@map("telegram_menu_buttons")
+}
+
+/// Per-workspace notification gate on top of the Identity-level TelegramConnection.
+model TelegramAccountPreference {
+  id             String   @id @default(cuid())
+  connectionId   String
+  workspaceId    String
+  notifyEnabled  Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  connection TelegramConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  workspace  Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, workspaceId])
+  @@index([workspaceId])
+  @@map("telegram_account_preferences")
+}
+
+model TelegramAutomation {
+  id               String                 @id @default(cuid())
+  kind             TelegramAutomationKind @unique
+  enabled          Boolean                @default(false)
+  hour             Int                    @default(8)
+  minute           Int                    @default(0)
+  timezone         String                 @default("Asia/Tashkent")
+  /// 1=Monday … 7=Sunday. Weekly automations only.
+  weekday          Int?
+  /// 1–31. Monthly automations only; clamped to last day of month.
+  monthDay         Int?
+  messageTemplate  String?
+  ctaLabel         String?
+  ctaPath          String?
+  lastRunAt        DateTime?
+  lastRunLocalKey  String?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  logs TelegramAutomationLog[]
+
+  @@index([enabled])
+  @@map("telegram_automations")
+}
+
+model TelegramAutomationLog {
+  id           String                      @id @default(cuid())
+  automationId String
+  identityId   String?
+  workspaceId  String?
+  connectionId String?
+  status       TelegramAutomationLogStatus
+  error        String?
+  createdAt    DateTime                    @default(now())
+
+  automation TelegramAutomation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@index([automationId, createdAt])
+  @@index([identityId, createdAt])
+  @@map("telegram_automation_logs")
+}
+
+model TelegramBroadcast {
+  id              String                    @id @default(cuid())
+  title           String?
+  name            String?
+  text            String
+  mediaKind       TelegramMediaKind         @default(NONE)
+  imageUrl        String?
+  buttonText      String?
+  buttonUrl       String?
+  audience        TelegramBroadcastAudience @default(ALL)
+  /// Forward-compatible segment JSON (plan, businessType, active users, …).
+  audienceFilter  Json?
+  timezone        String                    @default("Asia/Tashkent")
+  scheduledAt     DateTime?
+  status          TelegramBroadcastStatus   @default(PENDING)
+  totalRecipients Int                       @default(0)
+  sentCount       Int                       @default(0)
+  failedCount     Int                       @default(0)
+  createdById     String
+  startedAt       DateTime?
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  createdBy  User                          @relation("TelegramBroadcastCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  recipients TelegramBroadcastRecipient[]
+
+  @@index([status, createdAt])
+  @@index([status, scheduledAt])
+  @@index([createdAt])
+  @@map("telegram_broadcasts")
+}
+
+model TelegramBroadcastRecipient {
+  id             String                           @id @default(cuid())
+  broadcastId    String
+  connectionId   String?
+  telegramUserId String
+  telegramChatId String
+  status         TelegramBroadcastRecipientStatus @default(PENDING)
+  error          String?
+  sentAt         DateTime?
+  createdAt      DateTime                         @default(now())
+
+  broadcast  TelegramBroadcast   @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  connection TelegramConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+
+  @@unique([broadcastId, telegramUserId])
+  @@index([broadcastId, status])
+  @@map("telegram_broadcast_recipients")
+}
+
+/// One-time linking tokens. Only the SHA-256 hash is stored — never the raw start payload.
+model TelegramLinkToken {
+  id         String    @id @default(cuid())
+  identityId String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@index([identityId, expiresAt])
+  @@index([expiresAt])
+  @@map("telegram_link_tokens")
+}
+
+/// Short-lived confirmation after /start <token>, before the user presses Confirm.
+model TelegramPendingLink {
+  id             String   @id @default(cuid())
+  identityId     String
+  tokenHash      String
+  telegramUserId String
+  telegramChatId String
+  username       String?
+  firstName      String?
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@index([telegramUserId, expiresAt])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("telegram_pending_links")
+}
+
+/// Identity-level last meaningful activity (heartbeat + real interaction).
+model IdentityPresence {
+  identityId      String   @id
+  lastActivityAt  DateTime
+  lastHeartbeatAt DateTime
+  updatedAt       DateTime @updatedAt
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@index([lastActivityAt])
+  @@map("identity_presence")
+}
+
+/// Real usage session. Idle / hidden-tab time is not counted in activeSeconds.
+model AnalyticsSession {
+  id              String               @id @default(cuid())
+  identityId      String
+  accountType     AnalyticsAccountType
+  accountId       String?
+  clientSessionId String
+  startedAt       DateTime
+  lastActivityAt  DateTime
+  endedAt         DateTime?
+  activeSeconds   Int                  @default(0)
+  createdAt       DateTime             @default(now())
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@unique([identityId, clientSessionId])
+  @@index([identityId, startedAt])
+  @@index([lastActivityAt])
+  @@map("analytics_sessions")
+}
+
+/// Privacy-safe product usage event. Metadata is a whitelist — never money.
+model AnalyticsEvent {
+  id          String               @id @default(cuid())
+  identityId  String
+  accountType AnalyticsAccountType
+  accountId   String?
+  eventType   String
+  feature     String?
+  route       String?
+  sessionId   String?
+  metadata    Json?
+  createdAt   DateTime             @default(now())
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@index([identityId, createdAt])
+  @@index([eventType, createdAt])
+  @@index([feature, createdAt])
+  @@index([createdAt])
+  @@map("analytics_events")
+}
+
+model DailyUserActivity {
+  id                String   @id @default(cuid())
+  identityId        String
+  date              DateTime @db.Date
+  totalUsageSeconds Int      @default(0)
+  sessionsCount     Int      @default(0)
+  active            Boolean  @default(false)
+  topFeature        String?
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@unique([identityId, date])
+  @@index([date])
+  @@map("daily_user_activity")
+}
+
+model DailyFeatureUsage {
+  id          String               @id @default(cuid())
+  date        DateTime             @db.Date
+  feature     String
+  accountType AnalyticsAccountType
+  activeUsers Int                  @default(0)
+  eventCount  Int                  @default(0)
+
+  @@unique([date, feature, accountType])
+  @@index([date])
+  @@map("daily_feature_usage")
+}
+
+/// Usage XP ledger (flat per event, never ∝ money). Deduped by referenceKey.
+model PlatformXpTransaction {
+  id           String   @id @default(cuid())
+  identityId   String
+  eventType    String
+  xp           Int
+  referenceKey String
+  createdAt    DateTime @default(now())
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@unique([identityId, referenceKey])
+  @@index([identityId, createdAt])
+  @@index([eventType, createdAt])
+  @@map("platform_xp_transactions")
 }

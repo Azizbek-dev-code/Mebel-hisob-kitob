@@ -62,6 +62,20 @@ describe('hubForPath', () => {
     );
   });
 
+  it('maps telegram surfaces to the telegram hub', () => {
+    expect(hubForPath(ROUTES.platformTelegram)?.ariaLabelKey).toBe('platformAdmin.hub.telegramAria');
+    expect(hubForPath(ROUTES.platformTelegramBroadcast)?.ariaLabelKey).toBe(
+      'platformAdmin.hub.telegramAria',
+    );
+  });
+
+  it('maps usage analytics surfaces to the usage hub', () => {
+    expect(hubForPath(ROUTES.platformUsage)?.ariaLabelKey).toBe('platformAdmin.hub.usageAria');
+    expect(hubForPath(ROUTES.platformUsageFeatures)?.ariaLabelKey).toBe(
+      'platformAdmin.hub.usageAria',
+    );
+  });
+
   it('leaves the dashboard without hub tabs', () => {
     expect(hubForPath(ROUTES.dashboard)).toBeUndefined();
   });

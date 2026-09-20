@@ -821,11 +821,93 @@ export const GrowthHabitFrequency = {
   DAILY: 'DAILY',
   WEEKLY: 'WEEKLY',
   CUSTOM: 'CUSTOM',
+  MONTHLY: 'MONTHLY',
 } as const;
 export type GrowthHabitFrequency =
   (typeof GrowthHabitFrequency)[keyof typeof GrowthHabitFrequency];
 
 export const GROWTH_HABIT_FREQUENCIES = Object.values(GrowthHabitFrequency);
+
+export const GrowthHabitKind = {
+  GOOD: 'GOOD',
+  BAD: 'BAD',
+} as const;
+export type GrowthHabitKind = (typeof GrowthHabitKind)[keyof typeof GrowthHabitKind];
+export const GROWTH_HABIT_KINDS = Object.values(GrowthHabitKind);
+
+export const GrowthHabitBadMode = {
+  QUIT: 'QUIT',
+  LIMIT: 'LIMIT',
+} as const;
+export type GrowthHabitBadMode = (typeof GrowthHabitBadMode)[keyof typeof GrowthHabitBadMode];
+export const GROWTH_HABIT_BAD_MODES = Object.values(GrowthHabitBadMode);
+
+export const GrowthHabitScheduleKind = {
+  EVERY_DAY: 'EVERY_DAY',
+  WEEKDAYS: 'WEEKDAYS',
+  WEEKLY: 'WEEKLY',
+  MONTHLY: 'MONTHLY',
+  INTERVAL: 'INTERVAL',
+} as const;
+export type GrowthHabitScheduleKind =
+  (typeof GrowthHabitScheduleKind)[keyof typeof GrowthHabitScheduleKind];
+export const GROWTH_HABIT_SCHEDULE_KINDS = Object.values(GrowthHabitScheduleKind);
+
+export const GrowthHabitGoalPeriod = {
+  DAY: 'DAY',
+  WEEK: 'WEEK',
+  MONTH: 'MONTH',
+} as const;
+export type GrowthHabitGoalPeriod =
+  (typeof GrowthHabitGoalPeriod)[keyof typeof GrowthHabitGoalPeriod];
+export const GROWTH_HABIT_GOAL_PERIODS = Object.values(GrowthHabitGoalPeriod);
+
+export const GrowthHabitTimeOfDay = {
+  ANY: 'ANY',
+  MORNING: 'MORNING',
+  AFTERNOON: 'AFTERNOON',
+  EVENING: 'EVENING',
+  NIGHT: 'NIGHT',
+} as const;
+export type GrowthHabitTimeOfDay =
+  (typeof GrowthHabitTimeOfDay)[keyof typeof GrowthHabitTimeOfDay];
+export const GROWTH_HABIT_TIMES_OF_DAY = Object.values(GrowthHabitTimeOfDay);
+
+export const GrowthHabitDayStatus = {
+  COMPLETED: 'COMPLETED',
+  PARTIAL: 'PARTIAL',
+  FAILED: 'FAILED',
+  SKIPPED: 'SKIPPED',
+  NONE: 'NONE',
+  UNSCHEDULED: 'UNSCHEDULED',
+} as const;
+export type GrowthHabitDayStatus =
+  (typeof GrowthHabitDayStatus)[keyof typeof GrowthHabitDayStatus];
+export const GROWTH_HABIT_DAY_STATUSES = Object.values(GrowthHabitDayStatus);
+
+export const GrowthHabitGoalUnit = {
+  count: 'count',
+  duration: 'duration',
+  volume: 'volume',
+  distance: 'distance',
+  pages: 'pages',
+  custom: 'custom',
+} as const;
+export type GrowthHabitGoalUnit =
+  (typeof GrowthHabitGoalUnit)[keyof typeof GrowthHabitGoalUnit];
+export const GROWTH_HABIT_GOAL_UNITS = Object.values(GrowthHabitGoalUnit);
+
+export const GrowthHabitProgressPeriod = {
+  WEEK: 'WEEK',
+  MONTH: 'MONTH',
+  QUARTER: 'QUARTER',
+  HALF: 'HALF',
+  YEAR: 'YEAR',
+  CUSTOM: 'CUSTOM',
+} as const;
+export type GrowthHabitProgressPeriod =
+  (typeof GrowthHabitProgressPeriod)[keyof typeof GrowthHabitProgressPeriod];
+export const GROWTH_HABIT_PROGRESS_PERIODS = Object.values(GrowthHabitProgressPeriod);
 
 /** Learning / study category for O'sish. */
 export const GrowthLearningCategory = {
@@ -836,6 +918,8 @@ export const GrowthLearningCategory = {
   PROGRAMMING: 'PROGRAMMING',
   LANGUAGE: 'LANGUAGE',
   SKILL: 'SKILL',
+  WORK: 'WORK',
+  SPORT: 'SPORT',
   CUSTOM: 'CUSTOM',
 } as const;
 export type GrowthLearningCategory =
@@ -853,6 +937,23 @@ export type GrowthLearningGoalStatus =
   (typeof GrowthLearningGoalStatus)[keyof typeof GrowthLearningGoalStatus];
 
 export const GROWTH_LEARNING_GOAL_STATUSES = Object.values(GrowthLearningGoalStatus);
+
+/** Long-horizon O‘sish aims (IELTS, sport, books) — not money and not daily todos. */
+export const GrowthAimStatus = {
+  ACTIVE: 'ACTIVE',
+  COMPLETED: 'COMPLETED',
+  ARCHIVED: 'ARCHIVED',
+} as const;
+export type GrowthAimStatus = (typeof GrowthAimStatus)[keyof typeof GrowthAimStatus];
+
+export const GROWTH_AIM_STATUSES = Object.values(GrowthAimStatus);
+
+export const AuthEmailCodePurpose = {
+  PASSWORD_RESET: 'PASSWORD_RESET',
+  EMAIL_CHANGE: 'EMAIL_CHANGE',
+  EMAIL_VERIFY: 'EMAIL_VERIFY',
+} as const;
+export type AuthEmailCodePurpose = (typeof AuthEmailCodePurpose)[keyof typeof AuthEmailCodePurpose];
 
 /** XP ledger source for O'sish gamification. */
 export const GrowthXpSource = {
@@ -879,6 +980,28 @@ export type GrowthFriendshipStatus =
   (typeof GrowthFriendshipStatus)[keyof typeof GrowthFriendshipStatus];
 
 export const GROWTH_FRIENDSHIP_STATUSES = Object.values(GrowthFriendshipStatus);
+
+/** Who can see online / last-seen. Default for new profiles: friends only. */
+export const PresenceVisibility = {
+  EVERYONE: 'EVERYONE',
+  FRIENDS: 'FRIENDS',
+  NOBODY: 'NOBODY',
+} as const;
+export type PresenceVisibility =
+  (typeof PresenceVisibility)[keyof typeof PresenceVisibility];
+
+export const PRESENCE_VISIBILITIES = Object.values(PresenceVisibility);
+
+/** Analytics session / event account overlay. Not a financial account. */
+export const AnalyticsAccountType = {
+  PERSONAL: 'PERSONAL',
+  BUSINESS: 'BUSINESS',
+  PLATFORM: 'PLATFORM',
+} as const;
+export type AnalyticsAccountType =
+  (typeof AnalyticsAccountType)[keyof typeof AnalyticsAccountType];
+
+export const ANALYTICS_ACCOUNT_TYPES = Object.values(AnalyticsAccountType);
 
 export const GrowthChallengeKind = {
   FIGHT: 'FIGHT',
@@ -966,6 +1089,33 @@ export const PersonalNotificationSeverity = {
 export type PersonalNotificationSeverity =
   (typeof PersonalNotificationSeverity)[keyof typeof PersonalNotificationSeverity];
 
+export const BusinessNotificationCategory = {
+  SALES: 'SALES',
+  INVENTORY: 'INVENTORY',
+  DELIVERY: 'DELIVERY',
+  ASSEMBLY: 'ASSEMBLY',
+  WORKERS: 'WORKERS',
+  BILLING: 'BILLING',
+  IMPORTANT: 'IMPORTANT',
+} as const;
+export type BusinessNotificationCategory =
+  (typeof BusinessNotificationCategory)[keyof typeof BusinessNotificationCategory];
+
+export const BusinessNotificationKind = {
+  SALE_NEW: 'SALE_NEW',
+  SALE_CANCELLED: 'SALE_CANCELLED',
+  STOCK_LOW: 'STOCK_LOW',
+  DELIVERY_NEW: 'DELIVERY_NEW',
+  DELIVERY_OVERDUE: 'DELIVERY_OVERDUE',
+  ASSEMBLY_NEW: 'ASSEMBLY_NEW',
+  ASSEMBLY_OPEN: 'ASSEMBLY_OPEN',
+  WORKER_PAYMENT: 'WORKER_PAYMENT',
+  SUBSCRIPTION_EXPIRING: 'SUBSCRIPTION_EXPIRING',
+  SUBSCRIPTION_EXPIRED: 'SUBSCRIPTION_EXPIRED',
+} as const;
+export type BusinessNotificationKind =
+  (typeof BusinessNotificationKind)[keyof typeof BusinessNotificationKind];
+
 /** Referral wallet / commission row. Isolated from PersonalEntry and store Expense. */
 export const ReferralCommissionStatus = {
   PENDING: 'PENDING',
@@ -995,3 +1145,22 @@ export type ReferralPaymentSourceType =
 
 export const DEFAULT_REFERRAL_COMMISSION_PERCENT = 10;
 export const DEFAULT_REFERRAL_MIN_WITHDRAWAL_SOM = 100_000;
+
+export const AppFeedbackKind = {
+  ONBOARDING_EXPECTATION: 'ONBOARDING_EXPECTATION',
+  SUBSCRIPTION_OUTCOME: 'SUBSCRIPTION_OUTCOME',
+  VOLUNTARY: 'VOLUNTARY',
+} as const;
+export type AppFeedbackKind = (typeof AppFeedbackKind)[keyof typeof AppFeedbackKind];
+
+export const APP_FEEDBACK_KINDS = Object.values(AppFeedbackKind);
+
+export const GlobalLeaderboardPeriod = {
+  WEEKLY: 'WEEKLY',
+  MONTHLY: 'MONTHLY',
+  ALL: 'ALL',
+} as const;
+export type GlobalLeaderboardPeriod =
+  (typeof GlobalLeaderboardPeriod)[keyof typeof GlobalLeaderboardPeriod];
+
+export const GLOBAL_LEADERBOARD_PERIODS = Object.values(GlobalLeaderboardPeriod);

@@ -7,3 +7,4 @@ export * from './product-categories.js';
 export * from './pagination.js';
 export * from './regions.js';
 export * from './timezones.js';
+export * from './telegram.js';

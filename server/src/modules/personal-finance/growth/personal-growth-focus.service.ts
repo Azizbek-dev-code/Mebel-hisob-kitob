@@ -4,7 +4,9 @@ import {
   GrowthXpSource,
   WorkspaceStatus,
   WorkspaceType,
+  durationLogFromMinutes,
   evaluateFocusCredit,
+  isDurationUnit,
   type CompleteGrowthFocusRequest,
   type GrowthFocusSessionDto,
   type GrowthFocusStatsDto,
@@ -16,11 +18,12 @@ import { prisma as defaultPrisma } from '../../../lib/prisma.js';
 import { recordAudit } from '../../../services/audit.service.js';
 import { ApiError } from '../../../utils/api-error.js';
 
+import { createHabitLog } from './personal-growth-habits.service.js';
 import { focusXpAmount, tryAwardXp } from './personal-growth-xp.service.js';
 
 type DbClient = Pick<
   PrismaClient,
-  'workspace' | 'growthFocusSession' | 'growthTodo'
+  'workspace' | 'growthFocusSession' | 'growthTodo' | 'growthHabit'
 >;
 
 async function assertPersonalWorkspace(workspaceId: string, db: DbClient): Promise<void> {
@@ -38,7 +41,15 @@ async function assertPersonalWorkspace(workspaceId: string, db: DbClient): Promi
   }
 }
 
-type SessionRow = GrowthFocusSession & { todo?: { id: string; title: string } | null };
+type SessionRow = GrowthFocusSession & {
+  todo?: { id: string; title: string } | null;
+  habit?: { id: string; title: string } | null;
+};
+
+const sessionInclude = {
+  todo: { select: { id: true, title: true } },
+  habit: { select: { id: true, title: true } },
+} as const;
 
 function toDto(row: SessionRow): GrowthFocusSessionDto {
   return {
@@ -53,6 +64,8 @@ function toDto(row: SessionRow): GrowthFocusSessionDto {
     discardReason: row.discardReason,
     todoId: row.todoId,
     todoTitle: row.todo?.title ?? null,
+    habitId: row.habitId ?? null,
+    habitTitle: row.habit?.title ?? null,
     linkedGoalId: row.linkedGoalId,
     createdAt: row.createdAt.toISOString(),
   };
@@ -109,7 +122,7 @@ export async function getActiveFocusSession(
   await assertPersonalWorkspace(workspaceId, db);
   const row = await db.growthFocusSession.findFirst({
     where: { workspaceId, identityId, status: GrowthFocusStatus.RUNNING },
-    include: { todo: { select: { id: true, title: true } } },
+    include: sessionInclude,
     orderBy: { startedAt: 'desc' },
   });
   return row ? toDto(row) : null;
@@ -171,7 +184,7 @@ export async function startFocusSession(
     throw ApiError.conflict('Avvalgi fokus sessiyani tugating');
   }
 
-  let todoId: string | null = body.todoId ?? null;
+  const todoId: string | null = body.todoId ?? null;
   if (todoId) {
     const todo = await db.growthTodo.findFirst({
       where: { id: todoId, workspaceId },
@@ -180,18 +193,28 @@ export async function startFocusSession(
     if (!todo) throw ApiError.badRequest('Vazifa topilmadi');
   }
 
+  const habitId: string | null = body.habitId ?? null;
+  if (habitId) {
+    const habit = await db.growthHabit.findFirst({
+      where: { id: habitId, workspaceId, isArchived: false },
+      select: { id: true },
+    });
+    if (!habit) throw ApiError.badRequest('Odat topilmadi');
+  }
+
   const row = await db.growthFocusSession.create({
     data: {
       workspaceId,
       identityId,
       todoId,
+      habitId,
       linkedGoalId: body.linkedGoalId ?? null,
       kind: body.kind ?? GrowthFocusKind.FOCUS,
       status: GrowthFocusStatus.RUNNING,
       plannedMinutes,
       startedAt: now,
     },
-    include: { todo: { select: { id: true, title: true } } },
+    include: sessionInclude,
   });
 
   await recordAudit({
@@ -201,7 +224,7 @@ export async function startFocusSession(
     entityType: 'GROWTH_FOCUS_SESSION',
     entityId: row.id,
     summary: `Focus session started (${plannedMinutes}m)`,
-    metadata: { workspaceId, identityId, todoId, kind: row.kind },
+    metadata: { workspaceId, identityId, todoId, habitId, kind: row.kind },
   });
 
   return toDto(row);
@@ -219,7 +242,7 @@ export async function completeFocusSession(
 
   const existing = await db.growthFocusSession.findFirst({
     where: { id: sessionId, workspaceId, identityId },
-    include: { todo: { select: { id: true, title: true } } },
+    include: sessionInclude,
   });
   if (!existing) throw ApiError.notFound('Fokus sessiyasi topilmadi');
   if (existing.status !== GrowthFocusStatus.RUNNING) {
@@ -255,7 +278,7 @@ export async function completeFocusSession(
         body.clientReportedSeconds === undefined ? null : body.clientReportedSeconds,
       discardReason: credit.discardReason,
     },
-    include: { todo: { select: { id: true, title: true } } },
+    include: sessionInclude,
   });
 
   if (
@@ -267,6 +290,28 @@ export async function completeFocusSession(
       where: { id: existing.todoId, workspaceId },
       data: { actualMinutes: { increment: credit.creditedMinutes } },
     });
+  }
+
+  if (
+    credit.creditedMinutes > 0 &&
+    existing.habitId &&
+    existing.kind === GrowthFocusKind.FOCUS &&
+    credit.status !== GrowthFocusStatus.DISCARDED
+  ) {
+    const habit = await db.growthHabit.findFirst({
+      where: { id: existing.habitId, workspaceId },
+      select: { id: true, targetUnit: true },
+    });
+    if (habit && isDurationUnit(habit.targetUnit)) {
+      await createHabitLog(
+        workspaceId,
+        habit.id,
+        identityId,
+        { value: durationLogFromMinutes(habit.targetUnit, credit.creditedMinutes) },
+        db as never,
+        now,
+      );
+    }
   }
 
   await recordAudit({
@@ -287,7 +332,8 @@ export async function completeFocusSession(
   if (
     credit.creditedMinutes > 0 &&
     existing.kind === GrowthFocusKind.FOCUS &&
-    credit.status !== GrowthFocusStatus.DISCARDED
+    credit.status !== GrowthFocusStatus.DISCARDED &&
+    !existing.habitId
   ) {
     await tryAwardXp({
       workspaceId,

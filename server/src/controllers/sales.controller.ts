@@ -155,7 +155,10 @@ export const updateAssemblyTask = asyncHandler(async (req: Request, res: Respons
 
 export const listMyDeliveries = asyncHandler(async (req: Request, res: Response) => {
   const user = requireUser(req);
-  const data = await deliveryOpsService.listMyDeliveries(user.storeId, user.id);
+  const data = await deliveryOpsService.listMyDeliveries(user.storeId, {
+    id: user.id,
+    role: user.role,
+  });
   sendSuccess<MyDeliveriesResponse>(res, data);
 });
 

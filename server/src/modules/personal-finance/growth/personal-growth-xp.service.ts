@@ -62,7 +62,7 @@ function toProgressDto(
   todayXp: number,
   recentEvents: GrowthXpEvent[],
 ): GrowthProgressDto {
-  const level = computeLevelProgress(row.totalXp);
+  const level = computeLevelProgress(row.totalXp, row.level);
   return {
     totalXp: row.totalXp,
     level: level.level,
@@ -183,12 +183,12 @@ export async function awardXp(
   });
 
   const totalXp = progressRow.totalXp + awarded;
-  const level = computeLevelProgress(totalXp).level;
+  const computed = computeLevelProgress(totalXp, progressRow.level);
   progressRow = await db.growthProgress.update({
     where: { workspaceId: input.workspaceId },
     data: {
       totalXp,
-      level,
+      level: Math.max(progressRow.level, computed.level),
       currentStreak: streak.currentStreak,
       bestStreak: streak.bestStreak,
       lastActivityDayKey: streak.lastActivityDayKey,
@@ -266,13 +266,13 @@ export async function getGrowthProgress(
   await assertPersonalWorkspace(workspaceId, db);
   const dayKey = toDayKey(now);
   const progressRow = await ensureProgress(workspaceId, identityId, db);
-  const level = computeLevelProgress(progressRow.totalXp);
-  if (progressRow.level !== level.level) {
+  const computed = computeLevelProgress(progressRow.totalXp, progressRow.level);
+  if (computed.level > progressRow.level) {
     await db.growthProgress.update({
       where: { workspaceId },
-      data: { level: level.level },
+      data: { level: computed.level },
     });
-    progressRow.level = level.level;
+    progressRow.level = computed.level;
   }
 
   const [todayXp, recent] = await Promise.all([

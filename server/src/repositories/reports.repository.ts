@@ -93,6 +93,23 @@ export async function groupPaymentsByMethod(
   }));
 }
 
+export async function sumWorkerPaymentExpenses(
+  storeId: string,
+  from: Date,
+  to: Date,
+): Promise<Money> {
+  const result = await prisma.expense.aggregate({
+    where: {
+      storeId,
+      status: ExpenseStatus.ACTIVE,
+      workerPaymentId: { not: null },
+      expenseDate: { gte: from, lt: to },
+    },
+    _sum: { amount: true },
+  });
+  return fromDbMoneySum(result._sum.amount);
+}
+
 export async function sumWorkerPayments(
   storeId: string,
   from: Date,

@@ -25,6 +25,10 @@ export interface GrowthLearningGoalDto {
   targetUnit: string;
   currentValue: number;
   deadline: IsoDateString | null;
+  startDate?: IsoDateString | null;
+  dailyMinutes?: number | null;
+  linkedTodoIds?: string[];
+  todayStudyMinutes?: number;
   totalStudyMinutes: number;
   progressPercent: number;
   sortOrder: number;
@@ -71,6 +75,11 @@ export interface CreateGrowthLearningGoalRequest {
   targetUnit?: string;
   currentValue?: number;
   deadline?: string | null;
+  startDate?: string | null;
+  dailyMinutes?: number | null;
+  linkedTodoIds?: string[];
+  durationAmount?: number;
+  durationUnit?: 'day' | 'week' | 'month';
   milestones?: Array<{ title: string; targetValue: number }>;
 }
 
@@ -83,6 +92,9 @@ export interface UpdateGrowthLearningGoalRequest {
   targetUnit?: string;
   currentValue?: number;
   deadline?: string | null;
+  startDate?: string | null;
+  dailyMinutes?: number | null;
+  linkedTodoIds?: string[];
   sortOrder?: number;
 }
 

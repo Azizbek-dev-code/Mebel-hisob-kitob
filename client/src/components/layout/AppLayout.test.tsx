@@ -23,8 +23,16 @@ const ADMIN: AuthUser = {
 
 const SIGNED_IN_RESPONSE = { status: 200, body: { success: true, data: { user: ADMIN } } };
 
-function renderShell(initialPath = '/dashboard') {
-  return renderWithProviders(
+function renderShell(initialPath = '/dashboard', extra: Record<string, { status: number; body?: unknown }> = {}) {
+  const fetchMock = mockApi({
+    '/auth/me': SIGNED_IN_RESPONSE,
+    '/notifications': {
+      status: 200,
+      body: { success: true, data: { items: [], prefs: {}, unreadCount: 0 } },
+    },
+    ...extra,
+  });
+  renderWithProviders(
     <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
         <Route element={<AppLayout />}>
@@ -34,6 +42,7 @@ function renderShell(initialPath = '/dashboard') {
       </Routes>
     </MemoryRouter>,
   );
+  return fetchMock;
 }
 
 afterEach(() => {
@@ -41,8 +50,7 @@ afterEach(() => {
 });
 
 describe('AppLayout', () => {
-  it('lists every module in the sidebar', () => {
-    mockApi({ '/auth/me': SIGNED_IN_RESPONSE });
+  it('lists every module in the sidebar', async () => {
     renderShell();
 
     const modules = within(screen.getByRole('navigation', { name: i18n.t('nav.modules') }));
@@ -52,18 +60,22 @@ describe('AppLayout', () => {
       i18n.t('nav.assembly'),
       i18n.t('nav.products'),
       i18n.t('nav.customers'),
-      i18n.t('nav.expenses'),
       i18n.t('nav.workers'),
       i18n.t('nav.reports'),
-      i18n.t('nav.settings'),
+      i18n.t('nav.profile'),
     ]) {
-      expect(modules.getByRole('link', { name: label })).toBeInTheDocument();
+      expect(await modules.findByRole('link', { name: label })).toBeInTheDocument();
     }
+    expect(modules.queryByRole('link', { name: i18n.t('nav.expenses') })).not.toBeInTheDocument();
     expect(modules.queryByRole('link', { name: 'Ustalar' })).not.toBeInTheDocument();
+    expect(modules.getAllByRole('link', { name: i18n.t('nav.profile') })).toHaveLength(1);
+    expect(modules.getByRole('link', { name: i18n.t('nav.profile') })).toHaveAttribute(
+      'href',
+      '/settings',
+    );
   });
 
   it('names the current module in the header and marks it in the sidebar', () => {
-    mockApi({ '/auth/me': SIGNED_IN_RESPONSE });
     renderShell();
 
     expect(
@@ -77,7 +89,6 @@ describe('AppLayout', () => {
   });
 
   it('moves between modules without leaving the shell', async () => {
-    mockApi({ '/auth/me': SIGNED_IN_RESPONSE });
     const user = userEvent.setup();
     renderShell();
 
@@ -95,7 +106,6 @@ describe('AppLayout', () => {
   });
 
   it('shows the signed-in user and their role in the header', async () => {
-    mockApi({ '/auth/me': SIGNED_IN_RESPONSE });
     renderShell();
 
     expect(await screen.findByText('Store Administrator')).toBeInTheDocument();
@@ -103,7 +113,6 @@ describe('AppLayout', () => {
   });
 
   it('opens the navigation drawer on request and closes it on Escape', async () => {
-    mockApi({ '/auth/me': SIGNED_IN_RESPONSE });
     const user = userEvent.setup();
     renderShell();
 
@@ -117,7 +126,6 @@ describe('AppLayout', () => {
   });
 
   it('closes the drawer once a destination is chosen', async () => {
-    mockApi({ '/auth/me': SIGNED_IN_RESPONSE });
     const user = userEvent.setup();
     renderShell();
 
@@ -129,9 +137,8 @@ describe('AppLayout', () => {
   });
 
   it('signs out from the sidebar through the existing auth mutation', async () => {
-    const fetchMock = mockApi({ '/auth/me': SIGNED_IN_RESPONSE, '/auth/logout': { status: 204 } });
+    const fetchMock = renderShell('/dashboard', { '/auth/logout': { status: 204 } });
     const user = userEvent.setup();
-    renderShell();
 
     await user.click(screen.getByRole('button', { name: i18n.t('auth.logout') }));
 

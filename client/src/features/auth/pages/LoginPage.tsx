@@ -61,11 +61,11 @@ export function LoginPage() {
   const onSubmit = handleSubmit((values) => {
     login.mutate(values, {
       onSuccess: ({ user }) => {
+        const from = returnPathFrom(location.state, location.search);
         if (isPersonalAuth(user)) {
-          navigate(homePathForAuth(user), { replace: true });
+          navigate(from.startsWith('/personal') ? from : homePathForAuth(user), { replace: true });
           return;
         }
-        const from = returnPathFrom(location.state);
         navigate(from.startsWith('/personal') ? ROUTES.dashboard : from, { replace: true });
       },
     });
@@ -192,11 +192,15 @@ export function LoginPage() {
           </form>
         </div>
 
-        <p className="mt-6 text-center text-sm text-ink-muted">
-          <Link to={ROUTES.onboarding} className="font-medium text-brand-700 hover:underline">
-            {t('auth.createAccount')}
+        <div className="mt-6 flex flex-col items-center gap-2 text-center text-sm sm:flex-row sm:justify-center sm:gap-4">
+          <Link to={ROUTES.forgotPassword} className="font-medium text-brand-700 hover:underline">
+            {t('auth.forgotPassword')}
           </Link>
-        </p>
+          <span className="hidden h-4 w-px bg-line sm:block" aria-hidden="true" />
+          <Link to={ROUTES.onboarding} className="font-medium text-brand-700 hover:underline">
+            {t('auth.noAccountRegister')}
+          </Link>
+        </div>
       </div>
     </main>
   );
@@ -262,8 +266,10 @@ function describeLoginFailure(error: Error, fallback: string): string {
  * it is still checked: a path that leaves the app would turn the login form into
  * an open redirect the moment anything else learns how to set this state.
  */
-function returnPathFrom(state: unknown): string {
-  const from = (state as { from?: unknown } | null)?.from;
+function returnPathFrom(state: unknown, search = ''): string {
+  const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  const queryCandidate = params.get('returnTo') || params.get('from');
+  const from = queryCandidate || (state as { from?: unknown } | null)?.from;
   const isInternalPath = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//');
   return isInternalPath ? from : ROUTES.dashboard;
 }

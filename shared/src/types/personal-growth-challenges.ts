@@ -29,6 +29,9 @@ export interface GrowthChallengeDto {
   winnerId: string | null;
   completedAt: string | null;
   createdById: string;
+  todoIds?: string[];
+  dailyTargetMinutes?: number | null;
+  todayScore?: number;
   iAmCreator: boolean;
   myStatus: GrowthChallengeParticipantStatus | null;
   groupScore: number;
@@ -52,4 +55,6 @@ export interface CreateGrowthChallengeRequest {
   inviteeIds: string[];
   targetValue?: number | null;
   rewardXp?: number;
+  todoIds?: string[];
+  dailyTargetMinutes?: number | null;
 }

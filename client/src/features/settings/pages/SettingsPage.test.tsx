@@ -6,21 +6,11 @@ import { TEST_ADMIN, TEST_EMPLOYEE } from '@/test/auth-fixtures';
 import { mockApi } from '@/test/mock-api';
 import { renderWithProviders, screen } from '@/test/test-utils';
 
-const STORE_BODY = {
+const NOTIFY_BODY = {
   status: 200,
   body: {
     success: true,
-    data: {
-      store: {
-        id: 'store_1',
-        name: 'Mebel Savdo',
-        phone: '+998901234567',
-        address: 'Toshkent',
-        currency: 'UZS',
-        timezone: 'Asia/Tashkent',
-        updatedAt: '2026-08-19T00:00:00.000Z',
-      },
-    },
+    data: { items: [], prefs: {}, unreadCount: 0 },
   },
 };
 
@@ -30,14 +20,10 @@ afterEach(() => {
 });
 
 describe('SettingsPage', () => {
-  it('renders editable store settings for admin', async () => {
+  it('renders a grouped profile hub for admin', async () => {
     mockApi({
       '/auth/me': { status: 200, body: { success: true, data: { user: TEST_ADMIN } } },
-      '/settings/store': STORE_BODY,
-      '/billing/subscription': {
-        status: 200,
-        body: { success: true, data: { subscription: null } },
-      },
+      '/notifications': NOTIFY_BODY,
     });
 
     renderWithProviders(
@@ -46,16 +32,24 @@ describe('SettingsPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('heading', { level: 2, name: 'Sozlamalar' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Do‘kon nomi')).toHaveValue('Mebel Savdo');
-    expect(screen.getByRole('button', { name: 'Saqlash' })).toBeInTheDocument();
-    expect(screen.getAllByText('Akkauntni o‘chirish').length).toBeGreaterThan(0);
+    expect(await screen.findByRole('heading', { level: 2, name: 'Profil' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^Akkaunt/ })).toHaveAttribute('href', '/settings/account');
+    expect(screen.getByRole('link', { name: /^Xavfsizlik/ })).toHaveAttribute('href', '/settings/security');
+    expect(screen.getByRole('link', { name: /^Do‘kon/ })).toHaveAttribute('href', '/settings/shop');
+    expect(screen.getByRole('link', { name: /^Bildirishnomalar/ })).toHaveAttribute(
+      'href',
+      '/notifications',
+    );
+    expect(screen.getByRole('link', { name: /^Xavfli amallar/ })).toHaveAttribute(
+      'href',
+      '/settings/danger',
+    );
   });
 
-  it('renders read-only store settings for non-admin', async () => {
+  it('hides shop and backup links for non-admin', async () => {
     mockApi({
       '/auth/me': { status: 200, body: { success: true, data: { user: TEST_EMPLOYEE } } },
-      '/settings/store': STORE_BODY,
+      '/notifications': NOTIFY_BODY,
     });
 
     renderWithProviders(
@@ -64,8 +58,8 @@ describe('SettingsPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('heading', { level: 2, name: 'Sozlamalar' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Do‘kon nomi')).toHaveAttribute('readonly');
-    expect(screen.queryByRole('button', { name: 'Saqlash' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 2, name: 'Profil' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^Akkaunt/ })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^Do‘kon/ })).not.toBeInTheDocument();
   });
 });

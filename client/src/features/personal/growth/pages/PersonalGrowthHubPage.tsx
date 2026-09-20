@@ -1,17 +1,14 @@
+import { formatCountBadge } from '@furniture-erp/shared';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
 import { HubLinkList, type HubLinkItem } from '@/features/personal/components/HubLinkList';
 import { ROUTES } from '@/routes/paths';
 
+import { useGrowthHabits } from '../hooks/use-growth-habits';
 import { useGrowthQuotas } from '../hooks/use-growth-premium';
 
 const GROWTH_LINKS: readonly HubLinkItem[] = [
-  {
-    to: ROUTES.personalGrowthLearning,
-    labelKey: 'personal.growth.learning',
-    hintKey: 'personal.growth.learningHint',
-  },
   {
     to: ROUTES.personalGrowthTodos,
     labelKey: 'personal.growth.todo',
@@ -28,12 +25,6 @@ const GROWTH_LINKS: readonly HubLinkItem[] = [
     hintKey: 'personal.growth.focusHint',
   },
   {
-    to: '#growth-goals',
-    labelKey: 'personal.growth.goals',
-    hintKey: 'personal.growth.goalsHint',
-    comingSoon: true,
-  },
-  {
     to: ROUTES.personalGrowthLevel,
     labelKey: 'personal.growth.level',
     hintKey: 'personal.growth.levelHint',
@@ -44,35 +35,17 @@ const GROWTH_LINKS: readonly HubLinkItem[] = [
     hintKey: 'personal.growth.achievementsHint',
   },
   {
-    to: ROUTES.personalGrowthFriends,
-    labelKey: 'personal.growth.friends',
-    hintKey: 'personal.growth.friendsHint',
-  },
-  {
     to: ROUTES.personalGrowthChallenges,
     labelKey: 'personal.growth.challenge',
     hintKey: 'personal.growth.challengeHint',
-  },
-  {
-    to: ROUTES.personalGrowthSocial,
-    labelKey: 'personal.growth.social',
-    hintKey: 'personal.growth.socialHint',
-  },
-  {
-    to: ROUTES.personalGrowthNotifications,
-    labelKey: 'personal.growth.notifications',
-    hintKey: 'personal.growth.notificationsHint',
-  },
-  {
-    to: ROUTES.personalGrowthReviews,
-    labelKey: 'personal.growth.reviews',
-    hintKey: 'personal.growth.reviewsHint',
   },
 ];
 
 export function PersonalGrowthHubPage() {
   const { t } = useTranslation();
   const quotas = useGrowthQuotas();
+  const habits = useGrowthHabits();
+  const dueBadge = formatCountBadge(habits.data?.dueTodayCount ?? 0);
 
   return (
     <div className="space-y-5 overflow-x-hidden">
@@ -90,7 +63,11 @@ export function PersonalGrowthHubPage() {
         </p>
       ) : null}
 
-      <HubLinkList items={GROWTH_LINKS} />
+      <HubLinkList
+        items={GROWTH_LINKS.map((item) =>
+          item.to === ROUTES.personalGrowthHabits ? { ...item, badge: dueBadge } : item,
+        )}
+      />
     </div>
   );
 }

@@ -10,8 +10,6 @@ import {
   WorkerFinancialReferenceType,
   WorkerFinancialTransactionType,
   WorkerResponsibility,
-  computeWorkerEarnedTotal,
-  computeWorkerPaidTotal,
   type MyDeliveriesResponse,
   type PurchaseDeliveryOpsItem,
   type SaleDeliveryOpsItem,
@@ -101,27 +99,35 @@ async function ledgerStatusForPurchase(
   return any ? 'REVERSED' : 'PENDING';
 }
 
-export async function listMyDeliveries(
+async function assertCanListStoreDeliveries(
   storeId: string,
-  workerId: string,
-): Promise<MyDeliveriesResponse> {
+  actor: { id: string; role: string },
+): Promise<void> {
+  if (isAdminRole(actor.role)) return;
   const worker = await workerRepository.findActiveWorkerWithResponsibility(
     storeId,
-    workerId,
+    actor.id,
     WorkerResponsibility.DELIVERY,
   );
   if (!worker) {
     throw ApiError.forbidden('Delivery responsibility required');
   }
+}
+
+export async function listMyDeliveries(
+  storeId: string,
+  actor: { id: string; role: string },
+): Promise<MyDeliveriesResponse> {
+  await assertCanListStoreDeliveries(storeId, actor);
+  const admin = isAdminRole(actor.role);
 
   const dayStart = startOfUtcDay();
   const monthStart = startOfUtcMonth();
 
-  const [sales, purchases, financeAll, financeMonth] = await Promise.all([
+  const [sales, purchases] = await Promise.all([
     prisma.sale.findMany({
       where: {
         storeId,
-        deliveryPersonId: workerId,
         deliveryStatus: { not: FulfilmentStatus.NOT_REQUIRED },
       },
       select: {
@@ -133,13 +139,15 @@ export async function listMyDeliveries(
         deliveryDate: true,
         deliveryDueDate: true,
         deliveryAddress: true,
+        deliveryPersonId: true,
+        deliveryPerson: { select: { id: true, fullName: true } },
         customer: { select: { firstName: true, lastName: true, phone: true } },
       },
       orderBy: [{ deliveryDueDate: 'asc' }, { saleDate: 'desc' }],
-      take: 200,
+      take: 300,
     }),
     prisma.purchase.findMany({
-      where: { storeId, driverId: workerId },
+      where: { storeId, driverId: { not: null } },
       select: {
         id: true,
         purchaseNumber: true,
@@ -147,21 +155,12 @@ export async function listMyDeliveries(
         deliveredAt: true,
         driverFee: true,
         status: true,
+        driverId: true,
+        driver: { select: { id: true, fullName: true } },
         supplier: { select: { name: true } },
       },
       orderBy: { purchaseDate: 'desc' },
-      take: 100,
-    }),
-    workerFinancialRepository.aggregateWorkerTotals({
-      storeId,
-      workerId,
-      responsibility: WorkerResponsibility.DELIVERY,
-    }),
-    workerFinancialRepository.aggregateWorkerTotals({
-      storeId,
-      workerId,
-      dateFrom: monthStart,
-      responsibility: WorkerResponsibility.DELIVERY,
+      take: 200,
     }),
   ]);
 
@@ -172,6 +171,7 @@ export async function listMyDeliveries(
   let todayCompleted = 0;
   let todayEarned = 0;
   let monthTotal = 0;
+  let monthEarned = 0;
 
   for (const sale of sales) {
     const status = sale.deliveryStatus as FulfilmentStatus;
@@ -192,8 +192,12 @@ export async function listMyDeliveries(
         if (ledgerStatus === 'POSTED') todayEarned += fee;
       }
     }
-    if (isMonth) monthTotal += 1;
+    if (isMonth) {
+      monthTotal += 1;
+      if (status === FulfilmentStatus.COMPLETED && ledgerStatus === 'POSTED') monthEarned += fee;
+    }
 
+    const canAct = admin || sale.deliveryPersonId === actor.id;
     saleDeliveries.push({
       kind: 'SALE',
       id: sale.id,
@@ -214,9 +218,11 @@ export async function listMyDeliveries(
           : fee > 0 && ledgerStatus === 'POSTED'
             ? 'Shopir haqi hisoblandi.'
             : null,
-      canStart: isPendingDelivery(status),
-      // Shopir workflow: start first, then complete from IN_TRANSIT.
-      canComplete: isInProgressDelivery(status),
+      canStart: canAct && isPendingDelivery(status),
+      canComplete:
+        canAct &&
+        (admin ? isPendingDelivery(status) || isInProgressDelivery(status) : isInProgressDelivery(status)),
+      assigneeName: sale.deliveryPerson?.fullName ?? null,
     });
   }
 
@@ -231,8 +237,12 @@ export async function listMyDeliveries(
           ? 'COMPLETED'
           : 'PENDING';
     const ledgerStatus = await ledgerStatusForPurchase(storeId, p.id, fee, delivered);
+    if (delivered && ledgerStatus === 'POSTED' && p.purchaseDate >= monthStart) {
+      monthEarned += fee;
+    }
+    const canAct = admin || p.driverId === actor.id;
     const canComplete =
-      status === 'PENDING' && p.status !== 'CANCELLED' && Boolean(p.id);
+      canAct && status === 'PENDING' && p.status !== 'CANCELLED' && Boolean(p.id);
     purchaseDeliveries.push({
       kind: 'PURCHASE',
       id: p.id,
@@ -246,6 +256,7 @@ export async function listMyDeliveries(
       ledgerStatus,
       canStart: false,
       canComplete,
+      assigneeName: p.driver?.fullName ?? null,
       hint:
         ledgerStatus === 'POSTED'
           ? 'Kirim shopir haqi hisobga olingan.'
@@ -257,25 +268,6 @@ export async function listMyDeliveries(
     });
   }
 
-  const monthEarned = computeWorkerEarnedTotal({
-    totalBonuses: financeMonth.totalBonuses,
-    totalCommissions: financeMonth.totalCommissions,
-    totalAdvances: financeMonth.totalAdvances,
-    totalDebt: financeMonth.totalDebt,
-    totalPayments: financeMonth.totalPayments,
-    totalAdjustments: financeMonth.totalAdjustments,
-    reversalsByOriginalType: financeMonth.reversalsByOriginalType,
-  });
-  const monthPaid = computeWorkerPaidTotal({
-    totalBonuses: financeMonth.totalBonuses,
-    totalCommissions: financeMonth.totalCommissions,
-    totalAdvances: financeMonth.totalAdvances,
-    totalDebt: financeMonth.totalDebt,
-    totalPayments: financeMonth.totalPayments,
-    totalAdjustments: financeMonth.totalAdjustments,
-    reversalsByOriginalType: financeMonth.reversalsByOriginalType,
-  });
-
   return {
     kpis: {
       todayTotal,
@@ -285,9 +277,8 @@ export async function listMyDeliveries(
       todayEarned,
       monthTotal,
       monthEarned,
-      monthPaid,
-      // Outstanding is all-time DELIVERY-scoped balance (not month-only).
-      monthOutstanding: financeAll.netFinancialPosition,
+      monthPaid: 0,
+      monthOutstanding: 0,
     },
     saleDeliveries,
     purchaseDeliveries,

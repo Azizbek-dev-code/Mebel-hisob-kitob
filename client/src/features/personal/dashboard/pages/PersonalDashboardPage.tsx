@@ -1,9 +1,11 @@
-import { formatMoney, formatFocusMinutes, GrowthTodoStatus } from '@furniture-erp/shared';
-import { CalendarDays, Check, Flame, Sparkles, Target, Timer } from 'lucide-react';
+import { formatMoney, formatFocusMinutes, GrowthTodoStatus, type GrowthTodoDto } from '@furniture-erp/shared';
+import { CalendarDays, Check, Flame, Sparkles, Target, Timer, Trophy } from 'lucide-react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import { ErrorState } from '@/components/feedback/ErrorState';
+import { Dialog } from '@/components/ui/Dialog';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { cn } from '@/lib/cn';
 import { ROUTES } from '@/routes/paths';
@@ -42,6 +44,7 @@ export function PersonalDashboardPage() {
   const focusStats = useGrowthFocusStats();
   const todayProgress = useTodayGrowthProgress();
   const growthProgress = useGrowthProgress();
+  const [selectedTodo, setSelectedTodo] = useState<GrowthTodoDto | null>(null);
 
   return (
     <div className="space-y-5 overflow-x-hidden">
@@ -60,7 +63,7 @@ export function PersonalDashboardPage() {
             to={ROUTES.personalGrowthTodos}
             className="text-xs font-medium text-brand-700 hover:underline"
           >
-            {t('personal.growth.todo')}
+            {t('personal.allTasks')}
           </Link>
         </div>
         {todayTodos.isPending && !todayTodos.data ? (
@@ -73,9 +76,9 @@ export function PersonalDashboardPage() {
               <li key={todo.id} className="flex items-center gap-2.5 text-sm">
                 <button
                   type="button"
-                  disabled={updateTodo.isPending}
+                  disabled={updateTodo.isPending || todo.status === GrowthTodoStatus.DONE}
                   aria-label={t('personal.todoMarkDone')}
-                  className="flex size-11 shrink-0 items-center justify-center rounded-full border border-line-strong text-transparent hover:border-brand-500 hover:text-brand-600"
+                  className="flex size-11 shrink-0 items-center justify-center rounded-full border border-line-strong hover:border-brand-500 hover:text-brand-600"
                   onClick={() =>
                     void updateTodo.mutateAsync({
                       id: todo.id,
@@ -85,7 +88,13 @@ export function PersonalDashboardPage() {
                 >
                   <Check className="size-4" aria-hidden="true" />
                 </button>
-                <span className="min-w-0 flex-1 truncate text-ink">{todo.title}</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTodo(todo)}
+                  className="min-w-0 flex-1 truncate text-left text-ink hover:underline"
+                >
+                  {todo.title}
+                </button>
                 {todo.estimatedMinutes ? (
                   <span className="shrink-0 tabular-nums text-xs text-ink-muted">
                     {todo.estimatedMinutes} {t('personal.plan.minutes')}
@@ -215,6 +224,25 @@ export function PersonalDashboardPage() {
 
       <section className="rounded-2xl border border-line bg-surface p-4 shadow-card">
         <div className="flex items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <Trophy className="size-4 text-brand-700" aria-hidden="true" />
+            {t('personal.rankingTitle')}
+          </h2>
+          <Link to={ROUTES.personalRanking} className="text-xs font-medium text-brand-700 hover:underline">
+            {t('personal.rankingOpen')}
+          </Link>
+        </div>
+        <p className="mt-2 text-sm text-ink-muted">{t('personal.rankingHint')}</p>
+        <Link
+          to={ROUTES.personalGrowthFriends}
+          className="mt-3 inline-block text-xs font-medium text-brand-700 hover:underline"
+        >
+          {t('personal.friendsTitle')}
+        </Link>
+      </section>
+
+      <section className="rounded-2xl border border-line bg-surface p-4 shadow-card">
+        <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-ink">{t('personal.homeTodayProgress')}</h2>
           <Link
             to={ROUTES.personalGrowthHabits}
@@ -239,6 +267,45 @@ export function PersonalDashboardPage() {
             : t('personal.homeTodayProgressEmpty')}
         </p>
       </section>
+
+      <Dialog
+        open={Boolean(selectedTodo)}
+        title={selectedTodo?.title ?? t('personal.growth.todo')}
+        onClose={() => setSelectedTodo(null)}
+      >
+        {selectedTodo ? (
+          <div className="space-y-3 text-sm">
+            {selectedTodo.description ? <p className="text-ink-muted">{selectedTodo.description}</p> : null}
+            <p className="text-ink-muted">
+              {t('personal.todoPriority')}: {selectedTodo.priority}
+            </p>
+            {selectedTodo.dueAt ? (
+              <p className="text-ink-muted">
+                {t('personal.todoDue')}: {formatClock(selectedTodo.dueAt)}
+              </p>
+            ) : null}
+            {selectedTodo.estimatedMinutes ? (
+              <p className="text-ink-muted">
+                {selectedTodo.estimatedMinutes} {t('personal.plan.minutes')}
+              </p>
+            ) : null}
+            <button
+              type="button"
+              disabled={updateTodo.isPending || selectedTodo.status === GrowthTodoStatus.DONE}
+              className="w-full rounded-input bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-60"
+              onClick={() => {
+                void updateTodo.mutateAsync({
+                  id: selectedTodo.id,
+                  body: { status: GrowthTodoStatus.DONE },
+                });
+                setSelectedTodo(null);
+              }}
+            >
+              {t('personal.todoMarkDone')}
+            </button>
+          </div>
+        ) : null}
+      </Dialog>
     </div>
   );
 }

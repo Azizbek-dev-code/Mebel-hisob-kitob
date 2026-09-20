@@ -8,6 +8,8 @@ import {
   WorkspaceType,
   computeLearningProgress,
   evaluateLearningCredit,
+  parseStringIdList,
+  serializeStringIdList,
   type CreateGrowthLearningGoalRequest,
   type CreateGrowthLearningMilestoneRequest,
   type GrowthLearningGoalDto,
@@ -87,6 +89,9 @@ function toGoalDto(row: GoalRow): GrowthLearningGoalDto {
     targetUnit: row.targetUnit,
     currentValue: row.currentValue,
     deadline: row.deadline ? row.deadline.toISOString() : null,
+    startDate: row.startDate ? row.startDate.toISOString() : null,
+    dailyMinutes: row.dailyMinutes,
+    linkedTodoIds: parseStringIdList(row.linkedTodoIds),
     totalStudyMinutes: row.totalStudyMinutes,
     progressPercent: computeLearningProgress({
       targetValue: row.targetValue,
@@ -125,6 +130,17 @@ function parseOptionalInstant(value: string | null | undefined, field: string): 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) throw ApiError.badRequest(`${field} noto‘g‘ri`);
   return date;
+}
+
+function resolveLearningDeadline(body: CreateGrowthLearningGoalRequest): Date | null {
+  const explicit = parseOptionalInstant(body.deadline, 'deadline');
+  if (explicit) return explicit;
+  const amount = body.durationAmount;
+  const unit = body.durationUnit;
+  if (!amount || amount < 1 || !unit) return null;
+  const start = parseOptionalInstant(body.startDate, 'startDate') ?? new Date();
+  const days = unit === 'week' ? amount * 7 : unit === 'month' ? amount * 30 : amount;
+  return new Date(start.getTime() + days * 24 * 60 * 60 * 1000);
 }
 
 function dayBounds(now: Date): { start: Date; end: Date } {
@@ -284,6 +300,7 @@ export async function createLearningGoal(
     throw ApiError.badRequest('targetValue noto‘g‘ri');
   }
 
+  const deadline = resolveLearningDeadline(body);
   const milestones = (body.milestones ?? []).slice(0, MAX_MILESTONES_PER_GOAL);
   const row = await db.growthLearningGoal.create({
     data: {
@@ -294,7 +311,11 @@ export async function createLearningGoal(
       targetValue: body.targetValue,
       targetUnit: (body.targetUnit?.trim() || 'score').slice(0, 40),
       currentValue: body.currentValue ?? 0,
-      deadline: parseOptionalInstant(body.deadline, 'deadline'),
+      deadline,
+      startDate: parseOptionalInstant(body.startDate, 'startDate'),
+      dailyMinutes:
+        body.dailyMinutes != null ? Math.max(1, Math.min(480, Math.round(body.dailyMinutes))) : null,
+      linkedTodoIds: serializeStringIdList(body.linkedTodoIds),
       milestones: {
         create: milestones.map((m, index) => ({
           workspaceId,
@@ -350,6 +371,15 @@ export async function updateLearningGoal(
       ...(body.currentValue !== undefined ? { currentValue: body.currentValue } : {}),
       ...(body.deadline !== undefined
         ? { deadline: parseOptionalInstant(body.deadline, 'deadline') }
+        : {}),
+      ...(body.startDate !== undefined
+        ? { startDate: parseOptionalInstant(body.startDate, 'startDate') }
+        : {}),
+      ...(body.dailyMinutes !== undefined
+        ? { dailyMinutes: body.dailyMinutes == null ? null : Math.max(1, Math.min(480, body.dailyMinutes)) }
+        : {}),
+      ...(body.linkedTodoIds !== undefined
+        ? { linkedTodoIds: serializeStringIdList(body.linkedTodoIds) }
         : {}),
       ...(body.sortOrder !== undefined ? { sortOrder: body.sortOrder } : {}),
     },

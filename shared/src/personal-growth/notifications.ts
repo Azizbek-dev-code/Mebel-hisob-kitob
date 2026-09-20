@@ -1,4 +1,4 @@
-import { GrowthNotificationKind } from '../constants/enums.js';
+import type { GrowthNotificationKind } from '../constants/enums.js';
 
 export type GrowthNotifyPrefKey =
   | 'notifyReminder'
@@ -22,6 +22,11 @@ export const GROWTH_NOTIFY_PREF_BY_KIND: Record<
 
 /** Soft cap — oldest unread beyond this still listed but create is rate-limited elsewhere. */
 export const GROWTH_NOTIFICATION_LIST_LIMIT = 50;
+
+export function formatCountBadge(count: number): string {
+  if (count <= 0) return '';
+  return count > 99 ? '99+' : String(Math.floor(count));
+}
 
 export function isGrowthNotifyPrefEnabled(
   prefs: Partial<Record<GrowthNotifyPrefKey, boolean>> | null | undefined,

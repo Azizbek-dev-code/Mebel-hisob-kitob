@@ -86,6 +86,10 @@ export class ApiError extends Error {
     return new ApiError(409, ApiErrorCode.CONFLICT, message);
   }
 
+  static tooManyRequests(message = 'Too many requests. Try again later.'): ApiError {
+    return new ApiError(429, ApiErrorCode.RATE_LIMITED, message);
+  }
+
   static validation(message = 'Validation failed', details?: ApiFieldError[]): ApiError {
     return new ApiError(422, ApiErrorCode.VALIDATION_ERROR, message, details);
   }

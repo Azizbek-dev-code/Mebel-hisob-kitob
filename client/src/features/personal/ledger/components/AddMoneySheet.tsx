@@ -19,6 +19,7 @@ import {
   usePersonalCategories,
   usePersonalWallets,
 } from '../hooks/use-personal-ledger';
+import { CategoryPicker } from './CategoryPicker';
 
 const fieldClass =
   'w-full rounded-input border border-line bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500';
@@ -28,17 +29,15 @@ type SheetTab = 'INCOME' | 'EXPENSE' | 'TRANSFER';
 export function AddMoneySheet({
   open,
   onClose,
-  initialTab = PersonalEntryType.EXPENSE,
 }: {
   open: boolean;
   onClose: () => void;
-  initialTab?: typeof PersonalEntryType.INCOME | typeof PersonalEntryType.EXPENSE;
 }) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<SheetTab>('EXPENSE');
+  const [tab, setTab] = useState<SheetTab | null>(null);
   const wallets = usePersonalWallets();
   const categories = usePersonalCategories(
-    tab === 'TRANSFER'
+    tab === 'TRANSFER' || tab == null
       ? undefined
       : tab === 'INCOME'
         ? PersonalCategoryKind.INCOME
@@ -73,7 +72,7 @@ export function AddMoneySheet({
 
   useEffect(() => {
     if (!open) return;
-    setTab(initialTab === PersonalEntryType.INCOME ? 'INCOME' : 'EXPENSE');
+    setTab(null);
     setAmount(0);
     setNote('');
     setOccurredAt(todayInputDate());
@@ -82,7 +81,7 @@ export function AddMoneySheet({
     setFromWalletId('');
     setToWalletId('');
     setCategoryId('');
-  }, [open, initialTab]);
+  }, [open]);
 
   const selectedWalletId = walletId || activeWallets[0]?.id || '';
   const selectedFrom = fromWalletId || activeWallets[0]?.id || '';
@@ -125,12 +124,13 @@ export function AddMoneySheet({
     }
   }
 
-  const title =
+  const title = tab == null ? t('personal.addOperation') : (
     tab === 'INCOME'
       ? t('personal.income')
       : tab === 'EXPENSE'
         ? t('personal.expenses')
-        : t('personal.transfer');
+        : t('personal.transfer')
+  );
 
   return (
     <Dialog
@@ -139,6 +139,27 @@ export function AddMoneySheet({
       description={tab === 'TRANSFER' ? t('personal.transferHint') : undefined}
       onClose={onClose}
     >
+      {tab == null ? (
+        <div className="grid gap-2">
+          {(
+            [
+              ['INCOME', t('personal.tabIncome')],
+              ['EXPENSE', t('personal.tabExpense')],
+              ['TRANSFER', t('personal.tabTransfer')],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              className="rounded-2xl border border-line bg-surface px-4 py-3 text-left text-sm font-medium text-ink hover:bg-surface-hover"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <>
       <div className="mb-4 grid grid-cols-3 gap-1 rounded-input bg-surface-muted p-1">
         {(
           [
@@ -218,17 +239,11 @@ export function AddMoneySheet({
                 </option>
               ))}
             </select>
-            <select
+            <CategoryPicker
+              items={activeCategories}
               value={selectedCategoryId}
-              onChange={(event) => setCategoryId(event.target.value)}
-              className={fieldClass}
-            >
-              {activeCategories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
+              onChange={setCategoryId}
+            />
           </>
         )}
 
@@ -257,6 +272,8 @@ export function AddMoneySheet({
           </>
         ) : null}
       </form>
+        </>
+      )}
     </Dialog>
   );
 }

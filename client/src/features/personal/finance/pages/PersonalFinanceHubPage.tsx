@@ -11,11 +11,12 @@ import { ROUTES } from '@/routes/paths';
 const FINANCE_LINKS: readonly HubLinkItem[] = [
   { to: ROUTES.personalHistory, labelKey: 'personal.history', hintKey: 'personal.historyHint' },
   { to: ROUTES.personalAccounts, labelKey: 'personal.wallets', hintKey: 'personal.walletsHint' },
-  { to: ROUTES.personalCategories, labelKey: 'personal.categories', hintKey: 'personal.categoriesHint' },
   { to: ROUTES.personalBudgets, labelKey: 'personal.budgets', hintKey: 'personal.budgetsHint' },
   { to: ROUTES.personalGoals, labelKey: 'personal.goals', hintKey: 'personal.goalsHint' },
   { to: ROUTES.personalAnalytics, labelKey: 'personal.analytics', hintKey: 'personal.analyticsHint' },
-  { to: ROUTES.personalRecurring, labelKey: 'personal.recurring', hintKey: 'personal.recurringHint' },
+];
+
+const MORE_LINKS: readonly HubLinkItem[] = [
   { to: ROUTES.personalDebts, labelKey: 'personal.debts', hintKey: 'personal.debtsHint' },
 ];
 
@@ -88,6 +89,7 @@ export function PersonalFinanceHubPage() {
       )}
 
       <HubLinkList items={FINANCE_LINKS} />
+      <HubLinkList items={MORE_LINKS} />
 
       <p className="text-xs text-ink-muted">
         {t('personal.financeXpHint')}{' '}

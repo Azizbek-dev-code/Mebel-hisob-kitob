@@ -64,6 +64,10 @@ describe('PersonalGrowthFocusPage', () => {
         status: 200,
         body: { success: true, data: { items: [], openCount: 0, doneTodayCount: 0 } },
       },
+      '/personal/growth/habits': {
+        status: 200,
+        body: { success: true, data: { items: [], activeCount: 0, dueTodayCount: 0, bestCurrentStreak: 0 } },
+      },
     });
 
     renderWithProviders(

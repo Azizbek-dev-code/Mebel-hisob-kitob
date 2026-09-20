@@ -11,9 +11,13 @@ build/
 # Vercel's buildCommand copies client/dist here as the static output root
 /public/
 
-# Environment
+# Environment — never commit secrets or host-specific env files
 .env
 .env.local
+.env.development
+.env.test
+.env.staging
+.env.production
 .env.*.local
 !.env.example
 

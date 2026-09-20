@@ -28,6 +28,7 @@ import {
   UserRole,
   WorkerActivityType,
   WorkerResponsibility,
+  formatMoney,
   type AddPaymentRequest,
   type AssignAssemblyRequest,
   type CancelSaleRequest,
@@ -690,6 +691,47 @@ export async function createSale(
       metadata: { saleId: sale.id, amount: deposit?.amount },
     });
   }
+
+  const customerName = `${sale.customer.firstName} ${sale.customer.lastName}`.trim();
+  const productLine = sale.productSummary;
+  const dateLine = new Intl.DateTimeFormat('uz-UZ', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(sale.saleDate ? new Date(sale.saleDate) : new Date());
+  void import('../modules/telegram/telegram.delivery.js')
+    .then(({ tryDeliverBusinessNotification }) =>
+      tryDeliverBusinessNotification(
+        storeId,
+        {
+          type: 'SALE',
+          title: '🛒 Yangi sotuv',
+          message:
+            `Mijoz: ${customerName || '—'}\n` +
+            `Mahsulot: ${productLine}\n` +
+            `Summa: ${formatMoney(sale.totalSalePrice)}\n\n` +
+            dateLine,
+          accountType: 'BUSINESS',
+          accountId: storeId,
+          entityType: 'SALE',
+          entityId: sale.id,
+        },
+        'bizNotifySales',
+      ),
+    )
+    .catch(() => undefined);
+
+  void import('../modules/usage-analytics/try-track-activity.js')
+    .then(({ tryTrackBusinessEvent }) =>
+      tryTrackBusinessEvent({
+        actorUserId: actorId,
+        storeId,
+        eventType: 'sale_created',
+        entityId: sale.id,
+        feature: 'sales',
+      }),
+    )
+    .catch(() => undefined);
 
   return sale;
 }
@@ -1496,8 +1538,8 @@ export async function assignAssembly(
   return getSale(storeId, saleId);
 }
 
-export async function listMyAssemblyTasks(storeId: string, userId: string) {
-  const tasks = await saleRepository.listAssemblyTasksForWorker(storeId, userId);
+export async function listMyAssemblyTasks(storeId: string, _userId: string) {
+  const tasks = await saleRepository.listAssemblyTasksForStore(storeId);
   return tasks.map(toAssemblyTaskDto);
 }
 

@@ -19,6 +19,8 @@ export type VerifiedAccessToken = {
   expiresAt: Date;
   /** True when the session was opened with Remember Me (long TTL). */
   rememberMe: boolean;
+  /** AuthSession.id when the token was minted after device sessions shipped. */
+  sid?: string;
 } & (
   | {
       ctx: typeof AuthSessionKind.STORE;
@@ -88,7 +90,7 @@ export function verifyAccessToken(token: string): VerifiedAccessToken {
   }
 
   const raw = claims as Record<string, unknown>;
-  const { sub, storeId, role, iat, exp, ctx, workspaceId, rm } = raw;
+  const { sub, storeId, role, iat, exp, ctx, workspaceId, rm, sid } = raw;
 
   if (typeof sub !== 'string' || typeof iat !== 'number' || typeof exp !== 'number') {
     throw new InvalidTokenError('Access token claims are malformed');
@@ -97,6 +99,7 @@ export function verifyAccessToken(token: string): VerifiedAccessToken {
   const issuedAt = new Date(iat * 1000);
   const expiresAt = new Date(exp * 1000);
   const rememberMe = rm === true;
+  const sessionId = typeof sid === 'string' && sid.length > 0 ? sid : undefined;
 
   if (ctx === AuthSessionKind.PERSONAL) {
     if (typeof workspaceId !== 'string' || workspaceId.length === 0) {
@@ -109,6 +112,7 @@ export function verifyAccessToken(token: string): VerifiedAccessToken {
       issuedAt,
       expiresAt,
       rememberMe,
+      ...(sessionId ? { sid: sessionId } : {}),
     };
   }
 
@@ -128,6 +132,7 @@ export function verifyAccessToken(token: string): VerifiedAccessToken {
     issuedAt,
     expiresAt,
     rememberMe,
+    ...(sessionId ? { sid: sessionId } : {}),
   };
 }
 

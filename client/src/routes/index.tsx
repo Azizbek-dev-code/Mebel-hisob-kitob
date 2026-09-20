@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { PersonalEntryType } from '@furniture-erp/shared';
 
 import { AppLayout } from '@/components/layout/AppLayout';
+import { ForgotPasswordPage } from '@/features/auth/pages/ForgotPasswordPage';
 import { LoginPage } from '@/features/auth/pages/LoginPage';
 import { useCurrentUser } from '@/features/auth/hooks/use-auth';
 import { CustomersPage } from '@/features/customers/pages/CustomersPage';
@@ -17,16 +18,19 @@ import { PersonalDashboardPage } from '@/features/personal/dashboard/pages/Perso
 import { PersonalFinanceHubPage } from '@/features/personal/finance/pages/PersonalFinanceHubPage';
 import { PersonalGrowthFocusPage } from '@/features/personal/growth/pages/PersonalGrowthFocusPage';
 import { PersonalGrowthHabitsPage } from '@/features/personal/growth/pages/PersonalGrowthHabitsPage';
+import { PersonalGrowthHabitsProgressPage } from '@/features/personal/growth/pages/PersonalGrowthHabitsProgressPage';
+import { PersonalGrowthHabitDetailPage } from '@/features/personal/growth/pages/PersonalGrowthHabitDetailPage';
 import { PersonalGrowthLearningPage } from '@/features/personal/growth/pages/PersonalGrowthLearningPage';
 import { PersonalGrowthLevelPage } from '@/features/personal/growth/pages/PersonalGrowthLevelPage';
 import { PersonalGrowthAchievementsPage } from '@/features/personal/growth/pages/PersonalGrowthAchievementsPage';
 import { PersonalGrowthFriendsPage } from '@/features/personal/growth/pages/PersonalGrowthFriendsPage';
 import { PersonalGrowthChallengesPage } from '@/features/personal/growth/pages/PersonalGrowthChallengesPage';
 import { PersonalGrowthSocialPage } from '@/features/personal/growth/pages/PersonalGrowthSocialPage';
-import { PersonalGrowthNotificationsPage } from '@/features/personal/growth/pages/PersonalGrowthNotificationsPage';
 import { PersonalGrowthReviewsPage } from '@/features/personal/growth/pages/PersonalGrowthReviewsPage';
 import { PersonalGrowthHubPage } from '@/features/personal/growth/pages/PersonalGrowthHubPage';
 import { PersonalGrowthTodosPage } from '@/features/personal/growth/pages/PersonalGrowthTodosPage';
+import { PersonalGlobalRankingPage } from '@/features/personal/growth/pages/PersonalGlobalRankingPage';
+import { PersonalGlobalRankingProfilePage } from '@/features/personal/growth/pages/PersonalGlobalRankingProfilePage';
 import { PersonalHistoryPage } from '@/features/personal/history/pages/PersonalHistoryPage';
 import { PersonalLayout } from '@/features/personal/layout/PersonalLayout';
 import { PersonalCategoriesPage } from '@/features/personal/ledger/pages/PersonalCategoriesPage';
@@ -42,6 +46,10 @@ import { PersonalRecurringPage } from '@/features/personal/lifecycle/pages/Perso
 import { OnboardingCompletePage } from '@/features/personal/onboarding/pages/OnboardingCompletePage';
 import { OnboardingPage } from '@/features/personal/onboarding/pages/OnboardingPage';
 import { PersonalSettingsPage } from '@/features/personal/settings/pages/PersonalSettingsPage';
+import { PersonalProfileEditPage } from '@/features/personal/settings/pages/PersonalProfileEditPage';
+import { PersonalSecurityPage } from '@/features/personal/settings/pages/PersonalSecurityPage';
+import { PersonalFeedbackPage } from '@/features/personal/settings/pages/PersonalFeedbackPage';
+import { PersonalPrivacyPage } from '@/features/personal/settings/pages/PersonalPrivacyPage';
 import { ReferralDashboardPage, StoreReferralPage } from '@/features/referrals/pages/ReferralDashboardPage';
 import { ReferralLandingPage } from '@/features/referrals/pages/ReferralLandingPage';
 import { AccessBlockedPage } from '@/features/platform/pages/AccessBlockedPage';
@@ -52,6 +60,13 @@ import {
   PlatformAnalyticsRevenuePage,
   PlatformAnalyticsStoresPage,
 } from '@/features/platform/pages/PlatformAnalyticsPages';
+import {
+  PlatformUsageFeaturesPage,
+  PlatformUsageOverviewPage,
+  PlatformUsageRetentionPage,
+  PlatformUsageUserDetailPage,
+  PlatformUsageUsersPage,
+} from '@/features/platform/pages/PlatformUsageAnalyticsPages';
 import { PlatformDashboardPage } from '@/features/platform/pages/PlatformDashboardPage';
 import { PlatformExpensesPage } from '@/features/platform/pages/PlatformExpensesPage';
 import { PlatformOnboardingPage } from '@/features/platform/pages/PlatformOnboardingPage';
@@ -84,6 +99,16 @@ import { PlatformPlansPage } from '@/features/platform/pages/PlatformPlansPage';
 import { PlatformPnlPage } from '@/features/platform/pages/PlatformPnlPage';
 import { PlatformAccountDeletionsPage } from '@/features/platform/pages/PlatformAccountDeletionsPage';
 import { PlatformSettingsPage } from '@/features/platform/pages/PlatformSettingsPage';
+import {
+  PlatformTelegramAutomationsPage,
+  PlatformTelegramBroadcastPage,
+  PlatformTelegramBotPage,
+  PlatformTelegramMenuPage,
+  PlatformTelegramPage,
+  PlatformTelegramStartPage,
+  PlatformTelegramStatsPage,
+  PlatformTelegramUsersPage,
+} from '@/features/platform/pages/PlatformTelegramPages';
 import { PlatformShopDetailPage } from '@/features/platform/pages/PlatformShopDetailPage';
 import { PlatformShopsPage } from '@/features/platform/pages/PlatformShopsPage';
 import { PlatformSubscriptionRequestsPage } from '@/features/platform/pages/PlatformSubscriptionRequestsPage';
@@ -103,6 +128,11 @@ import { SaleDetailPage } from '@/features/sales/pages/SaleDetailPage';
 import { SalesPage } from '@/features/sales/pages/SalesPage';
 import { BackupPage } from '@/features/settings/pages/BackupPage';
 import { SettingsPage } from '@/features/settings/pages/SettingsPage';
+import { SettingsAccountPage } from '@/features/settings/pages/SettingsAccountPage';
+import { SettingsSecurityPage } from '@/features/settings/pages/SettingsSecurityPage';
+import { SettingsShopPage } from '@/features/settings/pages/SettingsShopPage';
+import { SettingsDangerPage } from '@/features/settings/pages/SettingsDangerPage';
+import { BusinessNotificationsPage } from '@/features/notifications/BusinessNotificationsPage';
 import { ForbiddenPage } from '@/features/store-creation/pages/ForbiddenPage';
 import { PlatformStoreRequestDetailPage } from '@/features/store-creation/pages/PlatformStoreRequestDetailPage';
 import { PlatformStoreRequestsPage } from '@/features/store-creation/pages/PlatformStoreRequestsPage';
@@ -254,6 +284,7 @@ export const routes: RouteObject[] = [
         ],
       },
       { path: ROUTES.login, element: <LoginPage /> },
+      { path: ROUTES.forgotPassword, element: <ForgotPasswordPage /> },
     ],
   },
   { path: ROUTES.registerStore, element: <RegisterStorePage /> },
@@ -273,7 +304,13 @@ export const routes: RouteObject[] = [
           { path: ROUTES.personalGrowthTodos, element: <PersonalGrowthTodosPage /> },
           { path: ROUTES.personalGrowthFocus, element: <PersonalGrowthFocusPage /> },
           { path: ROUTES.personalGrowthHabits, element: <PersonalGrowthHabitsPage /> },
+          { path: ROUTES.personalGrowthHabitsProgress, element: <PersonalGrowthHabitsProgressPage /> },
+          { path: '/personal/growth/habits/:habitId', element: <PersonalGrowthHabitDetailPage /> },
           { path: ROUTES.personalGrowthLearning, element: <PersonalGrowthLearningPage /> },
+          {
+            path: ROUTES.personalGrowthGoals,
+            element: <Navigate to={ROUTES.personalGrowthLearning} replace />,
+          },
           { path: ROUTES.personalGrowthLevel, element: <PersonalGrowthLevelPage /> },
           {
             path: ROUTES.personalGrowthAchievements,
@@ -284,11 +321,17 @@ export const routes: RouteObject[] = [
           { path: ROUTES.personalGrowthSocial, element: <PersonalGrowthSocialPage /> },
           {
             path: ROUTES.personalGrowthNotifications,
-            element: <PersonalGrowthNotificationsPage />,
+            element: <Navigate to={ROUTES.personalNotifications} replace />,
           },
           { path: ROUTES.personalGrowthReviews, element: <PersonalGrowthReviewsPage /> },
           { path: ROUTES.personalFinance, element: <PersonalFinanceHubPage /> },
           { path: ROUTES.personalProfile, element: <PersonalSettingsPage /> },
+          { path: ROUTES.personalProfileEdit, element: <PersonalProfileEditPage /> },
+          { path: ROUTES.personalSecurity, element: <PersonalSecurityPage /> },
+          { path: ROUTES.personalFeedback, element: <PersonalFeedbackPage /> },
+          { path: ROUTES.personalPrivacy, element: <PersonalPrivacyPage /> },
+          { path: ROUTES.personalRanking, element: <PersonalGlobalRankingPage /> },
+          { path: '/personal/ranking/:identityId', element: <PersonalGlobalRankingProfilePage /> },
           {
             path: ROUTES.personalSettings,
             element: <Navigate to={ROUTES.personalProfile} replace />,
@@ -443,6 +486,26 @@ export const routes: RouteObject[] = [
             path: ROUTES.platformAccountDeletions,
             element: platformOnly(<PlatformAccountDeletionsPage />),
           },
+          { path: ROUTES.platformTelegram, element: platformOnly(<PlatformTelegramPage />) },
+          { path: ROUTES.platformTelegramBot, element: platformOnly(<PlatformTelegramBotPage />) },
+          { path: ROUTES.platformTelegramStart, element: platformOnly(<PlatformTelegramStartPage />) },
+          { path: ROUTES.platformTelegramMenu, element: platformOnly(<PlatformTelegramMenuPage />) },
+          {
+            path: ROUTES.platformTelegramBroadcast,
+            element: platformOnly(<PlatformTelegramBroadcastPage />),
+          },
+          {
+            path: ROUTES.platformTelegramAutomations,
+            element: platformOnly(<PlatformTelegramAutomationsPage />),
+          },
+          { path: ROUTES.platformTelegramStats, element: platformOnly(<PlatformTelegramStatsPage />) },
+          { path: ROUTES.platformTelegramUsers, element: platformOnly(<PlatformTelegramUsersPage />) },
+          { path: ROUTES.platformUsage, element: platformOnly(<PlatformUsageOverviewPage />) },
+          { path: ROUTES.platformUsageUsers, element: platformOnly(<PlatformUsageUsersPage />) },
+          { path: '/platform/usage/users/:id', element: platformOnly(<PlatformUsageUserDetailPage />) },
+          { path: ROUTES.platformUsageFeatures, element: platformOnly(<PlatformUsageFeaturesPage />) },
+          { path: ROUTES.platformUsageRetention, element: platformOnly(<PlatformUsageRetentionPage />) },
+          { path: ROUTES.platformUsageSessions, element: platformOnly(<PlatformUsageUsersPage />) },
           { path: ROUTES.sales, element: <SalesPage /> },
           { path: ROUTES.saleNew, element: <NewSalePage /> },
           { path: '/sales/:id/edit', element: <EditSalePage /> },
@@ -626,6 +689,11 @@ export const routes: RouteObject[] = [
               </RequireStoreSettingsManager>
             ),
           },
+          { path: ROUTES.settingsAccount, element: <SettingsAccountPage /> },
+          { path: ROUTES.settingsSecurity, element: <SettingsSecurityPage /> },
+          { path: ROUTES.settingsShop, element: <SettingsShopPage /> },
+          { path: ROUTES.settingsDanger, element: <SettingsDangerPage /> },
+          { path: ROUTES.notifications, element: <BusinessNotificationsPage /> },
           { path: ROUTES.settings, element: <SettingsPage /> },
         ],
       },

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mockApi } from '@/test/mock-api';
 import { renderWithProviders, screen } from '@/test/test-utils';
 
-import { PersonalGrowthNotificationsPage } from './PersonalGrowthNotificationsPage';
+import { PersonalNotificationsPage } from '@/features/personal/lifecycle/pages/PersonalNotificationsPage';
 
 const PERSONAL: PersonalAuthUser = {
   kind: 'PERSONAL',
@@ -41,10 +41,26 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('PersonalGrowthNotificationsPage', () => {
+describe('PersonalNotificationsPage', () => {
   it('shows inbox item and prefs on 390px', async () => {
     mockApi({
       '/auth/me': { status: 200, body: { success: true, data: { user: PERSONAL } } },
+      '/personal/notifications': {
+        status: 200,
+        body: {
+          success: true,
+          data: {
+            unreadCount: 0,
+            prefs: {
+              notifyBudget: true,
+              notifyGoals: true,
+              notifyRecurring: true,
+              notifyDebts: true,
+            },
+            items: [],
+          },
+        },
+      },
       '/personal/growth/notifications': {
         status: 200,
         body: {
@@ -80,7 +96,7 @@ describe('PersonalGrowthNotificationsPage', () => {
     renderWithProviders(
       <MemoryRouter>
         <div className="w-[390px] overflow-x-hidden">
-          <PersonalGrowthNotificationsPage />
+          <PersonalNotificationsPage />
         </div>
       </MemoryRouter>,
     );

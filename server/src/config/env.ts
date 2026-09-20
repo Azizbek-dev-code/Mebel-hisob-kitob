@@ -15,6 +15,15 @@ if (!process.env.VERCEL) {
 
 const booleanFromString = z.enum(['true', 'false']).transform((value) => value === 'true');
 
+/** Optional secrets: blank `.env` values mean "not configured", not an empty string. */
+const optionalSecret = z
+  .string()
+  .optional()
+  .transform((value) => {
+    const trimmed = value?.trim();
+    return trimmed ? trimmed : undefined;
+  });
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
@@ -65,6 +74,30 @@ const envSchema = z.object({
   SEED_PLAN_BUSINESS_PRICE: z.coerce.number().int().nonnegative().default(350_000),
   SEED_DEFAULT_PLAN_NAME: z.string().min(1).default('START'),
   TRIAL_DAYS: z.coerce.number().int().positive().max(90).default(7),
+
+  /**
+   * Telegram Bot API token (server-side only). Empty/missing disables Telegram
+   * without crashing the process. Never log this value or return it from APIs.
+   */
+  TELEGRAM_BOT_TOKEN: optionalSecret,
+  /**
+   * Optional secret Telegram echoes as `X-Telegram-Bot-Api-Secret-Token`.
+   * Webhook processing stays disabled until this is set. Do not use the bot token.
+   */
+  TELEGRAM_WEBHOOK_SECRET: optionalSecret,
+  /**
+   * Public app origin for /app links and default webhook URL.
+   * Production default used in code when unset: https://balancy.space
+   */
+  PUBLIC_APP_URL: optionalSecret,
+  /** Explicit webhook URL; defaults to `${PUBLIC_APP_URL}/api/telegram/webhook`. */
+  TELEGRAM_WEBHOOK_URL: optionalSecret,
+  /** Protects cron routes (`Authorization: Bearer …` or `x-cron-secret`). */
+  CRON_SECRET: optionalSecret,
+  PRESENCE_OFFLINE_AFTER_SECONDS: z.coerce.number().int().positive().max(3600).default(300),
+  PRESENCE_HEARTBEAT_SECONDS: z.coerce.number().int().positive().max(300).default(45),
+  ANALYTICS_IDLE_TIMEOUT: z.coerce.number().int().positive().max(3600).default(300),
+  ANALYTICS_EVENT_RETENTION_DAYS: z.coerce.number().int().positive().max(730).default(90),
 });
 
 export type Env = z.infer<typeof envSchema> & {

@@ -2,6 +2,8 @@ import type { Request, Response } from 'express';
 
 import { env } from '../config/env.js';
 import { prisma } from '../lib/prisma.js';
+import { getTelegramHealthStatus } from '../modules/telegram/telegram.service.js';
+import type { TelegramHealthStatus } from '../modules/telegram/telegram.types.js';
 import { asyncHandler } from '../utils/async-handler.js';
 import { sendSuccess } from '../utils/http-response.js';
 
@@ -13,6 +15,8 @@ export interface HealthPayload {
   version: string;
   /** Database reachability — never includes connection strings or credentials. */
   database: 'up' | 'down';
+  /** Telegram bot reachability. Never includes the bot token or webhook secret. */
+  telegram: TelegramHealthStatus;
 }
 
 /**
@@ -39,5 +43,6 @@ export const getHealth = asyncHandler(async (_req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
     version: process.env.npm_package_version ?? '1.0.0',
     database,
+    telegram: await getTelegramHealthStatus(),
   });
 });

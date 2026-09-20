@@ -1,6 +1,8 @@
 export * from './todo.js';
 export * from './focus.js';
 export * from './habits.js';
+export * from './habit-engine.js';
+export * from './habit-ai.js';
 export * from './learning.js';
 export * from './xp.js';
 export * from './achievements.js';
@@ -10,3 +12,4 @@ export * from './social.js';
 export * from './notifications.js';
 export * from './reviews.js';
 export * from './premium.js';
+export * from './json-ids.js';

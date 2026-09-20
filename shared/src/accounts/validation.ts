@@ -24,6 +24,14 @@ export interface CreatePersonalAccountDraft {
   name?: string;
 }
 
+export function splitFullName(fullName: string): { firstName: string; lastName: string } {
+  const trimmed = normalizePersonName(fullName);
+  if (!trimmed) return { firstName: '', lastName: '' };
+  const space = trimmed.indexOf(' ');
+  if (space <= 0) return { firstName: trimmed, lastName: '' };
+  return { firstName: trimmed.slice(0, space), lastName: trimmed.slice(space + 1) };
+}
+
 export function defaultPersonalWorkspaceName(fullName: string): string {
   const trimmed = normalizePersonName(fullName);
   if (!trimmed) return 'Shaxsiy moliya';

@@ -82,6 +82,13 @@ export function PersonalGrowthLevelPage() {
                   style={{ width: `${progress.data.percent}%` }}
                 />
               </div>
+              <p className="mt-2 text-xs text-ink-muted">
+                {t('personal.levelNext', { level: progress.data.level + 1 })}
+                {' · '}
+                {t('personal.levelRemaining', {
+                  count: Math.max(0, progress.data.xpForNextLevel - progress.data.xpIntoLevel),
+                })}
+              </p>
             </div>
           </section>
 

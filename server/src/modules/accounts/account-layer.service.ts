@@ -112,6 +112,9 @@ export async function ensureMembership(
     await db.workspaceMembership.create({
       data: { identityId, workspaceId, role },
     });
+    void import('../telegram/telegram.account-pref.service.js')
+      .then(({ ensurePrefForWorkspace }) => ensurePrefForWorkspace(identityId, workspaceId))
+      .catch(() => undefined);
   } catch {
     const raced = await db.workspaceMembership.findUnique({
       where: { identityId_workspaceId: { identityId, workspaceId } },

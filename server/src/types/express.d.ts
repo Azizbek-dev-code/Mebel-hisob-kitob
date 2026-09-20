@@ -9,6 +9,8 @@ declare global {
       auth?: AuthUser;
       /** Personal Finance session. Absent on store ERP sessions. */
       personalAuth?: PersonalAuthUser;
+      /** AuthSession.id from the JWT when present. */
+      authSessionId?: string;
     }
   }
 }

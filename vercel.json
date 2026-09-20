@@ -2,6 +2,24 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build --workspace shared && cd server && npx prisma generate && node scripts/migrate-deploy.mjs && npx tsc -p tsconfig.json && cd .. && npm run build --workspace client && rm -rf public && cp -r client/dist public",
   "installCommand": "npm install",
+  "crons": [
+    {
+      "path": "/api/telegram/cron/daily-summary",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/telegram/cron/broadcast-tick",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/telegram/cron/automation-tick",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/presence/cron/maintenance",
+      "schedule": "15 4 * * *"
+    }
+  ],
   "routes": [
     {
       "src": "/api/(.*)",

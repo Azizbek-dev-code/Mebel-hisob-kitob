@@ -37,7 +37,7 @@ const SALE_ITEM = {
   ledgerStatus: 'PENDING' as const,
   hint: 'Shopir haqi yetkazib berish yakunlangandan keyin hisobga olinadi.',
   canStart: true,
-  canComplete: false,
+  assigneeName: 'Azizbek',
 };
 
 function renderPage() {
@@ -75,6 +75,8 @@ describe('DeliveryPage', () => {
     expect(await screen.findByTestId('delivery-kpis')).toBeInTheDocument();
     expect(screen.getByText(/Sotuv yetkazib berishlari/i)).toBeInTheDocument();
     expect(screen.getByText(/Client Client/i)).toBeInTheDocument();
+    expect(screen.getByText(/Mas'ul/i)).toBeInTheDocument();
+    expect(screen.getByText('Azizbek')).toBeInTheDocument();
     expect(screen.getByTestId('start-delivery-sale_1')).toBeInTheDocument();
     expect(screen.queryByTestId('complete-delivery-sale_1')).not.toBeInTheDocument();
   });
@@ -198,7 +200,7 @@ describe('DeliveryPage', () => {
     });
     renderPage();
     expect(
-      await screen.findByText(/Bugun sizga yetkazib berish tayinlanmagan/i),
+      await screen.findByText(/Hozircha yetkazib berish yo‘q/i),
     ).toBeInTheDocument();
   });
 

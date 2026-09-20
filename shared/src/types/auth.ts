@@ -72,6 +72,8 @@ export interface PersonalAuthUser {
   identityId: string;
   membershipRole: WorkspaceMembershipRole;
   subscription: AuthSubscriptionSnapshot;
+  /** Absent on older payloads — treat as unverified. */
+  emailVerified?: boolean;
 }
 
 export type AuthPrincipal = AuthUser | PersonalAuthUser;
@@ -110,6 +112,35 @@ export interface CurrentUserResponse {
   user: AuthPrincipal;
 }
 
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+  newPasswordConfirmation: string;
+}
+
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ResetPasswordRequest {
+  email: string;
+  code: string;
+  newPassword: string;
+  newPasswordConfirmation: string;
+}
+
+export interface UpdateAccountProfileRequest {
+  firstName?: string;
+  lastName?: string;
+  fullName?: string;
+  email?: string;
+  phone?: string | null;
+}
+
+export interface UpdateAccountProfileResponse {
+  user: AuthPrincipal;
+}
+
 /**
  * Claims embedded in the access token. Kept minimal — role and store are re-read
  * from the database on every request, so a demotion takes effect immediately
@@ -128,6 +159,8 @@ export type AccessTokenPayload =
       workspaceId?: never;
       /** Remember-me: long-lived session (see JWT_REFRESH_EXPIRES_IN). */
       rm?: boolean;
+      /** AuthSession.id. Absent on tokens minted before device sessions. */
+      sid?: string;
     }
   | {
       sub: string;
@@ -136,4 +169,28 @@ export type AccessTokenPayload =
       storeId?: never;
       role?: never;
       rm?: boolean;
+      sid?: string;
     };
+
+export interface AuthSessionDto {
+  id: string;
+  deviceLabel: string;
+  ipAddress: string | null;
+  createdAt: IsoDateString;
+  lastActiveAt: IsoDateString;
+  isCurrent: boolean;
+}
+
+export interface AuthSessionListResponse {
+  items: AuthSessionDto[];
+}
+
+export interface VerifyEmailConfirmRequest {
+  code: string;
+}
+
+export interface InAppPasswordResetConfirmRequest {
+  code: string;
+  newPassword: string;
+  newPasswordConfirmation: string;
+}

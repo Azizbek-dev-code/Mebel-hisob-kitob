@@ -442,7 +442,13 @@ async function reinstateActor(
     );
   }
 
-  await tx.user.create({ data: snapshot });
+  await tx.user.create({
+    data: {
+      ...snapshot,
+      bizNotifyPrefs: snapshot.bizNotifyPrefs ?? Prisma.DbNull,
+      bizNotifyReads: snapshot.bizNotifyReads ?? Prisma.DbNull,
+    },
+  });
   logger.warn('Restore reinstated the acting administrator', { storeId, actorId });
   return true;
 }

@@ -13,19 +13,19 @@ import {
   Boxes,
   CalendarDays,
   CircleDollarSign,
-  ClipboardList,
   CreditCard,
   Gift,
   HardHat,
   LayoutDashboard,
   LineChart,
+  Activity,
   PackagePlus,
+  MessageCircle,
   Rocket,
   Settings,
   ShoppingCart,
   Sofa,
   Sprout,
-  Tags,
   Truck,
   UserRound,
   Users,
@@ -49,24 +49,29 @@ export interface NavItem {
   matchingPaths?: readonly string[];
 }
 
+/**
+ * Finance pages stay routed and reachable from reports / workers / profile,
+ * but they are not primary Business sidebar items.
+ */
+const BUSINESS_SIDEBAR_EXCLUDED_KEYS = new Set([
+  'purchases',
+  'suppliers',
+  'debts',
+  'expenses',
+  'my-finances',
+]);
+
 /** The modules of the ERP, in the order the sidebar lists them. */
 export const NAV_ITEMS: readonly NavItem[] = [
   { key: 'dashboard', labelKey: 'nav.dashboard', to: ROUTES.dashboard, icon: LayoutDashboard },
-  { key: 'billing', labelKey: 'nav.billing', to: ROUTES.billing, icon: Tags },
-  { key: 'referral', labelKey: 'nav.referral', to: ROUTES.storeReferral, icon: Gift },
   { key: 'sales', labelKey: 'nav.sales', to: ROUTES.sales, icon: ShoppingCart },
   { key: 'my-sales', labelKey: 'nav.mySales', to: ROUTES.mySales, icon: ShoppingCart },
   { key: 'my-reports', labelKey: 'nav.myReports', to: ROUTES.myReports, icon: BarChart3 },
-  { key: 'assembly', labelKey: 'nav.assembly', to: ROUTES.assemblyTasks, icon: Wrench },
-  { key: 'delivery', labelKey: 'nav.delivery', to: ROUTES.delivery, icon: Truck },
-  { key: 'my-finances', labelKey: 'nav.myFinances', to: ROUTES.profileFinances, icon: Wallet },
   { key: 'products', labelKey: 'nav.products', to: ROUTES.products, icon: Sofa },
   { key: 'inventory', labelKey: 'nav.inventory', to: ROUTES.inventory, icon: Boxes },
-  { key: 'purchases', labelKey: 'nav.purchases', to: ROUTES.purchases, icon: PackagePlus },
-  { key: 'suppliers', labelKey: 'nav.suppliers', to: ROUTES.suppliers, icon: Truck },
+  { key: 'delivery', labelKey: 'nav.delivery', to: ROUTES.delivery, icon: Truck },
+  { key: 'assembly', labelKey: 'nav.assembly', to: ROUTES.assemblyTasks, icon: Wrench },
   { key: 'customers', labelKey: 'nav.customers', to: ROUTES.customers, icon: Users },
-  { key: 'debts', labelKey: 'nav.debts', to: ROUTES.debts, icon: CircleDollarSign },
-  { key: 'expenses', labelKey: 'nav.expenses', to: ROUTES.expenses, icon: Wallet },
   {
     key: 'workers',
     labelKey: 'nav.workers',
@@ -75,15 +80,35 @@ export const NAV_ITEMS: readonly NavItem[] = [
     matchingPaths: [ROUTES.masters, ROUTES.workersReconciliation],
   },
   { key: 'reports', labelKey: 'nav.reports', to: ROUTES.reports, icon: BarChart3 },
-  { key: 'audit', labelKey: 'nav.audit', to: ROUTES.audit, icon: ClipboardList },
   {
     key: 'profile',
     labelKey: 'nav.profile',
     to: ROUTES.profile,
     icon: UserRound,
-    matchingPaths: [ROUTES.profileFinances],
+    matchingPaths: [ROUTES.profileFinances, ROUTES.notifications],
   },
-  { key: 'settings', labelKey: 'nav.settings', to: ROUTES.settings, icon: Settings },
+  {
+    key: 'settings',
+    labelKey: 'nav.profile',
+    to: ROUTES.settings,
+    icon: UserRound,
+    matchingPaths: [
+      ROUTES.billing,
+      ROUTES.storeReferral,
+      ROUTES.audit,
+      ROUTES.settingsBackup,
+      ROUTES.settingsAccount,
+      ROUTES.settingsSecurity,
+      ROUTES.settingsShop,
+      ROUTES.settingsDanger,
+      ROUTES.notifications,
+    ],
+  },
+  { key: 'purchases', labelKey: 'nav.purchases', to: ROUTES.purchases, icon: PackagePlus },
+  { key: 'suppliers', labelKey: 'nav.suppliers', to: ROUTES.suppliers, icon: Truck },
+  { key: 'debts', labelKey: 'nav.debts', to: ROUTES.debts, icon: CircleDollarSign },
+  { key: 'expenses', labelKey: 'nav.expenses', to: ROUTES.expenses, icon: Wallet },
+  { key: 'my-finances', labelKey: 'nav.myFinances', to: ROUTES.profileFinances, icon: Wallet },
 ];
 
 /** Platform control-plane modules. Visible only to PLATFORM_ADMIN. */
@@ -160,6 +185,33 @@ export const PLATFORM_NAV_ITEMS: readonly NavItem[] = [
     ],
   },
   {
+    key: 'platform-usage',
+    labelKey: 'nav.usageAnalytics',
+    to: ROUTES.platformUsage,
+    icon: Activity,
+    matchingPaths: [
+      ROUTES.platformUsageUsers,
+      ROUTES.platformUsageFeatures,
+      ROUTES.platformUsageRetention,
+      ROUTES.platformUsageSessions,
+    ],
+  },
+  {
+    key: 'platform-telegram',
+    labelKey: 'nav.telegram',
+    to: ROUTES.platformTelegram,
+    icon: MessageCircle,
+    matchingPaths: [
+      ROUTES.platformTelegramBot,
+      ROUTES.platformTelegramStart,
+      ROUTES.platformTelegramMenu,
+      ROUTES.platformTelegramBroadcast,
+      ROUTES.platformTelegramAutomations,
+      ROUTES.platformTelegramStats,
+      ROUTES.platformTelegramUsers,
+    ],
+  },
+  {
     key: 'platform-settings',
     labelKey: 'nav.settings',
     to: ROUTES.platformSettings,
@@ -174,6 +226,7 @@ export const PERSONAL_NAV_ITEMS: readonly NavItem[] = [
     labelKey: 'personal.home',
     to: ROUTES.personalDashboard,
     icon: LayoutDashboard,
+    matchingPaths: [ROUTES.personalRanking, ROUTES.personalGrowthFriends],
   },
   {
     key: 'personal-plan',
@@ -191,9 +244,9 @@ export const PERSONAL_NAV_ITEMS: readonly NavItem[] = [
       ROUTES.personalGrowthFocus,
       ROUTES.personalGrowthHabits,
       ROUTES.personalGrowthLearning,
+      ROUTES.personalGrowthGoals,
       ROUTES.personalGrowthLevel,
       ROUTES.personalGrowthAchievements,
-      ROUTES.personalGrowthFriends,
       ROUTES.personalGrowthChallenges,
       ROUTES.personalGrowthSocial,
       ROUTES.personalGrowthNotifications,
@@ -228,6 +281,11 @@ export const PERSONAL_NAV_ITEMS: readonly NavItem[] = [
       ROUTES.personalBilling,
       ROUTES.personalNotifications,
       ROUTES.personalReferral,
+      ROUTES.personalProfileEdit,
+      ROUTES.personalSecurity,
+      ROUTES.personalFeedback,
+      ROUTES.personalPrivacy,
+      ROUTES.personalGrowthFriends,
     ],
   },
 ];
@@ -356,7 +414,9 @@ export function navItemsForUser(user: AuthPrincipal | null | undefined): NavItem
     items = erpNav.filter((item) => keys.has(item.key));
   }
 
-  return items.filter((item) => allowedByPlan(user, item));
+  return items.filter(
+    (item) => allowedByPlan(user, item) && !BUSINESS_SIDEBAR_EXCLUDED_KEYS.has(item.key),
+  );
 }
 
 export function canManageWorkers(user: AuthPrincipal | null | undefined): boolean {

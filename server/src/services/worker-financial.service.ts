@@ -18,8 +18,10 @@ import { parseFlexibleDate } from '../lib/date-input.js';
 import { resolveDashboardRange } from '../lib/date-range.js';
 import { fromDbMoney } from '../lib/money-mapper.js';
 import { prisma } from '../lib/prisma.js';
+import * as expenseRepository from '../repositories/expense.repository.js';
 import * as workerFinancialRepository from '../repositories/worker-financial.repository.js';
 import { ApiError } from '../utils/api-error.js';
+import { postExpenseForWorkerPayment, voidExpenseForWorkerPayment } from './worker-payment-expense.service.js';
 
 const WORKER_FINANCE_MANAGERS: ReadonlySet<string> = new Set([
   UserRole.ADMIN,
@@ -164,11 +166,11 @@ export async function createTransaction(
   }
 
   const workerId = await assertWorkerForCreate(storeId, input.workerId);
+  const worker = await workerFinancialRepository.findWorkerUserInStore(storeId, workerId);
   const transactionDate = parseTransactionDateOrThrow(input.transactionDate);
 
   let responsibility = input.responsibility ?? null;
   if (!responsibility) {
-    const worker = await workerFinancialRepository.findWorkerUserInStore(storeId, workerId);
     const resps = worker?.responsibilities?.map((row) => row.responsibility) ?? [];
     if (resps.length === 1) {
       responsibility = resps[0] as NonNullable<typeof input.responsibility>;
@@ -210,6 +212,37 @@ export async function createTransaction(
         ],
       );
     }
+  }
+
+  if (input.type === WorkerFinancialTransactionType.PAYMENT) {
+    await expenseRepository.ensureDefaultExpenseCategories(storeId);
+    return prisma.$transaction(async (tx) => {
+      const created = await workerFinancialRepository.createTransaction(
+        {
+          storeId,
+          workerId,
+          type: input.type,
+          amount: input.amount,
+          transactionDate,
+          description: normaliseDescription(input.description),
+          referenceType,
+          referenceId,
+          responsibility,
+          reversesType: null,
+          createdById: actor.id,
+        },
+        tx,
+      );
+      await postExpenseForWorkerPayment({
+        storeId,
+        payment: created,
+        workerName: worker?.fullName ?? workerId,
+        responsibility,
+        createdById: actor.id,
+        client: tx,
+      });
+      return created;
+    });
   }
 
   return workerFinancialRepository.createTransaction({
@@ -371,6 +404,15 @@ export async function reverseTransaction(
 
     if (originalRecord.type === WorkerFinancialTransactionType.COMMISSION) {
       await workerFinancialRepository.closeOpenCommission(storeId, originalRecord.id, tx);
+    }
+
+    if (originalRecord.type === WorkerFinancialTransactionType.PAYMENT) {
+      await voidExpenseForWorkerPayment({
+        storeId,
+        paymentId: originalRecord.id,
+        cancelledById: actor.id,
+        client: tx,
+      });
     }
 
     const original =

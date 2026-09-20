@@ -70,7 +70,30 @@ afterEach(() => {
 
 describe('PersonalSettingsPage', () => {
   it('shows profile account controls without burying finance modules', async () => {
-    mockApi({ '/auth/me': ME, '/accounts': ACCOUNTS });
+    mockApi({
+      '/auth/me': ME,
+      '/accounts': ACCOUNTS,
+      '/personal/growth/progress': {
+        status: 200,
+        body: {
+          success: true,
+          data: {
+            progress: {
+              totalXp: 7850,
+              level: 12,
+              xpIntoLevel: 7850,
+              xpForNextLevel: 10000,
+              percent: 78.5,
+              currentStreak: 4,
+              bestStreak: 8,
+              lastActivityDayKey: '2026-09-19',
+              todayXp: 20,
+              recentEvents: [],
+            },
+          },
+        },
+      },
+    });
     renderWithProviders(
       <MemoryRouter>
         <div className="w-[390px] overflow-x-hidden">
@@ -79,19 +102,45 @@ describe('PersonalSettingsPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('heading', { name: 'Profil' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Profil' })).toBeInTheDocument();
     expect(screen.getByText('Joriy hisob')).toBeInTheDocument();
     expect(screen.getByTestId('add-account')).toHaveAttribute('href', '/onboarding');
-    expect(screen.getAllByText('Yangi hisob ochish').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Yangi hisob ochish')).toHaveLength(1);
+    expect(screen.queryByText(/Avval shaxsiy yoki biznesni tanlaysiz/)).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Hisoblar/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Kategoriyalar/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Tahlil/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^Kategoriyalar/ })).toHaveAttribute(
+      'href',
+      '/personal/categories',
+    );
+    expect(screen.getByRole('link', { name: /^Takroriy/ })).toHaveAttribute(
+      'href',
+      '/personal/recurring',
+    );
+    expect(
+      screen.getAllByRole('link').find((el) => el.getAttribute('href') === '/personal/growth/friends'),
+    ).toBeTruthy();
+    expect(
+      screen.getAllByRole('link').find((el) => el.getAttribute('href') === '/personal/growth/social'),
+    ).toBeTruthy();
     expect(screen.getByRole('link', { name: /Bildirishnomalar/ })).toHaveAttribute(
       'href',
       '/personal/notifications',
     );
     expect(screen.getByRole('link', { name: /Tariflar/ })).toHaveAttribute('href', '/personal/billing');
     expect(screen.getByRole('link', { name: /Referral/ })).toHaveAttribute('href', '/personal/referral');
+    expect(screen.getByRole('link', { name: /Profil ma’lumotlari/ })).toHaveAttribute(
+      'href',
+      '/personal/profile/edit',
+    );
+    expect(screen.getByRole('link', { name: /^Xavfsizlik/ })).toHaveAttribute(
+      'href',
+      '/personal/profile/security',
+    );
+    expect(screen.getByRole('link', { name: /Fikr bildirish/ })).toHaveAttribute(
+      'href',
+      '/personal/profile/feedback',
+    );
+    expect(screen.queryByRole('button', { name: /^Saqlash$/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Chiqish/i })).toBeInTheDocument();
     expect(screen.getByTestId('language-switcher')).toBeInTheDocument();
   });

@@ -34,6 +34,24 @@ import { logger } from './utils/logger.js';
             message: error instanceof Error ? error.message : String(error),
           });
         });
+
+      void import('./modules/telegram/telegram.admin.service.js')
+        .then((mod) => mod.hydrateTelegramRuntimeFromDb())
+        .then(async () => {
+          const service = await import('./modules/telegram/telegram.service.js');
+          await service.probeTelegramOnBoot();
+          const broadcast = await import('./modules/telegram/telegram.broadcast.service.js');
+          void broadcast.kickBroadcastProcessing().catch((tickError: unknown) => {
+            logger.warn('Telegram broadcast kick failed', {
+              message: tickError instanceof Error ? tickError.message : String(tickError),
+            });
+          });
+        })
+        .catch((error: unknown) => {
+          logger.warn('Telegram boot probe failed', {
+            message: error instanceof Error ? error.message : String(error),
+          });
+        });
     }
   });
 

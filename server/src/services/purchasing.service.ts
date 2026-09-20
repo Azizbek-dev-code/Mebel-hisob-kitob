@@ -536,6 +536,25 @@ export async function createPurchase(
     },
   });
 
+  void import('../modules/telegram/telegram.delivery.js')
+    .then(async ({ tryDeliverBusinessNotification }) => {
+      const { formatMoney } = await import('@furniture-erp/shared');
+      return tryDeliverBusinessNotification(
+        storeId,
+        {
+          type: 'PURCHASE',
+          title: '📦 Yangi kirim',
+          message: `#${detail.purchaseNumber}\nSumma: ${formatMoney(detail.totalCost)}`,
+          accountType: 'BUSINESS',
+          accountId: storeId,
+          entityType: 'PURCHASE',
+          entityId: detail.id,
+        },
+        'bizNotifyInventory',
+      );
+    })
+    .catch(() => undefined);
+
   return detail;
 }
 

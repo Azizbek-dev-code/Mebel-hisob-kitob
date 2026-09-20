@@ -23,6 +23,10 @@ export interface PersonalCategoryDto {
   key: string | null;
   name: string;
   color: string;
+  icon: string | null;
+  iconName?: string | null;
+  iconColor?: string | null;
+  parentId?: string | null;
   sortOrder: number;
   isActive: boolean;
 }
@@ -89,11 +93,19 @@ export interface CreatePersonalCategoryRequest {
   kind: PersonalCategoryKind;
   name: string;
   color?: string;
+  icon?: string;
+  iconName?: string | null;
+  iconColor?: string | null;
+  parentId?: string | null;
 }
 
 export interface UpdatePersonalCategoryRequest {
   name?: string;
   color?: string;
+  icon?: string;
+  iconName?: string | null;
+  iconColor?: string | null;
+  parentId?: string | null;
   isActive?: boolean;
 }
 

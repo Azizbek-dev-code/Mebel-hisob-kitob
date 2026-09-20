@@ -23,6 +23,15 @@ const { prismaMock } = vi.hoisted(() => ({
     },
     identity: {
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+    },
+    authEmailCode: {
+      count: vi.fn(),
+      updateMany: vi.fn(),
+      create: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
     },
     workspaceMembership: {
       findUnique: vi.fn(),
@@ -68,8 +77,8 @@ const ADMIN_RECORD = {
 const PERSONAL_SUBSCRIPTION = {
   status: SubscriptionStatus.TRIAL,
   planKey: PERSONAL_PLAN_KEY.TRIAL,
-  trialEndsAt: new Date('2026-09-20T00:00:00.000Z'),
-  currentPeriodEnd: new Date('2026-09-20T00:00:00.000Z'),
+  trialEndsAt: new Date('2026-10-20T00:00:00.000Z'),
+  currentPeriodEnd: new Date('2026-10-20T00:00:00.000Z'),
   trialWelcomeSeenAt: new Date('2026-09-13T00:00:00.000Z'),
 };
 
@@ -110,6 +119,13 @@ beforeEach(() => {
   prismaMock.user.findFirst.mockReset();
   prismaMock.user.update.mockReset();
   prismaMock.identity.findFirst.mockReset();
+  prismaMock.identity.findUnique.mockReset();
+  prismaMock.identity.update.mockReset();
+  prismaMock.authEmailCode.count.mockReset();
+  prismaMock.authEmailCode.updateMany.mockReset();
+  prismaMock.authEmailCode.create.mockReset();
+  prismaMock.authEmailCode.findFirst.mockReset();
+  prismaMock.authEmailCode.update.mockReset();
   prismaMock.workspaceMembership.findUnique.mockReset();
   prismaMock.personalSubscription.findUnique.mockReset();
   prismaMock.personalSubscription.create.mockReset();
@@ -355,6 +371,9 @@ describe('store vs personal session isolation', () => {
 
     const expenses = await agent.get('/api/expenses').expect(403);
     expect(expenses.body.error.code).toBe('FORBIDDEN');
+
+    const notifications = await agent.get('/api/notifications').expect(403);
+    expect(notifications.body.error.code).toBe('FORBIDDEN');
   });
 
   it('blocks a store session from personal finance routes', async () => {
@@ -364,5 +383,69 @@ describe('store vs personal session isolation', () => {
     const summary = await agent.get('/api/personal/summary').expect(403);
     expect(summary.body.error.code).toBe('FORBIDDEN');
     expect(summary.body.error.message).toContain('shaxsiy moliya');
+  });
+});
+
+describe('password change and reset', () => {
+  it('changes password when the current password is correct', async () => {
+    const agent = request.agent(app);
+    await agent.post('/api/auth/login').send({ identifier: 'admin', password: PASSWORD }).expect(200);
+    prismaMock.user.findFirst.mockResolvedValue(ADMIN_RECORD);
+    prismaMock.user.update.mockResolvedValue(ADMIN_RECORD);
+
+    await agent
+      .post('/api/auth/change-password')
+      .send({
+        currentPassword: PASSWORD,
+        newPassword: 'NewAdmin123!',
+        newPasswordConfirmation: 'NewAdmin123!',
+      })
+      .expect(204);
+
+    expect(prismaMock.user.update).toHaveBeenCalled();
+  });
+
+  it('rejects a wrong current password', async () => {
+    const agent = request.agent(app);
+    await agent.post('/api/auth/login').send({ identifier: 'admin', password: PASSWORD }).expect(200);
+    prismaMock.user.findFirst.mockResolvedValue(ADMIN_RECORD);
+
+    await agent
+      .post('/api/auth/change-password')
+      .send({
+        currentPassword: 'wrong-password',
+        newPassword: 'NewAdmin123!',
+        newPasswordConfirmation: 'NewAdmin123!',
+      })
+      .expect(401);
+  });
+
+  it('rejects password confirmation mismatch', async () => {
+    const agent = request.agent(app);
+    await agent.post('/api/auth/login').send({ identifier: 'admin', password: PASSWORD }).expect(200);
+
+    await agent
+      .post('/api/auth/change-password')
+      .send({
+        currentPassword: PASSWORD,
+        newPassword: 'NewAdmin123!',
+        newPasswordConfirmation: 'Other1234!',
+      })
+      .expect(422);
+  });
+
+  it('always returns ok for forgot-password without revealing the inbox', async () => {
+    prismaMock.user.findFirst.mockResolvedValue(null);
+    prismaMock.identity.findFirst.mockResolvedValue(null);
+    prismaMock.authEmailCode.count.mockResolvedValue(0);
+    prismaMock.authEmailCode.updateMany.mockResolvedValue({ count: 0 });
+    prismaMock.authEmailCode.create.mockResolvedValue({ id: 'c1' });
+
+    const response = await request(app)
+      .post('/api/auth/forgot-password')
+      .send({ email: 'nobody@example.com' })
+      .expect(200);
+
+    expect(response.body.data.ok).toBe(true);
   });
 });

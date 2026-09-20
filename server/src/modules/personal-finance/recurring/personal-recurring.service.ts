@@ -1,10 +1,12 @@
 import {
   AuditEntityType,
   AuditEventType,
+  GrowthXpSource,
   PersonalCategoryKind,
   PersonalEntryType,
   WorkspaceStatus,
   WorkspaceType,
+  XP_FINANCE_RECURRING,
   advanceRecurringDue,
   recurringDueState,
   type CreatePersonalRecurringRuleRequest,
@@ -18,6 +20,7 @@ import { fromDbMoney, toDbMoney } from '../../../lib/money-mapper.js';
 import { prisma as defaultPrisma } from '../../../lib/prisma.js';
 import { recordAudit } from '../../../services/audit.service.js';
 import { ApiError } from '../../../utils/api-error.js';
+import { tryAwardXp } from '../growth/personal-growth-xp.service.js';
 import { createPersonalEntry } from '../ledger/personal-ledger.service.js';
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
@@ -169,6 +172,14 @@ export async function createPersonalRecurringRule(
     entityId: row.id,
     summary: `Personal recurring reminder created: ${row.name}`,
     metadata: { workspaceId, identityId, frequency: row.frequency },
+  });
+  await tryAwardXp({
+    workspaceId,
+    identityId,
+    source: GrowthXpSource.FINANCE_DISCIPLINE,
+    sourceEntityId: `finance-recurring:${row.id}`,
+    amount: XP_FINANCE_RECURRING,
+    summary: 'Recurring reminder created',
   });
   return toRuleDto(row);
 }

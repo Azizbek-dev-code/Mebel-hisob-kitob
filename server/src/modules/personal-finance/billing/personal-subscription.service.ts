@@ -213,7 +213,7 @@ export async function loadPersonalAuthUser(
   const membership = await db.workspaceMembership.findUnique({
     where: { identityId_workspaceId: { identityId, workspaceId } },
     include: {
-      identity: { select: { id: true, email: true, fullName: true } },
+      identity: { select: { id: true, email: true, fullName: true, emailVerifiedAt: true } },
       workspace: {
         select: {
           id: true,
@@ -260,6 +260,7 @@ export async function loadPersonalAuthUser(
     subscription: toPersonalSubscriptionSnapshot(sub, {
       hasPendingPaymentRequest: Boolean(pending),
     }),
+    emailVerified: Boolean(membership.identity.emailVerifiedAt),
   };
 }
 

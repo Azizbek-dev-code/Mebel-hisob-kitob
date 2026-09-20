@@ -13,6 +13,8 @@ export interface GrowthFocusSessionDto {
   discardReason: string | null;
   todoId: string | null;
   todoTitle: string | null;
+  habitId: string | null;
+  habitTitle: string | null;
   linkedGoalId: string | null;
   createdAt: IsoDateString;
 }
@@ -33,6 +35,7 @@ export interface StartGrowthFocusRequest {
   plannedMinutes: number;
   kind?: GrowthFocusKind;
   todoId?: string | null;
+  habitId?: string | null;
   linkedGoalId?: string | null;
 }
 

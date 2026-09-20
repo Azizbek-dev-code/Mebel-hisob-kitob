@@ -80,7 +80,9 @@ describe('AddMoneySheet', () => {
     expect(await screen.findByRole('button', { name: 'Chiqim' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Kirim' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'O‘tkazma' })).toBeInTheDocument();
-    expect(await screen.findByText('Oziq-ovqat')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Chiqim' }));
+    expect((await screen.findAllByText('Oziq-ovqat')).length).toBeGreaterThan(0);
 
     await userEvent.click(screen.getByRole('button', { name: 'O‘tkazma' }));
 

@@ -1,11 +1,11 @@
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Badge } from '@/components/ui/Badge';
-import { SectionCard } from '@/components/ui/SectionCard';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { AccountDeleteSection } from '@/features/settings/components/AccountDeleteSection';
+import { useBusinessUnreadCount } from '@/features/notifications/use-business-notifications';
 import { ResponsibilityBadges } from '@/features/workers/components/ResponsibilityBadges';
 import { WorkerAttributedFeesPanel } from '@/features/workers/components/WorkerAttributedFeesPanel';
 import { WorkerProfileModulesPanel } from '@/features/workers/components/WorkerProfileModulesPanel';
@@ -14,8 +14,10 @@ import { ROUTES } from '@/routes/paths';
 import { formatDate } from '@/utils/format';
 
 export function ProfilePage() {
+  const { t } = useTranslation();
   const modulesQuery = useMyProfileModules();
   const feesQuery = useMyAttributedFees();
+  const unread = useBusinessUnreadCount();
 
   if (modulesQuery.isError && !modulesQuery.data) {
     return (
@@ -44,41 +46,60 @@ export function ProfilePage() {
 
   const modules = modulesQuery.data;
   const worker = modules.worker;
+  const links = [
+    { to: ROUTES.settingsAccount, labelKey: 'settings.hubAccount', hintKey: 'settings.hubAccountHint' },
+    { to: ROUTES.settingsSecurity, labelKey: 'settings.hubSecurity', hintKey: 'settings.hubSecurityHint' },
+    { to: ROUTES.notifications, labelKey: 'settings.hubNotifications', hintKey: 'settings.hubNotificationsHint' },
+    { to: ROUTES.profileFinances, labelKey: 'nav.myFinances', hintKey: 'settings.hubAccountHint' },
+    { to: ROUTES.settingsDanger, labelKey: 'settings.hubDanger', hintKey: 'settings.hubDangerHint' },
+  ];
 
   return (
-    <PageContainer className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-ink">{worker.fullName}</h2>
-          <p className="mt-1 text-sm text-ink-muted">
-            @{worker.username ?? '—'}
-            {worker.phone ? ` · ${worker.phone}` : ''} · {formatDate(worker.createdAt)}
-          </p>
-          <div className="mt-2">
-            <ResponsibilityBadges responsibilities={worker.responsibilities} />
+    <PageContainer className="space-y-5">
+      <section className="rounded-2xl border border-line bg-surface px-4 py-3.5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-lg font-semibold tracking-tight text-ink">{worker.fullName}</h2>
+            <p className="mt-1 text-sm text-ink-muted">
+              @{worker.username ?? '—'}
+              {worker.phone ? ` · ${worker.phone}` : ''} · {formatDate(worker.createdAt)}
+            </p>
+            <div className="mt-2">
+              <ResponsibilityBadges responsibilities={worker.responsibilities} />
+            </div>
           </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
           <Badge tone={worker.isActive ? 'success' : 'neutral'}>
             {worker.isActive ? 'Faol' : 'Nofaol'}
           </Badge>
-          <Link
-            to={ROUTES.profileFinances}
-            className="rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
-          >
-            Moliyaviy hisob
-          </Link>
         </div>
-      </div>
+      </section>
 
-      <SectionCard title="Profil modullari" description="Mas’uliyat bo‘yicha ko‘rsatkichlar">
-        <WorkerProfileModulesPanel
-          modules={modules}
-          isLoading={modulesQuery.isLoading}
-          isError={modulesQuery.isError}
-          onRetry={() => void modulesQuery.refetch()}
-        />
-      </SectionCard>
+      <ul className="overflow-hidden rounded-2xl border border-line bg-surface">
+        {links.map((item) => (
+          <li key={item.to} className="border-b border-line last:border-b-0">
+            <Link to={item.to} className="flex items-center gap-3 px-4 py-3.5 hover:bg-surface-hover">
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2">
+                  <span className="block text-sm font-medium text-ink">{t(item.labelKey)}</span>
+                  {item.to === ROUTES.notifications && unread.badge ? (
+                    <span className="rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                      {unread.badge}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="mt-0.5 block text-xs text-ink-muted">{t(item.hintKey)}</span>
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+
+      <WorkerProfileModulesPanel
+        modules={modules}
+        isLoading={modulesQuery.isLoading}
+        isError={modulesQuery.isError}
+        onRetry={() => void modulesQuery.refetch()}
+      />
 
       <WorkerAttributedFeesPanel
         fees={feesQuery.data}
@@ -87,8 +108,6 @@ export function ProfilePage() {
         onRetry={() => void feesQuery.refetch()}
         linkReferences
       />
-
-      <AccountDeleteSection />
     </PageContainer>
   );
 }

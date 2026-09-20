@@ -179,6 +179,25 @@ export async function createExpense(
     metadata: { amount: expense.amount, categoryId: expense.category.id },
   });
 
+  void import('../modules/telegram/telegram.delivery.js')
+    .then(async ({ tryDeliverBusinessNotification }) => {
+      const { formatMoney } = await import('@furniture-erp/shared');
+      return tryDeliverBusinessNotification(
+        storeId,
+        {
+          type: 'EXPENSE',
+          title: '💸 Yangi xarajat',
+          message: `${expense.category.name}\nSumma: ${formatMoney(expense.amount)}`,
+          accountType: 'BUSINESS',
+          accountId: storeId,
+          entityType: 'EXPENSE',
+          entityId: expense.id,
+        },
+        'bizNotifyImportant',
+      );
+    })
+    .catch(() => undefined);
+
   return expense;
 }
 

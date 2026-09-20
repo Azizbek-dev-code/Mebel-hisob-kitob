@@ -40,6 +40,31 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const NOTIFY_ROUTES = {
+  '/personal/notifications': {
+    status: 200,
+    body: { success: true, data: { items: [], prefs: {}, unreadCount: 0 } },
+  },
+  '/personal/growth/notifications': {
+    status: 200,
+    body: {
+      success: true,
+      data: {
+        items: [],
+        unreadCount: 0,
+        prefs: {
+          notifyReminder: true,
+          notifyAchievement: true,
+          notifyFriend: true,
+          notifyFight: true,
+          notifyStreak: true,
+          notifyResult: true,
+        },
+      },
+    },
+  },
+} as const;
+
 describe('PersonalLayout navigation', () => {
   it('renders the five O‘sish primary tabs without overflow class on the shell', async () => {
     mockApi({
@@ -57,6 +82,11 @@ describe('PersonalLayout navigation', () => {
           },
         },
       },
+      '/personal/feedback/status': {
+        status: 200,
+        body: { success: true, data: { prompts: { showOnboarding: false, showOutcome: false } } },
+      },
+      ...NOTIFY_ROUTES,
     });
 
     const { container } = renderWithProviders(
@@ -72,9 +102,10 @@ describe('PersonalLayout navigation', () => {
     expect(screen.getAllByText('Reja').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Moliya').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Profil').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Global reyting')).not.toBeInTheDocument();
     expect(container.querySelector('.pf-shell.overflow-x-hidden')).toBeTruthy();
     expect(container.querySelector('nav ul.grid-cols-5')).toBeTruthy();
-    expect(screen.getByLabelText('Xarajat qo‘shish')).toBeInTheDocument();
+    expect(screen.getByLabelText('Qo‘shish')).toBeInTheDocument();
   });
 
   it('hides money FAB on Growth routes at 390px', async () => {
@@ -93,6 +124,11 @@ describe('PersonalLayout navigation', () => {
           },
         },
       },
+      '/personal/feedback/status': {
+        status: 200,
+        body: { success: true, data: { prompts: { showOnboarding: false, showOutcome: false } } },
+      },
+      ...NOTIFY_ROUTES,
     });
 
     renderWithProviders(
@@ -104,6 +140,6 @@ describe('PersonalLayout navigation', () => {
     );
 
     expect(await screen.findAllByText('O‘sish')).not.toHaveLength(0);
-    expect(screen.queryByLabelText('Xarajat qo‘shish')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Qo‘shish')).not.toBeInTheDocument();
   });
 });

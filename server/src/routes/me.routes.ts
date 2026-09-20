@@ -4,6 +4,7 @@ import rateLimit from 'express-rate-limit';
 
 import { env } from '../config/env.js';
 import { deleteOwnAccount } from '../controllers/account-deletion.controller.js';
+import { patchMyAccount } from '../controllers/auth.controller.js';
 import {
   getMyProfile,
   getMyProfileModules,
@@ -21,6 +22,7 @@ import { requireAuth } from '../middleware/require-auth.js';
 import { validate } from '../middleware/validate.js';
 import { ApiError } from '../utils/api-error.js';
 import { deleteAccountBodySchema } from '../validators/account-deletion.validators.js';
+import { updateAccountProfileBodySchema } from '../validators/auth.validators.js';
 import { workerSalesQuerySchema, sellerReportQuerySchema } from '../validators/workers.validators.js';
 import {
   workerFinancialSummaryQuerySchema,
@@ -50,6 +52,7 @@ const accountDeleteLimiter = rateLimit({
 });
 
 meRouter.get('/profile', getMyProfile);
+meRouter.patch('/account', validate({ body: updateAccountProfileBodySchema }), patchMyAccount);
 meRouter.get('/profile-modules', getMyProfileModules);
 meRouter.get('/stats', getMyStats);
 meRouter.get('/sales', validate({ query: workerSalesQuerySchema }), listMySales);

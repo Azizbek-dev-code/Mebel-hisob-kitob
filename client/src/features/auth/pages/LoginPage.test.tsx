@@ -46,9 +46,13 @@ describe('LoginPage', () => {
     expect(screen.getByLabelText('Parol')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Kirish' })).toBeInTheDocument();
     expect(screen.getByLabelText(/Meni eslab qolish/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Yangi hisob ochish' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Hisobingiz yo‘qmi? Ro‘yxatdan o‘ting' })).toHaveAttribute(
       'href',
       '/onboarding',
+    );
+    expect(screen.getByRole('link', { name: 'Parolni unutdingizmi?' })).toHaveAttribute(
+      'href',
+      '/forgot-password',
     );
     expect(screen.queryByRole('link', { name: 'Yangi do‘kon ochish' })).not.toBeInTheDocument();
   });

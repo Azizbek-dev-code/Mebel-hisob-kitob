@@ -1,8 +1,10 @@
 import {
   AuditEntityType,
   AuditEventType,
+  GrowthXpSource,
   WorkspaceStatus,
   WorkspaceType,
+  XP_FINANCE_DEBT_LOG,
   personalDebtRemaining,
   personalDebtStatus,
   type CreatePersonalDebtPaymentRequest,
@@ -19,6 +21,7 @@ import { fromDbMoney, toDbMoney } from '../../../lib/money-mapper.js';
 import { prisma as defaultPrisma } from '../../../lib/prisma.js';
 import { recordAudit } from '../../../services/audit.service.js';
 import { ApiError } from '../../../utils/api-error.js';
+import { tryAwardXp } from '../growth/personal-growth-xp.service.js';
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -145,6 +148,14 @@ export async function createPersonalDebt(
     entityId: row.id,
     summary: `Personal debt recorded: ${row.personName}`,
     metadata: { workspaceId, identityId, direction: row.direction },
+  });
+  await tryAwardXp({
+    workspaceId,
+    identityId,
+    source: GrowthXpSource.FINANCE_DISCIPLINE,
+    sourceEntityId: `finance-debt:${row.id}`,
+    amount: XP_FINANCE_DEBT_LOG,
+    summary: 'Debt recorded',
   });
   return toDebtDto(row);
 }

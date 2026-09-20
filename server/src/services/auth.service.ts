@@ -2,6 +2,7 @@ import {
   AuditEntityType,
   AuditEventType,
   AuthSessionKind,
+  AnalyticsAccountType,
   WorkspaceStatus,
   WorkspaceType,
   isPersonalAuth,
@@ -32,6 +33,7 @@ import {
 import { ApiError } from '../utils/api-error.js';
 import { logger } from '../utils/logger.js';
 import { recordAudit } from './audit.service.js';
+import { createAuthSession, assertSessionUsable, type SessionIssueMeta } from './auth-sessions.service.js';
 
 export interface StoreAuthenticatedSession {
   kind: typeof AuthSessionKind.STORE;
@@ -63,46 +65,85 @@ function tokenTtlOptions(rememberMe: boolean): { expiresIn?: string } | undefine
   return rememberMe ? { expiresIn: env.JWT_REFRESH_EXPIRES_IN } : undefined;
 }
 
-function signStoreToken(user: AuthUser, rememberMe = false): IssuedAccessToken {
+function signStoreToken(user: AuthUser, rememberMe = false, sid?: string): IssuedAccessToken {
   return signAccessToken(
     {
       sub: user.id,
       storeId: user.storeId,
       role: user.role,
       ...(rememberMe ? { rm: true as const } : {}),
+      ...(sid ? { sid } : {}),
     },
     tokenTtlOptions(rememberMe),
   );
 }
 
-function signPersonalToken(user: PersonalAuthUser, rememberMe = false): IssuedAccessToken {
+function signPersonalToken(user: PersonalAuthUser, rememberMe = false, sid?: string): IssuedAccessToken {
   return signAccessToken(
     {
       sub: user.identityId,
       ctx: AuthSessionKind.PERSONAL,
       workspaceId: user.workspaceId,
       ...(rememberMe ? { rm: true as const } : {}),
+      ...(sid ? { sid } : {}),
     },
     tokenTtlOptions(rememberMe),
   );
+}
+
+async function issueTokenWithSession(
+  user: AuthPrincipal,
+  rememberMe: boolean,
+  meta?: SessionIssueMeta,
+  existingSid?: string | null,
+): Promise<IssuedAccessToken> {
+  let sid = existingSid && existingSid !== 'current' ? existingSid : null;
+  if (!sid) {
+    try {
+      sid = await createAuthSession({
+        user,
+        expiresAt: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000),
+        rememberMe,
+        meta,
+      });
+    } catch {
+      sid = null;
+    }
+  }
+  const accessToken = isPersonalAuth(user)
+    ? signPersonalToken(user, rememberMe, sid ?? undefined)
+    : signStoreToken(user, rememberMe, sid ?? undefined);
+  if (sid) {
+    await prisma.authSession
+      .update({
+        where: { id: sid },
+        data: { expiresAt: accessToken.expiresAt, lastActiveAt: new Date() },
+      })
+      .catch(() => undefined);
+  }
+  return accessToken;
 }
 
 export async function issuePersonalSession(
   identityId: string,
   workspaceId: string,
   rememberMe = false,
+  meta?: SessionIssueMeta,
+  existingSid?: string | null,
 ): Promise<PersonalAuthenticatedSession> {
   const user = await loadPersonalAuthUser(identityId, workspaceId);
   return {
     kind: AuthSessionKind.PERSONAL,
     user,
-    accessToken: signPersonalToken(user, rememberMe),
+    accessToken: await issueTokenWithSession(user, rememberMe, meta, existingSid),
   };
 }
 
 export async function issueStoreSession(
   userId: string,
   rememberMe = false,
+  meta?: SessionIssueMeta,
+  existingSid?: string | null,
 ): Promise<StoreAuthenticatedSession> {
   const record = await findActiveUserById(userId);
   if (!record) {
@@ -112,7 +153,7 @@ export async function issueStoreSession(
   return {
     kind: AuthSessionKind.STORE,
     user,
-    accessToken: signStoreToken(user, rememberMe),
+    accessToken: await issueTokenWithSession(user, rememberMe, meta, existingSid),
   };
 }
 
@@ -185,6 +226,7 @@ export async function login(
   identifier: string,
   password: string,
   rememberMe = false,
+  meta?: SessionIssueMeta,
 ): Promise<AuthenticatedSession> {
   const candidate = await findSignInCandidate(identifier);
 
@@ -223,10 +265,21 @@ export async function login(
       metadata: { username: user.username, rememberMe },
     });
 
+    void import('../modules/usage-analytics/try-track-activity.js')
+      .then(({ tryTrackAuthEvent }) =>
+        tryTrackAuthEvent({
+          userId: user.id,
+          eventType: 'login',
+          accountType: AnalyticsAccountType.BUSINESS,
+          accountId: user.storeId,
+        }),
+      )
+      .catch(() => undefined);
+
     return {
       kind: AuthSessionKind.STORE,
       user,
-      accessToken: signStoreToken(user, rememberMe),
+      accessToken: await issueTokenWithSession(user, rememberMe, meta),
     };
   }
 
@@ -249,7 +302,7 @@ export async function login(
     throw invalidCredentials();
   }
 
-  const session = await issuePersonalSession(personal.id, personal.workspaceId, rememberMe);
+  const session = await issuePersonalSession(personal.id, personal.workspaceId, rememberMe, meta);
   await recordAudit({
     storeId: null,
     actorUserId: null,
@@ -259,6 +312,16 @@ export async function login(
     summary: `Signed in personal ${personal.email}`,
     metadata: { workspaceId: personal.workspaceId, rememberMe },
   });
+  void import('../modules/usage-analytics/try-track-activity.js')
+    .then(({ tryTrackAuthEvent }) =>
+      tryTrackAuthEvent({
+        identityId: personal.id,
+        eventType: 'login',
+        accountType: AnalyticsAccountType.PERSONAL,
+        accountId: personal.workspaceId,
+      }),
+    )
+    .catch(() => undefined);
   return session;
 }
 
@@ -281,6 +344,9 @@ export async function authenticate(token: string): Promise<ResolvedSession> {
 
   if (claims.ctx === AuthSessionKind.PERSONAL) {
     const user = await loadPersonalAuthUser(claims.sub, claims.workspaceId);
+    if (claims.sid) {
+      await assertSessionUsable({ sid: claims.sid, user });
+    }
     return { kind: AuthSessionKind.PERSONAL, user, claims };
   }
 
@@ -289,7 +355,11 @@ export async function authenticate(token: string): Promise<ResolvedSession> {
     throw ApiError.unauthorized('Your session is no longer valid. Please sign in again.');
   }
 
-  return { kind: AuthSessionKind.STORE, user: toAuthUser(record), claims };
+  const user = toAuthUser(record);
+  if (claims.sid) {
+    await assertSessionUsable({ sid: claims.sid, user });
+  }
+  return { kind: AuthSessionKind.STORE, user, claims };
 }
 
 /**
@@ -306,9 +376,13 @@ export function isDueForRenewal(claims: VerifiedAccessToken, now = Date.now()): 
   return now - claims.issuedAt.getTime() >= lifetimeMs / 2;
 }
 
-export function renewSession(user: AuthPrincipal, rememberMe = false): IssuedAccessToken {
+export function renewSession(
+  user: AuthPrincipal,
+  rememberMe = false,
+  sid?: string,
+): IssuedAccessToken {
   if (isPersonalAuth(user)) {
-    return signPersonalToken(user, rememberMe);
+    return signPersonalToken(user, rememberMe, sid);
   }
-  return signStoreToken(user, rememberMe);
+  return signStoreToken(user, rememberMe, sid);
 }

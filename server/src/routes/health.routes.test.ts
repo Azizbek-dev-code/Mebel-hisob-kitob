@@ -14,8 +14,10 @@ describe('GET /api/health', () => {
       status: expect.stringMatching(/^(ok|degraded)$/),
       environment: 'test',
       database: expect.stringMatching(/^(up|down)$/),
+      telegram: { configured: false, connected: false },
     });
     expect(typeof response.body.data.uptimeSeconds).toBe('number');
+    expect(JSON.stringify(response.body)).not.toContain('TELEGRAM_BOT_TOKEN');
   });
 
   it('echoes a correlation id back to the caller', async () => {

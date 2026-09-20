@@ -15,3 +15,7 @@ process.env.JWT_REFRESH_SECRET =
   process.env.JWT_REFRESH_SECRET ?? 'test-refresh-secret-that-is-long-enough-00000';
 process.env.COOKIE_SECRET = process.env.COOKIE_SECRET ?? 'test-cookie-secret-value';
 process.env.CORS_ORIGIN = process.env.CORS_ORIGIN ?? 'http://localhost:5173';
+// Isolate tests from a developer's local bot token in server/.env (dotenv does
+// not override keys that are already set).
+process.env.TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? '';
+process.env.TELEGRAM_WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET ?? '';

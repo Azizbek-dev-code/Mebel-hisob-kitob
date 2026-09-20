@@ -28,6 +28,8 @@ const createBodySchema = z
     inviteeIds: z.array(z.string().trim().min(1).max(64)).min(1).max(9),
     targetValue: z.number().int().min(1).max(1_000_000).nullable().optional(),
     rewardXp: z.number().int().min(0).max(200).optional(),
+    todoIds: z.array(z.string().trim().min(1).max(64)).max(40).optional(),
+    dailyTargetMinutes: z.number().int().min(1).max(240).nullable().optional(),
   })
   .superRefine((body, ctx) => {
     if (body.kind === 'FIGHT' && body.inviteeIds.length !== 1) {

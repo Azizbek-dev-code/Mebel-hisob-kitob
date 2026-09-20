@@ -21,7 +21,8 @@ function allowedWhileStoreBlocked(req: Request): boolean {
     path.startsWith('/api/store-access/') ||
     path.startsWith('/api/accounts') ||
     path.startsWith('/api/onboarding') ||
-    path.startsWith('/api/referrals')
+    path.startsWith('/api/referrals') ||
+    path.startsWith('/api/presence')
   );
 }
 
@@ -39,7 +40,9 @@ function allowedWithoutActiveSubscription(req: Request): boolean {
     path.startsWith('/api/store-access') ||
     path.startsWith('/api/platform') ||
     path.startsWith('/api/health') ||
-    path.startsWith('/api/referrals')
+    path.startsWith('/api/referrals') ||
+    path.startsWith('/api/telegram') ||
+    path.startsWith('/api/presence')
   );
 }
 
@@ -50,7 +53,10 @@ function allowedForPersonalSession(req: Request): boolean {
     path.startsWith('/api/accounts') ||
     path.startsWith('/api/onboarding') ||
     path.startsWith('/api/personal') ||
-    path.startsWith('/api/referrals')
+    path.startsWith('/api/me') ||
+    path.startsWith('/api/referrals') ||
+    path.startsWith('/api/telegram') ||
+    path.startsWith('/api/presence')
   );
 }
 
@@ -59,9 +65,12 @@ function allowedPersonalWithoutSubscription(req: Request): boolean {
   return (
     path.startsWith('/api/auth') ||
     path.startsWith('/api/accounts') ||
+    path.startsWith('/api/me') ||
     path.startsWith('/api/personal/billing') ||
     path.startsWith('/api/onboarding') ||
-    path.startsWith('/api/referrals')
+    path.startsWith('/api/referrals') ||
+    path.startsWith('/api/telegram') ||
+    path.startsWith('/api/presence')
   );
 }
 
@@ -89,9 +98,11 @@ export const requireAuth: RequestHandler = asyncHandler(async (req, res, next) =
   }
 
   if (isDueForRenewal(session.claims)) {
-    const renewed = renewSession(session.user, session.claims.rememberMe);
+    const renewed = renewSession(session.user, session.claims.rememberMe, session.claims.sid);
     setAuthCookie(res, renewed.token, renewed.expiresAt);
   }
+
+  req.authSessionId = session.claims.sid;
 
   if (session.kind === AuthSessionKind.PERSONAL) {
     req.personalAuth = session.user;

@@ -100,8 +100,8 @@ describe('loadPersonalAuthUser', () => {
     prismaMock.personalSubscription.findUnique.mockResolvedValue({
       status: SubscriptionStatus.TRIAL,
       planKey: PERSONAL_PLAN_KEY.TRIAL,
-      trialEndsAt: new Date('2026-09-20T00:00:00.000Z'),
-      currentPeriodEnd: new Date('2026-09-20T00:00:00.000Z'),
+      trialEndsAt: new Date('2026-10-20T00:00:00.000Z'),
+      currentPeriodEnd: new Date('2026-10-20T00:00:00.000Z'),
       trialWelcomeSeenAt: new Date('2026-09-13T10:00:00.000Z'),
     });
 
@@ -122,8 +122,8 @@ describe('selectPersonalPlan', () => {
       workspaceId: 'ws_1',
       status: SubscriptionStatus.TRIAL,
       planKey: PERSONAL_PLAN_KEY.TRIAL,
-      trialEndsAt: new Date('2026-09-20T00:00:00.000Z'),
-      currentPeriodEnd: new Date('2026-09-20T00:00:00.000Z'),
+      trialEndsAt: new Date('2026-10-20T00:00:00.000Z'),
+      currentPeriodEnd: new Date('2026-10-20T00:00:00.000Z'),
     });
 
     await expect(
@@ -153,8 +153,8 @@ describe('getPersonalBilling', () => {
     prismaMock.personalSubscription.findUnique.mockResolvedValue({
       status: SubscriptionStatus.TRIAL,
       planKey: PERSONAL_PLAN_KEY.TRIAL,
-      trialEndsAt: new Date('2026-09-20T00:00:00.000Z'),
-      currentPeriodEnd: new Date('2026-09-20T00:00:00.000Z'),
+      trialEndsAt: new Date('2026-10-20T00:00:00.000Z'),
+      currentPeriodEnd: new Date('2026-10-20T00:00:00.000Z'),
     });
     prismaMock.subscriptionPlan.findMany.mockResolvedValue([
       {
@@ -192,8 +192,8 @@ describe('markPersonalTrialWelcomeSeen', () => {
       workspaceId: 'ws_1',
       status: SubscriptionStatus.TRIAL,
       planKey: PERSONAL_PLAN_KEY.TRIAL,
-      trialEndsAt: new Date('2026-09-20T00:00:00.000Z'),
-      currentPeriodEnd: new Date('2026-09-20T00:00:00.000Z'),
+      trialEndsAt: new Date('2026-10-20T00:00:00.000Z'),
+      currentPeriodEnd: new Date('2026-10-20T00:00:00.000Z'),
       trialWelcomeSeenAt: null,
     };
     prismaMock.personalSubscription.findUnique.mockImplementation(async () => row);
@@ -215,8 +215,8 @@ describe('markPersonalTrialWelcomeSeen', () => {
       workspaceId: 'ws_1',
       status: SubscriptionStatus.TRIAL,
       planKey: PERSONAL_PLAN_KEY.TRIAL,
-      trialEndsAt: new Date('2026-09-20T00:00:00.000Z'),
-      currentPeriodEnd: new Date('2026-09-20T00:00:00.000Z'),
+      trialEndsAt: new Date('2026-10-20T00:00:00.000Z'),
+      currentPeriodEnd: new Date('2026-10-20T00:00:00.000Z'),
       trialWelcomeSeenAt: seen,
     });
 
@@ -243,8 +243,8 @@ describe('requestPersonalSubscription', () => {
       workspaceId: 'ws_1',
       status: SubscriptionStatus.TRIAL,
       planKey: PERSONAL_PLAN_KEY.TRIAL,
-      trialEndsAt: new Date('2026-09-20T00:00:00.000Z'),
-      currentPeriodEnd: new Date('2026-09-20T00:00:00.000Z'),
+      trialEndsAt: new Date('2026-10-20T00:00:00.000Z'),
+      currentPeriodEnd: new Date('2026-10-20T00:00:00.000Z'),
     });
     prismaMock.subscriptionPlan.findFirst.mockResolvedValue(PAID_PLAN);
     prismaMock.subscriptionRequest.create.mockResolvedValue({
@@ -288,7 +288,7 @@ describe('requestPersonalSubscription', () => {
       workspaceId: 'ws_1',
       status: SubscriptionStatus.ACTIVE,
       planKey: PERSONAL_PLAN_KEY.PAID,
-      trialEndsAt: new Date('2026-09-20T00:00:00.000Z'),
+      trialEndsAt: new Date('2026-10-20T00:00:00.000Z'),
       currentPeriodEnd: new Date('2027-01-01T00:00:00.000Z'),
     });
 

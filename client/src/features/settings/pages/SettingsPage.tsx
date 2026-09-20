@@ -6,31 +6,31 @@ import {
   UserRole,
   type StoreProfile,
 } from '@furniture-erp/shared';
-import { AlertTriangle, DatabaseBackup, Settings, Tags } from 'lucide-react';
+import { AlertTriangle, Tags } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 
-import { ErrorState } from '@/components/feedback/ErrorState';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Badge } from '@/components/ui/Badge';
 import { SectionCard } from '@/components/ui/SectionCard';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useCurrentUser } from '@/features/auth/hooks/use-auth';
+import { useBusinessUnreadCount } from '@/features/notifications/use-business-notifications';
+import { canReadAuditLog } from '@/routes/navigation';
 import { ApiClientError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { ROUTES } from '@/routes/paths';
 import { formatDate, formatDateTime } from '@/utils/format';
 import { storeBillingService } from '@/services/store-billing.service';
 
-import { AccountDeleteSection } from '../components/AccountDeleteSection';
-import { useResetStore, useStoreSettings, useUpdateStoreSettings } from '../hooks/use-settings';
+import { useResetStore, useUpdateStoreSettings } from '../hooks/use-settings';
 
 const fieldClass =
   'w-full rounded-input border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100';
 
-function canManageSettings(role: string | undefined): boolean {
+export function canManageSettings(role: string | undefined): boolean {
   return role === UserRole.ADMIN || role === UserRole.PLATFORM_ADMIN;
 }
 
@@ -39,7 +39,7 @@ function fieldError(error: unknown, field: string): string | null {
   return error.details.find((d) => d.field === field)?.message ?? null;
 }
 
-function loadErrorMessage(error: unknown, t: (key: string) => string): string {
+export function loadErrorMessage(error: unknown, t: (key: string) => string): string {
   if (error instanceof ApiClientError) {
     if (error.isForbidden) return t('settings.forbiddenView');
     return error.message || t('common.retry');
@@ -57,7 +57,7 @@ interface StoreSettingsFormProps {
   editable: boolean;
 }
 
-function StoreSettingsForm({ store, editable }: StoreSettingsFormProps) {
+export function StoreSettingsForm({ store, editable }: StoreSettingsFormProps) {
   const { t } = useTranslation();
   const updateStore = useUpdateStoreSettings();
 
@@ -244,23 +244,23 @@ function StoreSettingsForm({ store, editable }: StoreSettingsFormProps) {
 
 export function SettingsPage() {
   const { t } = useTranslation();
-  const { data: currentUser } = useCurrentUser();
-  const settings = useStoreSettings(Boolean(currentUser));
+  const { data: currentUser, isPending } = useCurrentUser();
   const editable = canManageSettings(currentUser?.role);
+  const unread = useBusinessUnreadCount();
 
-  if (settings.isError) {
-    return (
-      <PageContainer>
-        <ErrorState
-          title={t('settings.loadFailed')}
-          message={loadErrorMessage(settings.error, t)}
-          onRetry={() => void settings.refetch()}
-        />
-      </PageContainer>
-    );
-  }
+  const links: { to: string; labelKey: string; hintKey: string; show?: boolean }[] = [
+    { to: ROUTES.settingsAccount, labelKey: 'settings.hubAccount', hintKey: 'settings.hubAccountHint' },
+    { to: ROUTES.settingsSecurity, labelKey: 'settings.hubSecurity', hintKey: 'settings.hubSecurityHint' },
+    { to: ROUTES.settingsShop, labelKey: 'settings.hubShop', hintKey: 'settings.hubShopHint', show: editable },
+    { to: ROUTES.billing, labelKey: 'settings.hubBilling', hintKey: 'settings.hubBillingHint', show: editable },
+    { to: ROUTES.storeReferral, labelKey: 'settings.hubReferral', hintKey: 'settings.hubReferralHint', show: editable },
+    { to: ROUTES.notifications, labelKey: 'settings.hubNotifications', hintKey: 'settings.hubNotificationsHint' },
+    { to: ROUTES.settingsBackup, labelKey: 'settings.hubBackup', hintKey: 'settings.backupHint', show: editable },
+    { to: ROUTES.audit, labelKey: 'nav.audit', hintKey: 'settings.accountHubHint', show: editable && canReadAuditLog(currentUser) },
+    { to: ROUTES.settingsDanger, labelKey: 'settings.hubDanger', hintKey: 'settings.hubDangerHint' },
+  ];
 
-  if (settings.isLoading || !settings.data) {
+  if (isPending) {
     return (
       <PageContainer>
         <Skeleton className="h-48 w-full" />
@@ -269,41 +269,46 @@ export function SettingsPage() {
   }
 
   return (
-    <PageContainer className="space-y-6">
-      <div className="flex items-start gap-3">
-        <span className="flex size-10 items-center justify-center rounded-card bg-brand-50 text-brand-600">
-          <Settings className="size-5" aria-hidden="true" />
-        </span>
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-ink">{t('settings.title')}</h2>
-          <p className="mt-1 text-sm text-ink-muted">{t('settings.subtitle')}</p>
-        </div>
+    <PageContainer className="space-y-5">
+      <div>
+        <h2 className="text-2xl font-semibold tracking-tight text-ink">{t('nav.profile')}</h2>
+        <p className="mt-1 text-sm text-ink-muted">{t('settings.profileSubtitle')}</p>
       </div>
 
-      <StoreSettingsForm store={settings.data} editable={editable} />
+      <section className="rounded-2xl border border-line bg-surface px-4 py-3.5">
+        <p className="truncate text-lg font-semibold text-ink">{currentUser?.fullName ?? t('nav.profile')}</p>
+        {currentUser?.email ? <p className="mt-0.5 truncate text-xs text-ink-muted">{currentUser.email}</p> : null}
+        {currentUser && 'storeName' in currentUser && currentUser.storeName ? (
+          <p className="mt-1 text-sm text-ink-muted">{currentUser.storeName}</p>
+        ) : null}
+      </section>
 
-      {editable ? <StoreSubscriptionSettings /> : null}
-
-      {editable ? (
-        <SectionCard title={t('settings.backup')} description={t('settings.backupHint')}>
-          <Link
-            to={ROUTES.settingsBackup}
-            className="inline-flex items-center gap-2 rounded-input border border-line bg-surface px-4 py-2.5 text-sm font-medium text-ink hover:border-brand-200 hover:bg-brand-50"
-          >
-            <DatabaseBackup className="size-4 text-brand-600" aria-hidden="true" />
-            {t('settings.backupLink')}
-          </Link>
-        </SectionCard>
-      ) : null}
-
-      {editable ? <StoreResetSection /> : null}
-
-      <AccountDeleteSection />
+      <ul className="overflow-hidden rounded-2xl border border-line bg-surface">
+        {links
+          .filter((item) => item.show !== false)
+          .map((item) => (
+            <li key={item.to} className="border-b border-line last:border-b-0">
+              <Link to={item.to} className="flex items-center gap-3 px-4 py-3.5 hover:bg-surface-hover">
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className="block text-sm font-medium text-ink">{t(item.labelKey)}</span>
+                    {item.to === ROUTES.notifications && unread.badge ? (
+                      <span className="rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                        {unread.badge}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-ink-muted">{t(item.hintKey)}</span>
+                </span>
+              </Link>
+            </li>
+          ))}
+      </ul>
     </PageContainer>
   );
 }
 
-function StoreResetSection() {
+export function StoreResetSection() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const resetStore = useResetStore();
@@ -388,7 +393,7 @@ function StoreResetSection() {
   );
 }
 
-function StoreSubscriptionSettings() {
+export function StoreSubscriptionSettings() {
   const { t } = useTranslation();
   const subscription = useQuery({
     queryKey: ['store-billing-subscription'],

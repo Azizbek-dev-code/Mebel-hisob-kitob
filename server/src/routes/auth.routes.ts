@@ -3,11 +3,26 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 
 import { env } from '../config/env.js';
-import { getCurrentUser, postLogin, postLogout } from '../controllers/auth.controller.js';
+import {
+  getCurrentUser,
+  getAuthSessions,
+  postChangePassword,
+  postConfirmEmailVerification,
+  postConfirmInAppPasswordReset,
+  postForgotPassword,
+  postLogin,
+  postLogout,
+  postRequestEmailVerification,
+  postRequestInAppPasswordReset,
+  postResetPassword,
+  postRevokeAuthSession,
+  postRevokeOtherAuthSessions,
+} from '../controllers/auth.controller.js';
 import { requireAuth } from '../middleware/require-auth.js';
 import { validate } from '../middleware/validate.js';
 import { ApiError } from '../utils/api-error.js';
-import { loginBodySchema } from '../validators/auth.validators.js';
+import { loginBodySchema, changePasswordBodySchema, forgotPasswordBodySchema, resetPasswordBodySchema, verifyEmailCodeBodySchema, inAppResetPasswordBodySchema } from '../validators/auth.validators.js';
+import { z } from 'zod';
 
 /**
  * Password checking is intentionally slow, which also makes the login route the
@@ -32,8 +47,71 @@ const loginRateLimiter = rateLimit({
   },
 });
 
+/** Authenticated password change must not share the public login counter. */
+const changePasswordRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 8,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skip: () => env.isTest,
+  handler: (_req, _res, next) => {
+    next(
+      new ApiError(
+        429,
+        ApiErrorCode.RATE_LIMITED,
+        'Too many password change attempts. Please try again in a few minutes.',
+      ),
+    );
+  },
+});
+
 export const authRouter = Router();
 
 authRouter.post('/login', loginRateLimiter, validate({ body: loginBodySchema }), postLogin);
+authRouter.post(
+  '/forgot-password',
+  loginRateLimiter,
+  validate({ body: forgotPasswordBodySchema }),
+  postForgotPassword,
+);
+authRouter.post(
+  '/reset-password',
+  loginRateLimiter,
+  validate({ body: resetPasswordBodySchema }),
+  postResetPassword,
+);
+authRouter.post(
+  '/change-password',
+  requireAuth,
+  changePasswordRateLimiter,
+  validate({ body: changePasswordBodySchema }),
+  postChangePassword,
+);
 authRouter.get('/me', requireAuth, getCurrentUser);
 authRouter.post('/logout', postLogout);
+authRouter.get('/sessions', requireAuth, getAuthSessions);
+authRouter.post(
+  '/sessions/revoke-others',
+  requireAuth,
+  postRevokeOtherAuthSessions,
+);
+authRouter.post(
+  '/sessions/:id/revoke',
+  requireAuth,
+  validate({ params: z.object({ id: z.string().trim().min(1).max(64) }) }),
+  postRevokeAuthSession,
+);
+authRouter.post('/verify-email/request', requireAuth, postRequestEmailVerification);
+authRouter.post(
+  '/verify-email/confirm',
+  requireAuth,
+  validate({ body: verifyEmailCodeBodySchema }),
+  postConfirmEmailVerification,
+);
+authRouter.post('/security/email-reset/request', requireAuth, postRequestInAppPasswordReset);
+authRouter.post(
+  '/security/email-reset/confirm',
+  requireAuth,
+  validate({ body: inAppResetPasswordBodySchema }),
+  postConfirmInAppPasswordReset,
+);

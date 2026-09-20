@@ -34,6 +34,7 @@ const {
     aggregateSaleItemsByCategory: vi.fn(),
     aggregateSalesByDay: vi.fn(),
     aggregateInventoryMovements: vi.fn(),
+    sumWorkerPaymentExpenses: vi.fn(),
   },
   debtRepoMock: {
     summarizeDebts: vi.fn(),
@@ -118,6 +119,7 @@ beforeEach(() => {
     { method: 'CARD', amount: 3_000_000 },
   ]);
   reportsRepoMock.sumWorkerPayments.mockResolvedValue(100_000);
+  reportsRepoMock.sumWorkerPaymentExpenses.mockResolvedValue(0);
   purchasingRepoMock.sumSupplierPaymentsInPeriod.mockResolvedValue(250_000);
   purchasingRepoMock.getReportsSupplierPayablesData.mockResolvedValue({
     summary: {
@@ -191,6 +193,18 @@ describe('reports.service accounting rules', () => {
     expect(cash.outflow.total).toBe(850_000);
     expect(cash.netCashFlow).toBe(7_150_000);
     expect(cash.openingBalanceSupported).toBe(false);
+  });
+
+  it('does not double-count worker payments already posted as expenses', async () => {
+    reportsRepoMock.sumWorkerPaymentExpenses.mockResolvedValue(100_000);
+    const cash = await getReportsCashFlow({
+      storeId: STORE_ID,
+      actorRole: UserRole.ADMIN,
+      preset: DateRangePreset.THIS_MONTH,
+    });
+    expect(cash.outflow.operatingExpenses).toBe(500_000);
+    expect(cash.outflow.workerPayments).toBe(100_000);
+    expect(cash.outflow.total).toBe(750_000);
   });
 
   it('sales report attaches settled compensation per seller once', async () => {

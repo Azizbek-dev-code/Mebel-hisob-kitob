@@ -1,8 +1,48 @@
-import type { AccountDeletionListResponse, DeleteAccountRequest } from '@furniture-erp/shared';
+import type {
+  AccountDeletionListResponse,
+  AuthSessionListResponse,
+  ChangePasswordRequest,
+  CurrentUserResponse,
+  DeleteAccountRequest,
+  ForgotPasswordRequest,
+  ResetPasswordRequest,
+  UpdateAccountProfileRequest,
+} from '@furniture-erp/shared';
 
 import { apiClient } from '@/lib/api-client';
 
 export const accountService = {
+  updateProfile: (body: UpdateAccountProfileRequest) =>
+    apiClient.patch<CurrentUserResponse>('/me/account', { body }),
+
+  changePassword: (body: ChangePasswordRequest) =>
+    apiClient.post<void>('/auth/change-password', { body }),
+
+  forgotPassword: (body: ForgotPasswordRequest) =>
+    apiClient.post<{ ok: true }>('/auth/forgot-password', { body }),
+
+  resetPassword: (body: ResetPasswordRequest) =>
+    apiClient.post<{ ok: true }>('/auth/reset-password', { body }),
+
+  listSessions: () => apiClient.get<AuthSessionListResponse>('/auth/sessions'),
+
+  revokeSession: (id: string) => apiClient.post<void>(`/auth/sessions/${id}/revoke`),
+
+  revokeOtherSessions: () => apiClient.post<void>('/auth/sessions/revoke-others'),
+
+  requestEmailVerification: () => apiClient.post<{ ok: true }>('/auth/verify-email/request'),
+
+  confirmEmailVerification: (code: string) =>
+    apiClient.post<{ ok: true }>('/auth/verify-email/confirm', { body: { code } }),
+
+  requestInAppPasswordReset: () => apiClient.post<{ ok: true }>('/auth/security/email-reset/request'),
+
+  confirmInAppPasswordReset: (body: {
+    code: string;
+    newPassword: string;
+    newPasswordConfirmation: string;
+  }) => apiClient.post<{ ok: true }>('/auth/security/email-reset/confirm', { body }),
+
   async deleteOwnAccount(body: DeleteAccountRequest): Promise<void> {
     await apiClient.delete('/me/account', { body });
   },

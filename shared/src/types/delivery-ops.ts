@@ -43,6 +43,8 @@ export interface SaleDeliveryOpsItem {
   hint: string | null;
   canStart: boolean;
   canComplete: boolean;
+  /** Assigned shopir display name when the store-wide inbox lists every worker. */
+  assigneeName: string | null;
 }
 
 export type PurchaseDeliveryOpsStatus = 'PENDING' | 'COMPLETED' | 'CANCELLED';
@@ -63,6 +65,7 @@ export interface PurchaseDeliveryOpsItem {
   canStart: boolean;
   canComplete: boolean;
   hint: string | null;
+  assigneeName: string | null;
 }
 
 export interface MyDeliveriesResponse {

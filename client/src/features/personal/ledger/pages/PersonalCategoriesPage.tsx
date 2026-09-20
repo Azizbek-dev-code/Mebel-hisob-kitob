@@ -10,6 +10,9 @@ import { ApiClientError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { ROUTES } from '@/routes/paths';
 
+import { CategoryGlyph } from '../components/CategoryGlyph';
+import { CategoryIconPicker } from '../components/CategoryIconPicker';
+
 import {
   useCreatePersonalCategory,
   usePersonalCategories,
@@ -28,6 +31,10 @@ const COLOR_DOT: Record<string, string> = {
   sky: 'bg-sky-500',
   rose: 'bg-rose-500',
   green: 'bg-emerald-500',
+  amber: 'bg-amber-500',
+  orange: 'bg-orange-500',
+  blue: 'bg-blue-500',
+  pink: 'bg-pink-500',
 };
 
 export function PersonalCategoriesPage() {
@@ -39,6 +46,10 @@ export function PersonalCategoriesPage() {
   const updateCategory = useUpdatePersonalCategory();
   const [kind, setKind] = useState<PersonalCategoryKind>(PersonalCategoryKind.EXPENSE);
   const [name, setName] = useState('');
+  const [color] = useState('teal');
+  const [iconName, setIconName] = useState<string | null>(null);
+  const [iconColor, setIconColor] = useState<string | null>('#0D9488');
+  const [parentId, setParentId] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const items = categories.data?.items ?? [];
@@ -49,7 +60,14 @@ export function PersonalCategoriesPage() {
     event.preventDefault();
     setError(null);
     try {
-      await createCategory.mutateAsync({ kind, name });
+      await createCategory.mutateAsync({
+        kind,
+        name,
+        color,
+        iconName: iconName ?? undefined,
+        iconColor: iconColor ?? undefined,
+        parentId: parentId || null,
+      });
       setName('');
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : t('common.retry'));
@@ -138,6 +156,31 @@ export function PersonalCategoriesPage() {
             placeholder={t('personal.categoryName')}
             className={fieldClass}
           />
+          <label className="block space-y-1 text-sm">
+            <span className="text-ink-muted">{t('personal.parentCategory')}</span>
+            <select
+              value={parentId}
+              onChange={(event) => setParentId(event.target.value)}
+              className={fieldClass}
+            >
+              <option value="">{t('personal.topLevelCategory')}</option>
+              {items
+                .filter((item) => item.kind === kind && !item.parentId && item.isActive)
+                .map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <CategoryIconPicker
+            iconName={iconName}
+            iconColor={iconColor}
+            onChange={(next) => {
+              setIconName(next.iconName);
+              setIconColor(next.iconColor);
+            }}
+          />
           <button
             type="submit"
             disabled={createCategory.isPending}
@@ -207,8 +250,11 @@ function CategoryRows({
       {items.map((item) => (
         <li key={item.id} className="flex items-center justify-between gap-3 text-sm">
           <span className={cn('flex min-w-0 items-center gap-2', item.isActive ? 'text-ink' : 'text-ink-muted')}>
+            <CategoryGlyph category={item} />
             <span className={cn('size-2.5 shrink-0 rounded-full', COLOR_DOT[item.color] ?? 'bg-slate-400')} />
-            <span className={cn('truncate', !item.isActive && 'line-through')}>{item.name}</span>
+            <span className={cn('truncate', !item.isActive && 'line-through', item.parentId && 'pl-3')}>
+              {item.name}
+            </span>
           </span>
           {canWrite ? (
             <button

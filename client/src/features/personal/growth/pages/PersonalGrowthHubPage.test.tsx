@@ -70,6 +70,10 @@ describe('PersonalGrowthHubPage', () => {
           },
         },
       },
+      '/personal/growth/habits': {
+        status: 200,
+        body: { success: true, data: { items: [], activeCount: 0, dueTodayCount: 3, bestCurrentStreak: 0 } },
+      },
     });
 
     renderWithProviders(
@@ -87,5 +91,24 @@ describe('PersonalGrowthHubPage', () => {
       'href',
       '/personal/growth/todos',
     );
+    expect(screen.getByRole('link', { name: /Odatlar/ })).toHaveAttribute(
+      'href',
+      '/personal/growth/habits',
+    );
+    expect(screen.getByRole('link', { name: /Pomodoro/ })).toHaveAttribute(
+      'href',
+      '/personal/growth/focus',
+    );
+    expect(screen.queryByRole('link', { name: /Taraqqiyot/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Do‘stlar reytingi/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryAllByRole('link').filter((el) => el.getAttribute('href') === '/personal/growth/notifications'),
+    ).toHaveLength(0);
+    expect(
+      screen.queryAllByRole('link').filter((el) => el.getAttribute('href') === '/personal/growth/friends'),
+    ).toHaveLength(0);
+    expect(
+      screen.queryAllByRole('link').filter((el) => el.getAttribute('href') === '/personal/growth/goals'),
+    ).toHaveLength(0);
   });
 });

@@ -107,6 +107,46 @@ describe('createLearningGoal', () => {
     expect(prismaMock.expense.findMany).not.toHaveBeenCalled();
     expect(prismaMock.sale.findMany).not.toHaveBeenCalled();
   });
+
+  it('stores daily minutes, start date and duration deadline', async () => {
+    prismaMock.growthLearningGoal.create.mockResolvedValue({
+      ...GOAL,
+      title: 'IELTS speaking',
+      targetValue: 840,
+      targetUnit: 'minutes',
+      currentValue: 0,
+      dailyMinutes: 30,
+      startDate: NOW,
+      deadline: new Date('2026-10-15T12:00:00.000Z'),
+      linkedTodoIds: '["todo_1"]',
+    });
+    const goal = await createLearningGoal(
+      'ws_1',
+      'idn_1',
+      {
+        title: 'IELTS speaking',
+        category: GrowthLearningCategory.IELTS,
+        targetValue: 840,
+        targetUnit: 'minutes',
+        startDate: NOW.toISOString(),
+        dailyMinutes: 30,
+        durationAmount: 4,
+        durationUnit: 'week',
+        linkedTodoIds: ['todo_1'],
+      },
+      prismaMock as never,
+    );
+    expect(goal.dailyMinutes).toBe(30);
+    expect(goal.linkedTodoIds).toEqual(['todo_1']);
+    expect(prismaMock.growthLearningGoal.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          dailyMinutes: 30,
+          linkedTodoIds: '["todo_1"]',
+        }),
+      }),
+    );
+  });
 });
 
 describe('logLearningSession', () => {

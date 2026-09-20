@@ -198,7 +198,10 @@ describe('sales routes auth', () => {
     });
     const agent = await signedInAgent();
     await agent.get('/api/sales/deliveries/mine').expect(200);
-    expect(deliveryOpsMock.listMyDeliveries).toHaveBeenCalledWith('store_1', 'user_admin');
+    expect(deliveryOpsMock.listMyDeliveries).toHaveBeenCalledWith('store_1', {
+      id: 'user_admin',
+      role: 'ADMIN',
+    });
   });
 
   it('patches sale delivery status through delivery-ops', async () => {

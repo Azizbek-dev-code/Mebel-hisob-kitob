@@ -21,6 +21,7 @@ const { prismaMock, recordAuditMock } = vi.hoisted(() => ({
     },
     growthProgress: { findUnique: vi.fn() },
     workspaceMembership: { findFirst: vi.fn() },
+    identityPresence: { findUnique: vi.fn() },
   },
   recordAuditMock: vi.fn(),
 }));
@@ -32,6 +33,9 @@ vi.mock('./personal-growth-achievements.service.js', () => ({
 }));
 vi.mock('./personal-growth-premium.service.js', () => ({
   assertGrowthQuota: vi.fn().mockResolvedValue('FREE'),
+}));
+vi.mock('../../presence/presence.service.js', () => ({
+  presenceDtoFor: vi.fn(async () => ({ online: false, lastSeenAt: null })),
 }));
 
 const { acceptFriendRequest, sendFriendRequest } = await import(
@@ -92,7 +96,7 @@ beforeEach(() => {
 });
 
 describe('sendFriendRequest', () => {
-  it('creates a pending friendship by email', async () => {
+  it('creates a pending friendship by handle, never by email', async () => {
     prismaMock.identity.findFirst.mockResolvedValue(OTHER);
     prismaMock.growthFriendship.findUnique.mockResolvedValue(null);
     prismaMock.growthFriendship.create.mockResolvedValue({
@@ -112,13 +116,52 @@ describe('sendFriendRequest', () => {
     const row = await sendFriendRequest(
       'ws_1',
       'idn_me',
-      { query: 'other@example.com' },
+      { query: 'other' },
       prismaMock as never,
       NOW,
     );
     expect(row.status).toBe('PENDING');
     expect(row.friend.fullName).toBe('Other');
+    expect(row.friend.email).toBeNull();
     expect(row.iAmRequester).toBe(true);
+    expect(prismaMock.identity.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { socialProfile: { handle: { equals: 'other', mode: 'insensitive' } } },
+      }),
+    );
+  });
+
+  it('rejects a self request', async () => {
+    prismaMock.identity.findFirst.mockResolvedValue(ME);
+    await expect(
+      sendFriendRequest('ws_1', 'idn_me', { identityId: 'idn_me' }, prismaMock as never, NOW),
+    ).rejects.toThrow(/O‘zingizga/);
+  });
+
+  it('rejects a blocked pair', async () => {
+    prismaMock.identity.findFirst.mockResolvedValue(OTHER);
+    prismaMock.growthFriendship.findUnique.mockResolvedValue({
+      id: 'fr_1',
+      status: GrowthFriendshipStatus.BLOCKED,
+      requesterId: 'idn_me',
+      addresseeId: 'idn_other',
+    });
+    await expect(
+      sendFriendRequest('ws_1', 'idn_me', { identityId: 'idn_other' }, prismaMock as never, NOW),
+    ).rejects.toThrow(/bloklangan/);
+  });
+
+  it('rejects a duplicate pending request', async () => {
+    prismaMock.identity.findFirst.mockResolvedValue(OTHER);
+    prismaMock.growthFriendship.findUnique.mockResolvedValue({
+      id: 'fr_1',
+      status: GrowthFriendshipStatus.PENDING,
+      requesterId: 'idn_me',
+      addresseeId: 'idn_other',
+    });
+    await expect(
+      sendFriendRequest('ws_1', 'idn_me', { identityId: 'idn_other' }, prismaMock as never, NOW),
+    ).rejects.toThrow(/allaqachon/);
   });
 });
 

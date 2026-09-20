@@ -167,7 +167,7 @@ export async function listPersonalNotifications(
     INFO: 2,
   };
   items.sort((a, b) => rank[a.severity] - rank[b.severity] || a.title.localeCompare(b.title));
-  return { items, prefs };
+  return { items, prefs, unreadCount: items.length };
 }
 
 export async function updatePersonalNotificationPrefs(

@@ -20,6 +20,11 @@ export const createLearningGoalBodySchema = z.object({
   targetUnit: z.string().trim().min(1).max(40).optional(),
   currentValue: z.number().min(0).max(1_000_000).optional(),
   deadline: isoDateTimeSchema.nullable().optional(),
+  startDate: isoDateTimeSchema.nullable().optional(),
+  dailyMinutes: z.number().int().min(1).max(480).nullable().optional(),
+  linkedTodoIds: z.array(z.string().trim().min(1).max(64)).max(40).optional(),
+  durationAmount: z.number().int().min(1).max(365).optional(),
+  durationUnit: z.enum(['day', 'week', 'month']).optional(),
   milestones: z
     .array(
       z.object({
@@ -41,6 +46,9 @@ export const updateLearningGoalBodySchema = z
     targetUnit: z.string().trim().min(1).max(40).optional(),
     currentValue: z.number().min(0).max(1_000_000).optional(),
     deadline: isoDateTimeSchema.nullable().optional(),
+    startDate: isoDateTimeSchema.nullable().optional(),
+    dailyMinutes: z.number().int().min(1).max(480).nullable().optional(),
+    linkedTodoIds: z.array(z.string().trim().min(1).max(64)).max(40).optional(),
     sortOrder: z.number().int().min(0).max(10_000).optional(),
   })
   .refine(
@@ -53,6 +61,9 @@ export const updateLearningGoalBodySchema = z
       body.targetUnit !== undefined ||
       body.currentValue !== undefined ||
       body.deadline !== undefined ||
+      body.startDate !== undefined ||
+      body.dailyMinutes !== undefined ||
+      body.linkedTodoIds !== undefined ||
       body.sortOrder !== undefined,
     { message: 'At least one field is required' },
   );

@@ -69,4 +69,15 @@ describe('computeLearningProgress', () => {
       }),
     ).toBe(50);
   });
+
+  it('uses study minutes when unit is minutes', () => {
+    expect(
+      computeLearningProgress({
+        targetValue: 60,
+        currentValue: 0,
+        totalStudyMinutes: 45,
+        targetUnit: 'minutes',
+      }),
+    ).toBe(75);
+  });
 });

@@ -79,7 +79,7 @@ beforeEach(() => {
 });
 
 describe('delivery-ops.service', () => {
-  it('lists only assigned sale deliveries for the shopir', async () => {
+  it('lists store-wide sale deliveries with assignee names', async () => {
     prismaMock.sale.findMany.mockResolvedValue([
       {
         id: 'sale_1',
@@ -90,20 +90,52 @@ describe('delivery-ops.service', () => {
         deliveryDate: null,
         deliveryDueDate: new Date(),
         deliveryAddress: 'Test',
+        deliveryPersonId: SHOPIR,
+        deliveryPerson: { id: SHOPIR, fullName: 'Azizbek' },
         customer: { firstName: 'A', lastName: 'B', phone: '+99890' },
+      },
+      {
+        id: 'sale_2',
+        saleNumber: 12,
+        saleDate: new Date(),
+        deliveryStatus: FulfilmentStatus.PENDING,
+        deliveryCost: 80_000n,
+        deliveryDate: null,
+        deliveryDueDate: new Date(),
+        deliveryAddress: 'Boshqa',
+        deliveryPersonId: OTHER,
+        deliveryPerson: { id: OTHER, fullName: 'Ali' },
+        customer: { firstName: 'C', lastName: 'D', phone: '+99891' },
       },
     ]);
 
-    const result = await listMyDeliveries(STORE, SHOPIR);
-    expect(result.saleDeliveries).toHaveLength(1);
+    const result = await listMyDeliveries(STORE, { id: SHOPIR, role: UserRole.EMPLOYEE });
+    expect(prismaMock.sale.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { storeId: STORE, deliveryStatus: { not: FulfilmentStatus.NOT_REQUIRED } },
+      }),
+    );
+    expect(result.saleDeliveries).toHaveLength(2);
+    expect(result.saleDeliveries[0]?.assigneeName).toBe('Azizbek');
     expect(result.saleDeliveries[0]?.canStart).toBe(true);
-    expect(result.saleDeliveries[0]?.canComplete).toBe(false);
+    expect(result.saleDeliveries[1]?.assigneeName).toBe('Ali');
+    expect(result.saleDeliveries[1]?.canStart).toBe(false);
     expect(result.kpis.todayPending).toBeGreaterThanOrEqual(1);
   });
 
   it('forbids listing without DELIVERY responsibility', async () => {
     workerRepoMock.findActiveWorkerWithResponsibility.mockResolvedValue(null);
-    await expect(listMyDeliveries(STORE, SHOPIR)).rejects.toMatchObject({ statusCode: 403 });
+    await expect(listMyDeliveries(STORE, { id: SHOPIR, role: UserRole.EMPLOYEE })).rejects.toMatchObject({
+      statusCode: 403,
+    });
+  });
+
+  it('lets store admins list deliveries without DELIVERY responsibility', async () => {
+    workerRepoMock.findActiveWorkerWithResponsibility.mockResolvedValue(null);
+    prismaMock.sale.findMany.mockResolvedValue([]);
+    const result = await listMyDeliveries(STORE, { id: 'admin_1', role: UserRole.ADMIN });
+    expect(result.saleDeliveries).toEqual([]);
+    expect(workerRepoMock.findActiveWorkerWithResponsibility).not.toHaveBeenCalled();
   });
 
   it('starts delivery → IN_TRANSIT', async () => {
@@ -250,11 +282,13 @@ describe('delivery-ops.service', () => {
         deliveredAt: null,
         driverFee: 100_000n,
         status: 'ACTIVE',
+        driverId: SHOPIR,
+        driver: { id: SHOPIR, fullName: 'Azizbek' },
         supplier: { name: 'Wood' },
       },
     ]);
 
-    const result = await listMyDeliveries(STORE, SHOPIR);
+    const result = await listMyDeliveries(STORE, { id: SHOPIR, role: UserRole.EMPLOYEE });
     expect(result.purchaseDeliveries).toHaveLength(1);
     expect(result.purchaseDeliveries[0]?.status).toBe('PENDING');
     expect(result.purchaseDeliveries[0]?.canComplete).toBe(true);

@@ -9,7 +9,7 @@ import { mockApi, SIGNED_OUT_RESPONSE } from '@/test/mock-api';
 import { renderWithProviders, screen } from '@/test/test-utils';
 
 import { routes } from './index';
-import { NAV_ITEMS } from './navigation';
+import { NAV_ITEMS, navItemsForUser } from './navigation';
 import { ROUTES } from './paths';
 
 const ADMIN: AuthUser = {
@@ -59,6 +59,10 @@ function mockSignedInApp() {
 
   return mockApi({
     '/auth/me': SIGNED_IN_RESPONSE,
+    '/notifications': {
+      status: 200,
+      body: { success: true, data: { items: [], prefs: {}, unreadCount: 0 } },
+    },
     '/analytics/financial-summary': FINANCIAL_RESPONSE,
     '/analytics/financial-trend': TREND_RESPONSE,
     '/analytics/expenses': EXPENSE_RESPONSE,
@@ -82,6 +86,49 @@ function mockSignedInApp() {
           },
         },
       },
+    },
+    '/me/profile-modules': {
+      status: 200,
+      body: {
+        success: true,
+        data: {
+          modules: {
+            worker: {
+              id: ADMIN.id,
+              fullName: ADMIN.fullName,
+              username: ADMIN.username,
+              phone: ADMIN.phone,
+              role: ADMIN.role,
+              isActive: true,
+              responsibilities: ADMIN.responsibilities,
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+            tabs: ['GENERAL'],
+            general: {
+              finance: {
+                earned: 0,
+                paid: 0,
+                outstanding: 0,
+                monthEarned: 0,
+                monthPaid: 0,
+                monthAdvances: 0,
+                monthOutstanding: 0,
+                bonuses: 0,
+                advances: 0,
+                debt: 0,
+                adjustments: 0,
+                reversals: 0,
+                commissions: 0,
+              },
+              breakdown: [],
+            },
+          },
+        },
+      },
+    },
+    '/me/attributed-fees': {
+      status: 200,
+      body: { success: true, data: { fees: { items: [], summary: { total: 0 } } } },
     },
     '/api/me/profile': {
       status: 200,
@@ -140,6 +187,27 @@ function mockSignedInApp() {
     '/accounts': {
       status: 200,
       body: { success: true, data: { items: [] } },
+    },
+    '/settings/store': {
+      status: 200,
+      body: {
+        success: true,
+        data: {
+          store: {
+            id: 'store_1',
+            name: 'Mebel Savdo',
+            phone: '+998901234567',
+            address: 'Toshkent',
+            currency: 'UZS',
+            timezone: 'Asia/Tashkent',
+            updatedAt: '2026-08-19T00:00:00.000Z',
+          },
+        },
+      },
+    },
+    '/billing/subscription': {
+      status: 200,
+      body: { success: true, data: { subscription: null } },
     },
     '/referrals/me': {
       status: 200,
@@ -216,7 +284,7 @@ describe('application routes', () => {
     expect(screen.getByRole('link', { name: 'Bosh sahifa' })).toHaveAttribute('href', ROUTES.home);
   });
 
-  it.each(NAV_ITEMS.map((item) => [i18n.t(item.labelKey), item.to]))(
+  it.each(navItemsForUser(ADMIN).map((item) => [i18n.t(item.labelKey), item.to]))(
     'opens %s inside the shell',
     async (label, to) => {
       mockSignedInApp();

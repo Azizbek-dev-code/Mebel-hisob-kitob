@@ -23,6 +23,7 @@ import {
   useDeclineChallenge,
   useGrowthChallenges,
 } from '../hooks/use-growth-challenges';
+import { useCreateGrowthTodo, useGrowthTodos } from '../hooks/use-growth-todos';
 
 const fieldClass =
   'w-full rounded-input border border-line bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100';
@@ -50,7 +51,12 @@ export function PersonalGrowthChallengesPage() {
   const [targetValue, setTargetValue] = useState(600);
   const [opponentId, setOpponentId] = useState('');
   const [inviteeIds, setInviteeIds] = useState<string[]>([]);
+  const [todoIds, setTodoIds] = useState<string[]>([]);
+  const [newTodo, setNewTodo] = useState('');
+  const [dailyTargetMinutes, setDailyTargetMinutes] = useState(30);
   const [error, setError] = useState<string | null>(null);
+  const todos = useGrowthTodos();
+  const createTodo = useCreateGrowthTodo();
 
   const friendOptions = useMemo(
     () => friends.data?.friends ?? [],
@@ -83,6 +89,8 @@ export function PersonalGrowthChallengesPage() {
         durationDays,
         inviteeIds: ids,
         ...(kind === 'GROUP' ? { targetValue } : {}),
+        ...(metric === GrowthChallengeMetric.TASKS_COMPLETED ? { todoIds } : {}),
+        ...(metric === GrowthChallengeMetric.LEARNING_MINUTES ? { dailyTargetMinutes } : {}),
       });
       setTitle('');
       setOpponentId('');
@@ -259,6 +267,60 @@ export function PersonalGrowthChallengesPage() {
           </label>
         ) : null}
 
+        {metric === GrowthChallengeMetric.TASKS_COMPLETED ? (
+          <fieldset className="space-y-2">
+            <legend className="text-sm text-ink-muted">{t('personal.challengesPickTasks')}</legend>
+            <ul className="max-h-40 space-y-1 overflow-y-auto">
+              {(todos.data?.items ?? []).map((todo) => (
+                <li key={todo.id}>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={todoIds.includes(todo.id)}
+                      onChange={() =>
+                        setTodoIds((prev) =>
+                          prev.includes(todo.id) ? prev.filter((id) => id !== todo.id) : [...prev, todo.id],
+                        )
+                      }
+                    />
+                    {todo.title}
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <input
+              className={fieldClass}
+              value={newTodo}
+              placeholder={t('personal.challengesAddTask')}
+              onChange={(e) => setNewTodo(e.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter') return;
+                event.preventDefault();
+                const title = newTodo.trim();
+                if (!title) return;
+                void createTodo.mutateAsync({ title }).then((created) => {
+                  setTodoIds((prev) => [...prev, created.todo.id]);
+                  setNewTodo('');
+                });
+              }}
+            />
+          </fieldset>
+        ) : null}
+
+        {metric === GrowthChallengeMetric.LEARNING_MINUTES ? (
+          <label className="block space-y-1 text-sm">
+            <span className="text-ink-muted">{t('personal.challengesDailyMinutes')}</span>
+            <input
+              className={fieldClass}
+              type="number"
+              min={5}
+              max={240}
+              value={dailyTargetMinutes}
+              onChange={(e) => setDailyTargetMinutes(Number(e.target.value) || 30)}
+            />
+          </label>
+        ) : null}
+
         {error ? <p className="text-sm text-danger">{error}</p> : null}
         {friendOptions.length === 0 ? (
           <p className="text-sm text-ink-muted">
@@ -365,6 +427,16 @@ function ChallengeCard({
           <p className="mt-1 text-xs text-ink-muted">
             {others.map((p) => p.fullName).join(', ') || '—'}
           </p>
+          {mode === 'active' &&
+          row.metric === GrowthChallengeMetric.LEARNING_MINUTES &&
+          row.dailyTargetMinutes ? (
+            <p className="mt-1 text-xs font-medium text-brand-800">
+              {t('personal.challengesTodayProgress', {
+                today: row.todayScore ?? 0,
+                target: row.dailyTargetMinutes,
+              })}
+            </p>
+          ) : null}
         </div>
         <span className="shrink-0 rounded-full bg-canvas px-2 py-0.5 text-xs text-ink-muted">
           {t(`personal.challengeStatus.${row.status}`)}

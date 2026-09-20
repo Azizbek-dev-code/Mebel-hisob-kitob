@@ -10,26 +10,23 @@ describe('NAV_ITEMS', () => {
   it('covers every module the sidebar can show', () => {
     expect(NAV_ITEMS.map((item) => item.key)).toEqual([
       'dashboard',
-      'billing',
-      'referral',
       'sales',
       'my-sales',
       'my-reports',
-      'assembly',
-      'delivery',
-      'my-finances',
       'products',
       'inventory',
-      'purchases',
-      'suppliers',
+      'delivery',
+      'assembly',
       'customers',
-      'debts',
-      'expenses',
       'workers',
       'reports',
-      'audit',
       'profile',
       'settings',
+      'purchases',
+      'suppliers',
+      'debts',
+      'expenses',
+      'my-finances',
     ]);
     expect(NAV_ITEMS.map((item) => item.key)).not.toContain('masters');
   });
@@ -78,9 +75,27 @@ describe('navItemsForUser', () => {
     const keys = navItemsForUser(TEST_ADMIN).map((item) => item.key);
     expect(keys).toContain('workers');
     expect(keys).toContain('sales');
-    expect(keys).toContain('referral');
+    expect(keys).toContain('settings');
+    expect(keys).not.toContain('billing');
+    expect(keys).not.toContain('referral');
+    expect(keys).not.toContain('audit');
     expect(keys).not.toContain('my-sales');
     expect(keys).not.toContain('profile');
+  });
+
+  it('lists the primary business modules in the requested order', () => {
+    expect(navItemsForUser(TEST_ADMIN).map((item) => item.key)).toEqual([
+      'dashboard',
+      'sales',
+      'products',
+      'inventory',
+      'delivery',
+      'assembly',
+      'customers',
+      'workers',
+      'reports',
+      'settings',
+    ]);
   });
 
   it('adapts employee nav to responsibilities', () => {
@@ -92,11 +107,11 @@ describe('navItemsForUser', () => {
         'my-sales',
         'my-reports',
         'assembly',
-        'my-finances',
         'customers',
         'profile',
       ]),
     );
+    expect(keys).not.toContain('my-finances');
     expect(keys).not.toContain('delivery');
     expect(keys).not.toContain('workers');
     expect(keys).not.toContain('reports');
@@ -111,13 +126,22 @@ describe('navItemsForUser', () => {
     };
     const keys = navItemsForUser(deliveryWorker).map((item) => item.key);
     expect(keys).toEqual(
-      expect.arrayContaining(['dashboard', 'delivery', 'sales', 'my-finances', 'profile']),
+      expect.arrayContaining(['dashboard', 'delivery', 'sales', 'profile']),
     );
+    expect(keys).not.toContain('my-finances');
     expect(keys).not.toContain('my-sales');
   });
 
-  it('shows expenses for store admins', () => {
-    expect(navItemsForUser(TEST_ADMIN).map((item) => item.key)).toContain('expenses');
+  it('hides finance modules from the business sidebar while keeping routes registered', () => {
+    const keys = navItemsForUser(TEST_ADMIN).map((item) => item.key);
+    expect(keys).not.toContain('expenses');
+    expect(keys).not.toContain('purchases');
+    expect(keys).not.toContain('suppliers');
+    expect(keys).not.toContain('debts');
+    expect(keys).not.toContain('my-finances');
+    expect(NAV_ITEMS.map((item) => item.key)).toEqual(
+      expect.arrayContaining(['expenses', 'purchases', 'suppliers', 'debts', 'my-finances']),
+    );
   });
 
   it('shows inventory for store admins but not employees', () => {
@@ -125,23 +149,26 @@ describe('navItemsForUser', () => {
     expect(navItemsForUser(TEST_EMPLOYEE).map((item) => item.key)).not.toContain('inventory');
   });
 
-  it('shows purchases and suppliers for store admins but not employees', () => {
+  it('keeps purchases and suppliers off the sidebar for store admins and employees', () => {
     const adminKeys = navItemsForUser(TEST_ADMIN).map((item) => item.key);
     const employeeKeys = navItemsForUser(TEST_EMPLOYEE).map((item) => item.key);
-    expect(adminKeys).toContain('purchases');
-    expect(adminKeys).toContain('suppliers');
+    expect(adminKeys).not.toContain('purchases');
+    expect(adminKeys).not.toContain('suppliers');
     expect(employeeKeys).not.toContain('purchases');
     expect(employeeKeys).not.toContain('suppliers');
   });
 
-  it('shows debts for admins and sellers', () => {
-    expect(navItemsForUser(TEST_ADMIN).map((item) => item.key)).toContain('debts');
-    expect(navItemsForUser(TEST_EMPLOYEE).map((item) => item.key)).toContain('debts');
+  it('keeps debts off the business sidebar for admins and sellers', () => {
+    expect(navItemsForUser(TEST_ADMIN).map((item) => item.key)).not.toContain('debts');
+    expect(navItemsForUser(TEST_EMPLOYEE).map((item) => item.key)).not.toContain('debts');
   });
 
-  it('shows audit for store admins but not employees', () => {
-    expect(navItemsForUser(TEST_ADMIN).map((item) => item.key)).toContain('audit');
+  it('keeps audit inside Profil matching paths for store admins', () => {
+    expect(navItemsForUser(TEST_ADMIN).map((item) => item.key)).toContain('settings');
+    expect(navItemsForUser(TEST_ADMIN).map((item) => item.key)).not.toContain('audit');
+    expect(navItemForPath(ROUTES.audit)?.labelKey).toBe('nav.profile');
     expect(navItemsForUser(TEST_EMPLOYEE).map((item) => item.key)).not.toContain('audit');
+    expect(navItemsForUser(TEST_EMPLOYEE).map((item) => item.key)).not.toContain('settings');
   });
 
   it('shows pending accounts only for platform admins', () => {
@@ -152,8 +179,10 @@ describe('navItemsForUser', () => {
     expect(navItemsForUser(TEST_EMPLOYEE).map((item) => item.key)).not.toContain('platform-accounts');
   });
 
-  it('shows billing for store admins', () => {
-    expect(navItemsForUser(TEST_ADMIN).map((item) => item.key)).toContain('billing');
+  it('shows Profil (settings) for store admins instead of a separate Tariflar item', () => {
+    expect(navItemsForUser(TEST_ADMIN).map((item) => item.key)).toContain('settings');
+    expect(navItemsForUser(TEST_ADMIN).map((item) => item.key)).not.toContain('billing');
+    expect(navItemForPath(ROUTES.billing)?.labelKey).toBe('nav.profile');
   });
 
   it('hides START-only modules from a restricted trial snapshot', () => {
@@ -176,10 +205,12 @@ describe('navItemsForUser', () => {
     };
     const keys = navItemsForUser(trialAdmin).map((item) => item.key);
     expect(keys).toContain('sales');
-    expect(keys).toContain('billing');
+    expect(keys).toContain('settings');
+    expect(keys).not.toContain('billing');
     expect(keys).not.toContain('inventory');
     expect(keys).not.toContain('workers');
     expect(keys).not.toContain('purchases');
+    expect(keys).not.toContain('expenses');
   });
 
   it('gives PLATFORM_ADMIN the platform tree and hides store ERP modules', () => {
@@ -191,6 +222,8 @@ describe('navItemsForUser', () => {
       'platform-onboarding',
       'platform-finance',
       'platform-referral',
+      'platform-usage',
+      'platform-telegram',
       'platform-settings',
     ]);
     expect(keys).not.toContain('sales');
@@ -341,6 +374,7 @@ describe('navItemForPath', () => {
     expect(navItemForPath(ROUTES.personalAnalytics)?.key).toBe('personal-finance');
     expect(navItemForPath(ROUTES.personalRecurring)?.key).toBe('personal-finance');
     expect(navItemForPath(ROUTES.personalDebts)?.key).toBe('personal-finance');
+    expect(navItemForPath(ROUTES.personalRanking)?.key).toBe('personal-home');
     expect(navItemForPath(ROUTES.personalProfile)?.key).toBe('personal-profile');
     expect(navItemForPath(ROUTES.personalSettings)?.key).toBe('personal-profile');
     expect(navItemForPath(ROUTES.personalBilling)?.key).toBe('personal-profile');

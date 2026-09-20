@@ -1,4 +1,4 @@
-import type { GrowthFriendshipDto } from '@furniture-erp/shared';
+import type { GrowthFriendPresenceDto, GrowthFriendshipDto } from '@furniture-erp/shared';
 import { UserPlus, Users } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { useCurrentUser } from '@/features/auth/hooks/use-auth';
 import { ApiClientError } from '@/lib/api-client';
 import { ROUTES } from '@/routes/paths';
+import { formatRelativeTime } from '@/utils/format';
 
 import {
   useAcceptFriend,
@@ -211,6 +212,7 @@ function FriendRow({ row, canWrite }: { row: GrowthFriendshipDto; canWrite: bool
           {row.friend.handle ? `@${row.friend.handle}` : ''}
           {row.friend.level != null ? ` · Lv ${row.friend.level}` : ''}
         </p>
+        <FriendPresence presence={row.friend.presence} />
       </div>
       {canWrite ? (
         <button
@@ -276,4 +278,23 @@ function OutgoingRow({ row, canWrite }: { row: GrowthFriendshipDto; canWrite: bo
       ) : null}
     </li>
   );
+}
+
+function FriendPresence({ presence }: { presence?: GrowthFriendPresenceDto }) {
+  const { t } = useTranslation();
+  if (!presence || (presence.online == null && !presence.lastSeenAt)) return null;
+  if (presence.online === true) {
+    return <p className="text-[11px] text-emerald-700">{t('personal.presenceOnline')}</p>;
+  }
+  if (presence.online === false) {
+    return (
+      <p className="text-[11px] text-ink-subtle">
+        {t('personal.presenceOffline')}
+        {presence.lastSeenAt
+          ? ` · ${t('personal.presenceLastSeen', { time: formatRelativeTime(presence.lastSeenAt) })}`
+          : ''}
+      </p>
+    );
+  }
+  return null;
 }

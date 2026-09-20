@@ -22,9 +22,14 @@ const searchQuerySchema = z.object({
   q: z.string().trim().min(1).max(120).optional(),
 });
 
-const sendRequestBodySchema = z.object({
-  query: z.string().trim().min(2).max(120),
-});
+const sendRequestBodySchema = z
+  .object({
+    query: z.string().trim().min(2).max(120).optional(),
+    identityId: z.string().trim().min(1).max(64).optional(),
+  })
+  .refine((body) => Boolean(body.identityId) || Boolean(body.query), {
+    message: 'query yoki identityId kerak',
+  });
 
 const privacyBodySchema = z
   .object({
@@ -33,6 +38,9 @@ const privacyBodySchema = z
     showLevel: z.boolean().optional(),
     showActivity: z.boolean().optional(),
     allowFriendRequests: z.boolean().optional(),
+    onlineStatusVisibility: z.enum(['EVERYONE', 'FRIENDS', 'NOBODY']).optional(),
+    lastSeenVisibility: z.enum(['EVERYONE', 'FRIENDS', 'NOBODY']).optional(),
+    showInGlobalRanking: z.boolean().optional(),
   })
   .refine(
     (body) =>
@@ -40,7 +48,10 @@ const privacyBodySchema = z
       body.bio !== undefined ||
       body.showLevel !== undefined ||
       body.showActivity !== undefined ||
-      body.allowFriendRequests !== undefined,
+      body.allowFriendRequests !== undefined ||
+      body.onlineStatusVisibility !== undefined ||
+      body.lastSeenVisibility !== undefined ||
+      body.showInGlobalRanking !== undefined,
     { message: 'At least one field is required' },
   );
 

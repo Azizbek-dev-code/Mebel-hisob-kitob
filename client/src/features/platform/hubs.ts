@@ -90,6 +90,30 @@ export const PLATFORM_REFERRAL_HUB: PlatformHub = {
   ],
 };
 
+export const PLATFORM_TELEGRAM_HUB: PlatformHub = {
+  ariaLabelKey: 'platformAdmin.hub.telegramAria',
+  tabs: [
+    { to: ROUTES.platformTelegram, labelKey: 'platformAdmin.hub.overview', end: true },
+    { to: ROUTES.platformTelegramBot, labelKey: 'platformAdmin.hub.bot', end: true },
+    { to: ROUTES.platformTelegramStart, labelKey: 'platformAdmin.hub.startMessage', end: true },
+    { to: ROUTES.platformTelegramMenu, labelKey: 'platformAdmin.hub.menu', end: true },
+    { to: ROUTES.platformTelegramBroadcast, labelKey: 'platformAdmin.hub.broadcast', end: true },
+    { to: ROUTES.platformTelegramAutomations, labelKey: 'platformAdmin.hub.automations', end: true },
+    { to: ROUTES.platformTelegramStats, labelKey: 'platformAdmin.hub.stats', end: true },
+  ],
+};
+
+export const PLATFORM_USAGE_HUB: PlatformHub = {
+  ariaLabelKey: 'platformAdmin.hub.usageAria',
+  tabs: [
+    { to: ROUTES.platformUsage, labelKey: 'platformAdmin.hub.overview', end: true },
+    { to: ROUTES.platformUsageUsers, labelKey: 'platformAdmin.hub.users', matchPrefix: [ROUTES.platformUsageUsers] },
+    { to: ROUTES.platformUsageSessions, labelKey: 'platformAdmin.usage.sessions', end: true },
+    { to: ROUTES.platformUsageFeatures, labelKey: 'platformAdmin.usage.features', end: true },
+    { to: ROUTES.platformUsageRetention, labelKey: 'platformAdmin.usage.retention', end: true },
+  ],
+};
+
 export const PLATFORM_SETTINGS_HUB: PlatformHub = {
   ariaLabelKey: 'platformAdmin.hub.settingsAria',
   tabs: [
@@ -141,6 +165,14 @@ const HUBS: readonly { prefixes: readonly string[]; hub: PlatformHub }[] = [
       ROUTES.platformReferralSettings,
     ],
     hub: PLATFORM_REFERRAL_HUB,
+  },
+  {
+    prefixes: [ROUTES.platformTelegram],
+    hub: PLATFORM_TELEGRAM_HUB,
+  },
+  {
+    prefixes: [ROUTES.platformUsage],
+    hub: PLATFORM_USAGE_HUB,
   },
   {
     prefixes: [ROUTES.platformSettings, ROUTES.platformAccountDeletions],

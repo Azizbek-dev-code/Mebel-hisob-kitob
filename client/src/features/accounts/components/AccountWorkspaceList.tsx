@@ -88,6 +88,7 @@ export function AccountWorkspaceList({ onPicked }: { onPicked?: () => void }) {
       <Link
         role="menuitem"
         to={ROUTES.onboarding}
+        data-testid="add-account"
         onClick={onPicked}
         className="flex w-full items-center gap-2.5 rounded-input px-2.5 py-2 text-sm text-ink hover:bg-surface-hover"
       >
@@ -96,7 +97,6 @@ export function AccountWorkspaceList({ onPicked }: { onPicked?: () => void }) {
         </span>
         <span className="min-w-0">
           <span className="block font-medium">{t('personal.addAccount')}</span>
-          <span className="block text-xs text-ink-muted">{t('personal.addAccountHint')}</span>
         </span>
       </Link>
     </div>

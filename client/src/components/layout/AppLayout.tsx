@@ -12,6 +12,7 @@ import { useSubscription } from '@/features/subscription/subscription-context';
 import { useCurrentUser } from '@/features/auth/hooks/use-auth';
 import { featureForNavKey } from '@furniture-erp/shared';
 import { navItemForPath } from '@/routes/navigation';
+import { PresenceTracker } from '@/features/presence/PresenceTracker';
 
 function FeatureGatedOutlet() {
   const { pathname } = useLocation();
@@ -63,6 +64,7 @@ export function AppLayout() {
         </main>
       </div>
       </div>
+      <PresenceTracker />
     </SubscriptionProvider>
   );
 }

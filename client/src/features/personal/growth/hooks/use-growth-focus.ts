@@ -5,6 +5,7 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { personalGrowthFocusService } from '@/services/personal-growth-focus.service';
+import { personalGrowthHabitsKeys } from '@/features/personal/growth/hooks/use-growth-habits';
 import { personalGrowthTodoKeys } from '@/features/personal/growth/hooks/use-growth-todos';
 
 export const personalGrowthFocusKeys = {
@@ -16,6 +17,7 @@ export const personalGrowthFocusKeys = {
 function invalidateFocus(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: personalGrowthFocusKeys.all });
   void queryClient.invalidateQueries({ queryKey: personalGrowthTodoKeys.all });
+  void queryClient.invalidateQueries({ queryKey: personalGrowthHabitsKeys.all });
   void queryClient.invalidateQueries({ queryKey: ['personal'] });
 }
 

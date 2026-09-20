@@ -169,15 +169,17 @@ export async function getReportsCashFlow(input: AnalyticsPeriodInput): Promise<R
   const to = new Date(financial.period.toInstant);
   const storeId = input.storeId;
 
-  const [byMethod, workerPayments, supplierPayments] = await Promise.all([
+  const [byMethod, workerPayments, supplierPayments, workerPaymentExpenses] = await Promise.all([
     reportsRepository.groupPaymentsByMethod(storeId, from, to),
     reportsRepository.sumWorkerPayments(storeId, from, to),
     purchasingRepository.sumSupplierPaymentsInPeriod(storeId, from, to),
+    reportsRepository.sumWorkerPaymentExpenses(storeId, from, to),
   ]);
 
   const inflowTotal = byMethod.reduce((sum, row) => sum + row.amount, 0);
   const operatingExpenses = financial.metrics.operatingExpenses;
-  const outflowTotal = operatingExpenses + workerPayments + supplierPayments;
+  const unlinkedWorkerPayments = Math.max(0, workerPayments - workerPaymentExpenses);
+  const outflowTotal = operatingExpenses + unlinkedWorkerPayments + supplierPayments;
 
   return {
     period: financial.period,
@@ -198,7 +200,7 @@ export async function getReportsCashFlow(input: AnalyticsPeriodInput): Promise<R
     notes: [
       "Ochilish/yopilish kassa qoldig'i modelda yo'q — faqat davr oqimi.",
       "Kirim: to'lovlar (paidAt), faqat faol/yakunlangan sotuvlar.",
-      "Chiqim: ACTIVE xarajatlar + ishchi PAYMENT + yetkazib beruvchi to'lovlari.",
+      "Chiqim: ACTIVE xarajatlar + ishchi PAYMENT (xarajatga bog‘lanmagan qoldiq) + yetkazib beruvchi to‘lovlari.",
       'Komissiya (COMMISSION) naqd chiqim emas — alohida hisoblanadi.',
       "Xarid (purchase) opex emas — faqat SupplierPayment naqd chiqim hisoblanadi.",
     ],

@@ -3,8 +3,10 @@ import {
   GrowthFocusKind,
   GrowthTodoStatus,
   PersonalEntryType,
+  GrowthXpSource,
   WorkspaceStatus,
   WorkspaceType,
+  XP_FINANCE_REVIEW,
   currentWeekStart,
   currentYearMonth,
   isValidDayKey,
@@ -25,6 +27,8 @@ import type { PrismaClient } from '@prisma/client';
 
 import { prisma as defaultPrisma } from '../../../lib/prisma.js';
 import { ApiError } from '../../../utils/api-error.js';
+
+import { tryAwardXp } from './personal-growth-xp.service.js';
 
 type DbClient = {
   workspace: PrismaClient['workspace'];
@@ -265,6 +269,15 @@ export async function upsertWeeklyReview(
     },
   });
 
+  await tryAwardXp({
+    workspaceId,
+    identityId,
+    source: GrowthXpSource.FINANCE_DISCIPLINE,
+    sourceEntityId: `finance-review-week:${startKey}`,
+    amount: XP_FINANCE_REVIEW,
+    summary: 'Weekly review',
+  });
+
   return getWeeklyReview(workspaceId, identityId, startKey, db, now);
 }
 
@@ -330,6 +343,15 @@ export async function upsertMonthlyReport(
         ? { nextMonthIntent: clipText(body.nextMonthIntent) }
         : {}),
     },
+  });
+
+  await tryAwardXp({
+    workspaceId,
+    identityId,
+    source: GrowthXpSource.FINANCE_DISCIPLINE,
+    sourceEntityId: `finance-review-month:${ym}`,
+    amount: XP_FINANCE_REVIEW,
+    summary: 'Monthly review',
   });
 
   return getMonthlyReport(workspaceId, identityId, ym, db, now);

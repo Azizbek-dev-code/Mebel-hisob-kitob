@@ -31,6 +31,31 @@ export function mockApi(routes: MockApiRoutes): ReturnType<typeof vi.fn> {
       .sort((a, b) => b[0].length - a[0].length)[0];
 
     if (!match) {
+      // Business header bell always polls store notifications. Tests that do not
+      // exercise that inbox still render AppLayout, so an empty default keeps
+      // the fetch contract without leaking Personal `/personal/notifications`.
+      if (url.includes('/notifications') && !url.includes('/personal/')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              success: true,
+              data: { items: [], prefs: {}, unreadCount: 0 },
+            }),
+        } as Response);
+      }
+      if (url.includes('/presence/')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              success: true,
+              data: { online: false, lastSeenAt: new Date().toISOString(), stored: 0 },
+            }),
+        } as Response);
+      }
       return Promise.reject(new Error(`Unhandled request in test: ${url}`));
     }
 

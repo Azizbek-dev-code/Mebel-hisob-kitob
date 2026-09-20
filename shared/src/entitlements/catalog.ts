@@ -344,6 +344,7 @@ export const NAV_FEATURE_MAP: Record<string, FeatureKey | null> = {
   reports: FeatureKey.REPORTS,
   analytics: FeatureKey.ANALYTICS,
   audit: FeatureKey.AUDIT,
+  notifications: null,
 };
 
 /** The plan feature a nav/module key needs, or null when it is always open. */

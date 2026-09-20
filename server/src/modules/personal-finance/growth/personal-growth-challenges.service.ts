@@ -4,7 +4,6 @@ import {
   GrowthChallengeParticipantStatus,
   GrowthChallengeStatus,
   GrowthFocusKind,
-  GrowthFocusStatus,
   GrowthFriendshipStatus,
   GrowthNotificationKind,
   GrowthTodoStatus,
@@ -17,7 +16,9 @@ import {
   groupTargetReached,
   isValidChallengeDuration,
   isValidTargetValue,
+  parseStringIdList,
   pickFightWinner,
+  serializeStringIdList,
   type CreateGrowthChallengeRequest,
   type GrowthChallengeDto,
   type GrowthChallengeParticipantDto,
@@ -118,6 +119,8 @@ function toDto(row: ChallengeRow, me: string): GrowthChallengeDto {
     myStatus: (mine?.status as GrowthChallengeParticipantDto['status']) ?? null,
     groupScore: accepted.reduce((sum, p) => sum + p.score, 0),
     participants,
+    todoIds: parseStringIdList(row.todoIds),
+    dailyTargetMinutes: row.dailyTargetMinutes,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -193,6 +196,7 @@ async function scoreForIdentity(
   startAt: Date,
   endAt: Date,
   db: DbClient,
+  options: { todoIds?: string[] } = {},
 ): Promise<number> {
   const workspaceId = await personalWorkspaceId(identityId, db);
   if (!workspaceId) return 0;
@@ -217,6 +221,7 @@ async function scoreForIdentity(
         workspaceId,
         status: GrowthTodoStatus.DONE,
         completedAt: { gte: startAt, lte: endAt },
+        ...(options.todoIds?.length ? { id: { in: options.todoIds } } : {}),
       },
     });
   }
@@ -268,6 +273,7 @@ async function refreshScores(
       row.startAt,
       endBound,
       db,
+      { todoIds: parseStringIdList(row.todoIds) },
     );
     if (score !== participant.score) {
       await db.growthChallengeParticipant.update({
@@ -444,6 +450,28 @@ async function loadOwned(
   return row;
 }
 
+async function withTodayScore(
+  dto: GrowthChallengeDto,
+  identityId: string,
+  db: DbClient,
+  now: Date,
+): Promise<GrowthChallengeDto> {
+  if (dto.status !== GrowthChallengeStatus.ACTIVE || !dto.startAt) {
+    return { ...dto, todayScore: 0 };
+  }
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+  const windowStart = start < new Date(dto.startAt) ? new Date(dto.startAt) : start;
+  const todayScore = await scoreForIdentity(
+    identityId,
+    dto.metric,
+    windowStart,
+    now,
+    db,
+    { todoIds: dto.todoIds },
+  );
+  return { ...dto, todayScore };
+}
+
 export async function listChallenges(
   workspaceId: string,
   identityId: string,
@@ -467,7 +495,7 @@ export async function listChallenges(
   for (let row of rows) {
     row = await maybeActivatePending(row, db, now);
     row = await maybeComplete(row, db, now);
-    const dto = toDto(row, identityId);
+    const dto = await withTodayScore(toDto(row, identityId), identityId, db, now);
     const mine = row.participants.find((p) => p.identityId === identityId);
     if (!mine) continue;
 
@@ -507,7 +535,7 @@ export async function getChallenge(
   let row = await loadOwned(challengeId, identityId, db);
   row = await maybeActivatePending(row, db, now);
   row = await maybeComplete(row, db, now);
-  return toDto(row, identityId);
+  return withTodayScore(toDto(row, identityId), identityId, db, now);
 }
 
 export async function createChallenge(
@@ -527,8 +555,8 @@ export async function createChallenge(
   if (!expectedInviteeCount(body.kind, body.inviteeIds.length)) {
     throw ApiError.badRequest(
       body.kind === GrowthChallengeKind.FIGHT
-        ? 'Fight uchun bitta raqib kerak'
-        : 'Group challenge 3–10 ishtirokchi',
+        ? 'Musobaqa uchun bitta raqib kerak'
+        : 'Guruh musobaqasi 3–10 ishtirokchi',
     );
   }
   if (!isValidTargetValue(body.kind, body.metric, body.targetValue ?? null)) {
@@ -555,6 +583,11 @@ export async function createChallenge(
       status: GrowthChallengeStatus.PENDING,
       createdById: identityId,
       rewardXp,
+      todoIds: serializeStringIdList(body.todoIds),
+      dailyTargetMinutes:
+        body.metric === GrowthChallengeMetric.LEARNING_MINUTES
+          ? Math.max(1, Math.min(240, body.dailyTargetMinutes ?? 30))
+          : null,
       participants: {
         create: [
           {
@@ -590,8 +623,8 @@ export async function createChallenge(
         title: title,
         body:
           body.kind === GrowthChallengeKind.FIGHT
-            ? 'Sizni fightga taklif qilishdi'
-            : 'Sizni group challengega taklif qilishdi',
+            ? 'Sizni musobaqaga taklif qilishdi'
+            : 'Sizni guruh musobaqasiga taklif qilishdi',
         href: '/personal/growth/challenges',
         entityType: 'GROWTH_CHALLENGE',
         entityId: created.id,

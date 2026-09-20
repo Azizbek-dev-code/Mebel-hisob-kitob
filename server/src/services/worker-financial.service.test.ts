@@ -25,6 +25,16 @@ const { prismaMock } = vi.hoisted(() => ({
       groupBy: vi.fn(),
       deleteMany: vi.fn(),
     },
+    expense: {
+      findFirst: vi.fn(),
+      create: vi.fn(),
+      updateMany: vi.fn(),
+    },
+    expenseCategory: {
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+      createMany: vi.fn(),
+    },
     $transaction: vi.fn(),
   },
 }));
@@ -94,6 +104,16 @@ beforeEach(() => {
     },
   ]);
   prismaMock.workerFinancialTransaction.findMany.mockResolvedValue([]);
+  prismaMock.expense.findFirst.mockResolvedValue(null);
+  prismaMock.expense.create.mockResolvedValue({ id: 'exp_pay_1' });
+  prismaMock.expense.updateMany.mockResolvedValue({ count: 1 });
+  prismaMock.expenseCategory.findFirst.mockResolvedValue({
+    id: 'cat_salary',
+    key: 'SALARY',
+    isActive: true,
+  });
+  prismaMock.expenseCategory.findMany.mockResolvedValue([{ name: 'Ish haqi', key: 'SALARY' }]);
+  prismaMock.expenseCategory.createMany.mockResolvedValue({ count: 0 });
   prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
     fn(prismaMock),
   );
@@ -127,6 +147,9 @@ describe('worker-financial.service createTransaction', () => {
     expect(transaction.type).toBe(type);
     expect(transaction.amount).toBe(amount);
     expect(transaction.description).toBe(description);
+    if (type === WorkerFinancialTransactionType.PAYMENT) {
+      expect(prismaMock.expense.create).toHaveBeenCalled();
+    }
   });
 
   it('blocks PAYMENT that exceeds earned', async () => {

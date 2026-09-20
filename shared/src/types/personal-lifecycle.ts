@@ -139,6 +139,7 @@ export interface PersonalNotificationDto {
 export interface PersonalNotificationListResponse {
   items: PersonalNotificationDto[];
   prefs: PersonalNotificationPrefs;
+  unreadCount: number;
 }
 
 export interface UpdatePersonalNotificationPrefsRequest {

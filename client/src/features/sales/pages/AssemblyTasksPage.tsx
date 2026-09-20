@@ -1,4 +1,4 @@
-import { AssemblyTaskStatus } from '@furniture-erp/shared';
+import { AssemblyTaskStatus, UserRole } from '@furniture-erp/shared';
 import { CheckCircle2, Loader2, Wrench } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -9,6 +9,7 @@ import { PageContainer } from '@/components/layout/PageContainer';
 import { Badge } from '@/components/ui/Badge';
 import { SectionCard } from '@/components/ui/SectionCard';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { useCurrentUser } from '@/features/auth/hooks/use-auth';
 import { ROUTES } from '@/routes/paths';
 import { formatDate, formatDateTime } from '@/utils/format';
 import {
@@ -21,33 +22,30 @@ import { useMyAssemblyTasks, useUpdateAssemblyTask } from '../hooks/use-sales';
 
 type TaskFilter = 'ALL' | 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
 
-/**
- * Worker inbox for assembly assignments (terlash).
- * Shows only tasks assigned to the signed-in worker.
- */
 export function AssemblyTasksPage() {
+  const { data: user } = useCurrentUser();
   const [filter, setFilter] = useState<TaskFilter>('ALL');
-  const status =
-    filter === 'ALL' ? undefined : (filter as typeof AssemblyTaskStatus.PENDING);
+  const status = filter === 'ALL' ? undefined : (filter as typeof AssemblyTaskStatus.PENDING);
   const tasks = useMyAssemblyTasks(status);
   const updateTask = useUpdateAssemblyTask();
+  const isAdmin = user?.role === UserRole.ADMIN || user?.role === UserRole.PLATFORM_ADMIN;
 
   return (
     <PageContainer className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold tracking-tight text-ink">My assembly tasks</h2>
+        <h2 className="text-2xl font-semibold tracking-tight text-ink">Terlash</h2>
         <p className="mt-1 text-sm text-ink-muted">
-          Furniture assigned to you for assembly (terlash).
+          Do‘kon bo‘yicha barcha terlash vazifalari. Har bir kartada mas’ul ishchi ko‘rinadi.
         </p>
       </div>
 
       <div className="flex flex-wrap gap-2">
         {(
           [
-            ['ALL', 'All'],
-            ['PENDING', 'Pending'],
-            ['IN_PROGRESS', 'In progress'],
-            ['COMPLETED', 'Completed'],
+            ['ALL', 'Barchasi'],
+            ['PENDING', 'Kutilmoqda'],
+            ['IN_PROGRESS', 'Jarayonda'],
+            ['COMPLETED', 'Yakunlangan'],
           ] as const
         ).map(([value, label]) => (
           <button
@@ -67,8 +65,8 @@ export function AssemblyTasksPage() {
 
       {tasks.isError ? (
         <ErrorState
-          title="Could not load tasks"
-          message={tasks.error instanceof Error ? tasks.error.message : 'Try again.'}
+          title="Vazifalarni yuklab bo‘lmadi"
+          message={tasks.error instanceof Error ? tasks.error.message : 'Qayta urinib ko‘ring.'}
           onRetry={() => void tasks.refetch()}
         />
       ) : null}
@@ -84,8 +82,8 @@ export function AssemblyTasksPage() {
       {tasks.data && tasks.data.length === 0 ? (
         <EmptyState
           icon={Wrench}
-          title="No assembly tasks"
-          description="When a seller assigns furniture to you, it will appear here."
+          title="Terlash vazifasi yo‘q"
+          description="Sotuvga usta biriktirilganda vazifa shu yerda chiqadi."
         />
       ) : null}
 
@@ -95,11 +93,12 @@ export function AssemblyTasksPage() {
             const isOpen =
               task.status === AssemblyTaskStatus.PENDING ||
               task.status === AssemblyTaskStatus.IN_PROGRESS;
+            const canAct = Boolean(isAdmin || (user && task.assignee.id === user.id));
 
             return (
               <SectionCard
                 key={task.id}
-                title={`${formatSaleNumber(task.saleNumber)} · ${task.productSummary}`}
+                title={`${task.assignee.fullName} — ${task.productSummary}`}
                 action={
                   <Badge tone={assemblyStatusTone(task.status)}>
                     {assemblyStatusLabel(task.status)}
@@ -108,28 +107,32 @@ export function AssemblyTasksPage() {
               >
                 <dl className="grid gap-2 text-sm sm:grid-cols-2">
                   <div>
-                    <dt className="text-ink-muted">Customer</dt>
+                    <dt className="text-ink-muted">Mas'ul</dt>
+                    <dd className="text-ink">{task.assignee.fullName}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-ink-muted">Mijoz</dt>
                     <dd className="text-ink">{task.customerName}</dd>
                   </div>
                   <div>
-                    <dt className="text-ink-muted">Assigned</dt>
+                    <dt className="text-ink-muted">Biriktirilgan</dt>
                     <dd className="text-ink">{formatDate(task.assignedAt)}</dd>
                   </div>
                   <div>
-                    <dt className="text-ink-muted">Deadline</dt>
+                    <dt className="text-ink-muted">Muddat</dt>
                     <dd className="text-ink">
                       {task.deadline ? formatDate(task.deadline) : '—'}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-ink-muted">Completed</dt>
+                    <dt className="text-ink-muted">Yakunlangan</dt>
                     <dd className="text-ink">
                       {task.completedAt ? formatDateTime(task.completedAt) : '—'}
                     </dd>
                   </div>
                   {task.notes ? (
                     <div className="sm:col-span-2">
-                      <dt className="text-ink-muted">Notes</dt>
+                      <dt className="text-ink-muted">Izoh</dt>
                       <dd className="text-ink">{task.notes}</dd>
                     </div>
                   ) : null}
@@ -140,10 +143,10 @@ export function AssemblyTasksPage() {
                     to={ROUTES.saleDetail(task.saleId)}
                     className="rounded-input border border-line px-3 py-2 text-sm text-ink-soft hover:bg-surface-hover"
                   >
-                    View sale
+                    Sotuvni ko‘rish
                   </Link>
 
-                  {task.status === AssemblyTaskStatus.PENDING ? (
+                  {canAct && task.status === AssemblyTaskStatus.PENDING ? (
                     <button
                       type="button"
                       disabled={updateTask.isPending}
@@ -155,11 +158,11 @@ export function AssemblyTasksPage() {
                       }
                       className="rounded-input border border-line px-3 py-2 text-sm text-ink hover:bg-surface-hover disabled:opacity-60"
                     >
-                      Start
+                      Boshlash
                     </button>
                   ) : null}
 
-                  {isOpen ? (
+                  {canAct && isOpen ? (
                     <button
                       type="button"
                       disabled={updateTask.isPending}
@@ -176,7 +179,7 @@ export function AssemblyTasksPage() {
                       ) : (
                         <CheckCircle2 className="size-4" />
                       )}
-                      Complete
+                      Yakunlash
                     </button>
                   ) : null}
                 </div>

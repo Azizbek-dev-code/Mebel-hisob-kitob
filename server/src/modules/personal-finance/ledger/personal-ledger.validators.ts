@@ -42,16 +42,31 @@ export const createPersonalCategoryBodySchema = z.object({
   kind: z.nativeEnum(PersonalCategoryKind),
   name: z.string().trim().min(2).max(80),
   color: z.string().trim().min(2).max(40).optional(),
+  icon: z.string().trim().min(1).max(16).optional(),
+  iconName: z.string().trim().min(1).max(64).regex(/^[A-Za-z][A-Za-z0-9]*$/).nullable().optional(),
+  iconColor: z.string().trim().regex(/^#[0-9A-Fa-f]{6}$/).nullable().optional(),
+  parentId: cuidSchema.nullable().optional(),
 });
 
 export const updatePersonalCategoryBodySchema = z
   .object({
     name: z.string().trim().min(2).max(80).optional(),
     color: z.string().trim().min(2).max(40).optional(),
+    icon: z.string().trim().min(1).max(16).optional(),
+    iconName: z.string().trim().min(1).max(64).regex(/^[A-Za-z][A-Za-z0-9]*$/).nullable().optional(),
+    iconColor: z.string().trim().regex(/^#[0-9A-Fa-f]{6}$/).nullable().optional(),
+    parentId: cuidSchema.nullable().optional(),
     isActive: z.boolean().optional(),
   })
   .refine(
-    (body) => body.name !== undefined || body.color !== undefined || body.isActive !== undefined,
+    (body) =>
+      body.name !== undefined ||
+      body.color !== undefined ||
+      body.icon !== undefined ||
+      body.iconName !== undefined ||
+      body.iconColor !== undefined ||
+      body.parentId !== undefined ||
+      body.isActive !== undefined,
     { message: 'At least one field is required' },
   );
 

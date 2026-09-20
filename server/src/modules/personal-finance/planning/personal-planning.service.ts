@@ -10,6 +10,7 @@ import {
   WorkspaceStatus,
   WorkspaceType,
   XP_FINANCE_CONTRIBUTION,
+  XP_FINANCE_BUDGET,
   budgetProgress,
   projectGoal,
   toDayKey,
@@ -269,6 +270,14 @@ export async function createPersonalBudget(
       entityId: row.id,
       summary: `Personal budget created: ${row.name}`,
       metadata: { workspaceId, identityId, kind: row.kind },
+    });
+    await tryAwardXp({
+      workspaceId,
+      identityId,
+      source: GrowthXpSource.FINANCE_DISCIPLINE,
+      sourceEntityId: `finance-budget:${row.id}`,
+      amount: XP_FINANCE_BUDGET,
+      summary: 'Budget created',
     });
     const spentSom = await monthSpentSom(workspaceId, categoryId, db);
     return toBudgetDto(row, spentSom, monthBounds());

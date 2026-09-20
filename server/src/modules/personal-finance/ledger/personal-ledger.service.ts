@@ -101,6 +101,7 @@ export async function ensurePersonalLedger(
         key: category.key,
         name: category.name,
         color: category.color,
+        icon: category.icon,
         sortOrder: index,
       })),
     });
@@ -141,6 +142,10 @@ function toCategoryDto(row: {
   key: string | null;
   name: string;
   color: string;
+  icon: string | null;
+  iconName?: string | null;
+  iconColor?: string | null;
+  parentId?: string | null;
   sortOrder: number;
   isActive: boolean;
 }): PersonalCategoryDto {
@@ -150,6 +155,10 @@ function toCategoryDto(row: {
     key: row.key,
     name: row.name,
     color: row.color,
+    icon: row.icon,
+    iconName: row.iconName ?? null,
+    iconColor: row.iconColor ?? null,
+    parentId: row.parentId ?? null,
     sortOrder: row.sortOrder,
     isActive: row.isActive,
   };
@@ -336,6 +345,28 @@ export async function listPersonalCategories(
   return rows.map(toCategoryDto);
 }
 
+async function resolveCategoryParentId(
+  workspaceId: string,
+  kind: PersonalCategoryKind,
+  parentId: string | null | undefined,
+  db: PrismaClient,
+  selfId?: string,
+): Promise<string | null> {
+  if (parentId == null || parentId === '') return null;
+  if (selfId && parentId === selfId) {
+    throw ApiError.badRequest('Kategoriya o‘zining ichida bo‘lmaydi');
+  }
+  const parent = await db.personalCategory.findFirst({
+    where: { id: parentId, workspaceId, kind },
+    select: { id: true, parentId: true },
+  });
+  if (!parent) throw ApiError.badRequest('Asosiy kategoriya topilmadi');
+  if (parent.parentId) {
+    throw ApiError.badRequest('Faqat bitta daraja: ichki kategoriyaga ichki qo‘shib bo‘lmaydi');
+  }
+  return parent.id;
+}
+
 export async function createPersonalCategory(
   workspaceId: string,
   input: CreatePersonalCategoryRequest,
@@ -349,12 +380,17 @@ export async function createPersonalCategory(
     ]);
   }
   try {
+    const parentId = await resolveCategoryParentId(workspaceId, input.kind, input.parentId, db);
     const row = await db.personalCategory.create({
       data: {
         workspaceId,
         kind: input.kind,
         name,
         color: input.color?.trim() || 'slate',
+        icon: input.icon?.trim() || null,
+        iconName: input.iconName?.trim() || null,
+        iconColor: input.iconColor?.trim() || null,
+        parentId,
       },
     });
     return toCategoryDto(row);
@@ -396,6 +432,19 @@ export async function updatePersonalCategory(
     data.name = name;
   }
   if (input.color !== undefined) data.color = input.color.trim() || existing.color;
+  if (input.icon !== undefined) data.icon = input.icon.trim() || null;
+  if (input.iconName !== undefined) data.iconName = input.iconName?.trim() || null;
+  if (input.iconColor !== undefined) data.iconColor = input.iconColor?.trim() || null;
+  if (input.parentId !== undefined) {
+    const parentId = await resolveCategoryParentId(
+      workspaceId,
+      existing.kind,
+      input.parentId,
+      db,
+      categoryId,
+    );
+    data.parent = parentId ? { connect: { id: parentId } } : { disconnect: true };
+  }
   if (input.isActive !== undefined) data.isActive = input.isActive;
 
   try {
@@ -528,6 +577,26 @@ export async function createPersonalEntry(
     dayKey,
   });
   await tryEvaluateAchievements(workspaceId, identityId).catch(() => undefined);
+
+  void import('../../telegram/telegram.delivery.js')
+    .then(async ({ tryDeliverTelegramNotification }) => {
+      const { formatMoney, PersonalEntryType } = await import('@furniture-erp/shared');
+      const isIncome = row.type === PersonalEntryType.INCOME;
+      return tryDeliverTelegramNotification(
+        identityId,
+        {
+          type: isIncome ? 'PERSONAL_INCOME' : 'PERSONAL_EXPENSE',
+          title: isIncome ? '💰 Yangi daromad' : '💸 Yangi xarajat',
+          message: formatMoney(input.amount),
+          accountType: 'PERSONAL',
+          accountId: workspaceId,
+          entityType: 'PERSONAL_ENTRY',
+          entityId: row.id,
+        },
+        isIncome ? undefined : 'personalNotifyBudget',
+      );
+    })
+    .catch(() => undefined);
 
   return toEntryDto(row);
 }

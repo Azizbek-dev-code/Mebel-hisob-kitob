@@ -12,6 +12,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useCurrentUser } from '@/features/auth/hooks/use-auth';
+import { useGrowthHabits } from '@/features/personal/growth/hooks/use-growth-habits';
 import { useGrowthTodos } from '@/features/personal/growth/hooks/use-growth-todos';
 import {
   useCompleteGrowthFocus,
@@ -35,16 +36,24 @@ export function PersonalGrowthFocusPage() {
   const canWrite = Boolean(user && 'subscription' in user && user.subscription?.canWrite);
   const [params] = useSearchParams();
   const presetTodoId = params.get('todoId');
+  const presetHabitId = params.get('habitId');
+  const presetMinutes = Number(params.get('minutes') ?? '');
 
   const statsQuery = useGrowthFocusStats();
   const todos = useGrowthTodos('OPEN');
+  const habits = useGrowthHabits();
   const start = useStartGrowthFocus();
   const complete = useCompleteGrowthFocus();
 
-  const [plannedMinutes, setPlannedMinutes] = useState(25);
+  const [plannedMinutes, setPlannedMinutes] = useState(
+    Number.isFinite(presetMinutes) && presetMinutes > 0 ? Math.min(90, presetMinutes) : 25,
+  );
   const [breakMinutes, setBreakMinutes] = useState(5);
   const [todoId, setTodoId] = useState<string>(presetTodoId ?? '');
-  const [customMinutes, setCustomMinutes] = useState('25');
+  const [habitId, setHabitId] = useState<string>(presetHabitId ?? '');
+  const [customMinutes, setCustomMinutes] = useState(
+    Number.isFinite(presetMinutes) && presetMinutes > 0 ? String(Math.min(90, presetMinutes)) : '25',
+  );
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(() => Date.now());
 
@@ -60,6 +69,12 @@ export function PersonalGrowthFocusPage() {
   useEffect(() => {
     if (presetTodoId) setTodoId(presetTodoId);
   }, [presetTodoId]);
+
+  useEffect(() => {
+    if (presetHabitId) setHabitId(presetHabitId);
+  }, [presetHabitId]);
+
+  const linkedHabit = habits.data?.items.find((item) => item.id === (active?.habitId ?? habitId));
 
   const remainingSeconds = useMemo(() => {
     if (!active) return plannedMinutes * 60;
@@ -82,6 +97,7 @@ export function PersonalGrowthFocusPage() {
         plannedMinutes: minutes,
         kind: kind === 'BREAK' ? GrowthFocusKind.BREAK : GrowthFocusKind.FOCUS,
         todoId: kind === 'FOCUS' && todoId ? todoId : null,
+        habitId: kind === 'FOCUS' && habitId ? habitId : null,
       });
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : t('personal.focusStartFailed'));
@@ -152,7 +168,9 @@ export function PersonalGrowthFocusPage() {
         <p className="mt-3 font-semibold tabular-nums tracking-tight text-ink text-5xl sm:text-6xl">
           {formatCountdown(remainingSeconds)}
         </p>
-        {active?.todoTitle ? (
+        {active?.habitTitle || linkedHabit?.title ? (
+          <p className="mt-3 text-sm text-ink-soft">{active?.habitTitle ?? linkedHabit?.title}</p>
+        ) : active?.todoTitle ? (
           <p className="mt-3 text-sm text-ink-soft">{active.todoTitle}</p>
         ) : null}
 

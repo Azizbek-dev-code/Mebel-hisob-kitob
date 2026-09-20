@@ -45,6 +45,10 @@ describe('PersonalGrowthChallengesPage', () => {
   it('shows active fight on 390px', async () => {
     mockApi({
       '/auth/me': { status: 200, body: { success: true, data: { user: PERSONAL } } },
+      '/personal/growth/todos': {
+        status: 200,
+        body: { success: true, data: { items: [] } },
+      },
       '/personal/growth/friends': {
         status: 200,
         body: {

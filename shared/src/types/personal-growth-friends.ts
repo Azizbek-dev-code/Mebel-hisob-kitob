@@ -1,13 +1,21 @@
-import type { GrowthFriendshipStatus } from '../constants/enums.js';
+import type { GrowthFriendshipStatus, PresenceVisibility } from '../constants/enums.js';
 import type { IsoDateString } from './api.js';
+
+export interface GrowthFriendPresenceDto {
+  /** Null when the viewer's privacy settings hide this. */
+  online: boolean | null;
+  lastSeenAt: IsoDateString | null;
+}
 
 export interface GrowthFriendPublicDto {
   identityId: string;
   fullName: string;
+  /** Always null on public/search payloads — never leak email. */
   email: string | null;
   handle: string | null;
   level: number | null;
   showActivity: boolean;
+  presence: GrowthFriendPresenceDto;
 }
 
 export interface GrowthFriendshipDto {
@@ -32,8 +40,10 @@ export interface GrowthFriendSearchResponse {
 }
 
 export interface SendFriendRequestBody {
-  /** Email or @handle (without requiring @). */
-  query: string;
+  /** Public @handle (without requiring @). Optional when identityId is set. */
+  query?: string;
+  /** Direct identity id from Global Reyting — never exposes email. */
+  identityId?: string;
 }
 
 export interface GrowthSocialPrivacyDto {
@@ -42,6 +52,9 @@ export interface GrowthSocialPrivacyDto {
   showLevel: boolean;
   showActivity: boolean;
   allowFriendRequests: boolean;
+  onlineStatusVisibility: PresenceVisibility;
+  lastSeenVisibility: PresenceVisibility;
+  showInGlobalRanking: boolean;
 }
 
 export interface UpdateGrowthSocialPrivacyRequest {
@@ -50,4 +63,7 @@ export interface UpdateGrowthSocialPrivacyRequest {
   showLevel?: boolean;
   showActivity?: boolean;
   allowFriendRequests?: boolean;
+  onlineStatusVisibility?: PresenceVisibility;
+  lastSeenVisibility?: PresenceVisibility;
+  showInGlobalRanking?: boolean;
 }

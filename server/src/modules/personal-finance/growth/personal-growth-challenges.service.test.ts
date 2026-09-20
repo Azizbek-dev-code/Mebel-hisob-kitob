@@ -147,6 +147,77 @@ describe('createChallenge', () => {
     expect(row.participants).toHaveLength(2);
     expect(recordAuditMock).toHaveBeenCalled();
   });
+
+  it('stores selected todos for a tasks metric', async () => {
+    prismaMock.growthChallenge.create.mockResolvedValue({
+      id: 'ch_tasks',
+      kind: GrowthChallengeKind.FIGHT,
+      title: 'Vazifalar',
+      metric: GrowthChallengeMetric.TASKS_COMPLETED,
+      targetValue: null,
+      durationDays: 7,
+      status: GrowthChallengeStatus.PENDING,
+      createdById: 'idn_me',
+      rewardXp: 50,
+      startAt: null,
+      endAt: null,
+      winnerId: null,
+      completedAt: null,
+      todoIds: '["todo_1","todo_2"]',
+      dailyTargetMinutes: null,
+      createdAt: NOW,
+      updatedAt: NOW,
+      participants: [
+        {
+          id: 'p1',
+          challengeId: 'ch_tasks',
+          identityId: 'idn_me',
+          status: GrowthChallengeParticipantStatus.ACCEPTED,
+          score: 0,
+          respondedAt: NOW,
+          createdAt: NOW,
+          updatedAt: NOW,
+          identity: ME,
+        },
+        {
+          id: 'p2',
+          challengeId: 'ch_tasks',
+          identityId: 'idn_other',
+          status: GrowthChallengeParticipantStatus.INVITED,
+          score: 0,
+          respondedAt: null,
+          createdAt: NOW,
+          updatedAt: NOW,
+          identity: OTHER,
+        },
+      ],
+    });
+
+    const row = await createChallenge(
+      'ws_1',
+      'idn_me',
+      {
+        kind: GrowthChallengeKind.FIGHT,
+        title: 'Vazifalar',
+        metric: GrowthChallengeMetric.TASKS_COMPLETED,
+        durationDays: 7,
+        inviteeIds: ['idn_other'],
+        todoIds: ['todo_1', 'todo_2'],
+      },
+      prismaMock as never,
+      NOW,
+    );
+
+    expect(row.todoIds).toEqual(['todo_1', 'todo_2']);
+    expect(prismaMock.growthChallenge.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          todoIds: '["todo_1","todo_2"]',
+          dailyTargetMinutes: null,
+        }),
+      }),
+    );
+  });
 });
 
 describe('acceptChallenge', () => {

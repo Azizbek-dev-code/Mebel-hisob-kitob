@@ -62,6 +62,7 @@ describe('PersonalGrowthFriendsPage', () => {
                   handle: 'jasur',
                   level: 4,
                   showActivity: true,
+                  presence: { online: true, lastSeenAt: '2026-09-21T12:00:00.000Z' },
                 },
                 createdAt: '2026-09-17T00:00:00.000Z',
                 respondedAt: '2026-09-17T00:00:00.000Z',
@@ -84,6 +85,9 @@ describe('PersonalGrowthFriendsPage', () => {
               showLevel: true,
               showActivity: true,
               allowFriendRequests: true,
+              onlineStatusVisibility: 'FRIENDS',
+              lastSeenVisibility: 'FRIENDS',
+              showInGlobalRanking: true,
             },
           },
         },
@@ -101,5 +105,6 @@ describe('PersonalGrowthFriendsPage', () => {
     expect(await screen.findByRole('heading', { name: 'Do‘stlar' })).toBeInTheDocument();
     expect(await screen.findByText('Jasur')).toBeInTheDocument();
     expect(screen.getByText(/@jasur/)).toBeInTheDocument();
+    expect(screen.getByText('Online')).toBeInTheDocument();
   });
 });

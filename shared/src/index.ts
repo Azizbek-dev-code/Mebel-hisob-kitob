@@ -13,6 +13,8 @@ export * from './personal-analytics/index.js';
 export * from './personal-lifecycle/index.js';
 export * from './personal-plan/index.js';
 export * from './personal-growth/index.js';
+export * from './presence/index.js';
+export * from './analytics/index.js';
 export * from './referral/index.js';
 export * from './types/index.js';
 export * from './utils/index.js';

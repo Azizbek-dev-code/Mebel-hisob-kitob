@@ -95,7 +95,7 @@ describe('PersonalGrowthLearningPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('heading', { name: 'O‘qish' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Taraqqiyot' })).toBeInTheDocument();
     expect(await screen.findByText('IELTS 7.0')).toBeInTheDocument();
     expect(screen.getByText('79%')).toBeInTheDocument();
     expect(screen.getByText('45m')).toBeInTheDocument();

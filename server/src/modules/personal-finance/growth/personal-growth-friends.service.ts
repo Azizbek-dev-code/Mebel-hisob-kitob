@@ -1,6 +1,7 @@
 import {
   GrowthFriendshipStatus,
   GrowthNotificationKind,
+  PresenceVisibility,
   WorkspaceStatus,
   WorkspaceType,
   friendshipPairKey,
@@ -19,6 +20,7 @@ import { prisma as defaultPrisma } from '../../../lib/prisma.js';
 import { recordAudit } from '../../../services/audit.service.js';
 import { ApiError } from '../../../utils/api-error.js';
 
+import { presenceDtoFor } from '../../presence/presence.service.js';
 import { tryEvaluateAchievements } from './personal-growth-achievements.service.js';
 import { tryEmitGrowthNotification } from './personal-growth-notifications.service.js';
 import { assertGrowthQuota } from './personal-growth-premium.service.js';
@@ -30,14 +32,25 @@ type DbClient = {
   growthSocialProfile: PrismaClient['growthSocialProfile'];
   growthProgress: PrismaClient['growthProgress'];
   workspaceMembership: PrismaClient['workspaceMembership'];
+  identityPresence: PrismaClient['identityPresence'];
+};
+
+type SocialBits = {
+  handle: string | null;
+  showLevel: boolean;
+  showActivity: boolean;
+  onlineStatusVisibility?: PresenceVisibility | null;
+  lastSeenVisibility?: PresenceVisibility | null;
 };
 
 type FriendshipRow = GrowthFriendship & {
   requester: Identity & {
-    socialProfile: { handle: string | null; showLevel: boolean; showActivity: boolean } | null;
+    socialProfile: SocialBits | null;
+    presence: { lastActivityAt: Date } | null;
   };
   addressee: Identity & {
-    socialProfile: { handle: string | null; showLevel: boolean; showActivity: boolean } | null;
+    socialProfile: SocialBits | null;
+    presence: { lastActivityAt: Date } | null;
   };
 };
 
@@ -79,21 +92,31 @@ async function levelForIdentity(
 
 async function toPublicDto(
   identity: Identity & {
-    socialProfile: { handle: string | null; showLevel: boolean; showActivity: boolean } | null;
+    socialProfile: SocialBits | null;
+    presence?: { lastActivityAt: Date } | null;
   },
-  viewerIsSelf: boolean,
+  viewerId: string,
+  viewerIsFriend: boolean,
   db: DbClient,
 ): Promise<GrowthFriendPublicDto> {
   const profile = identity.socialProfile;
+  const viewerIsSelf = viewerId === identity.id;
   const showLevel = viewerIsSelf || (profile?.showLevel ?? true);
   const showActivity = viewerIsSelf || (profile?.showActivity ?? true);
+  const presence = await presenceDtoFor(
+    viewerId,
+    { id: identity.id, socialProfile: profile },
+    identity.presence ?? null,
+    viewerIsFriend,
+  );
   return {
     identityId: identity.id,
     fullName: identity.fullName,
-    email: viewerIsSelf ? identity.email : null,
+    email: null,
     handle: profile?.handle ?? null,
     level: await levelForIdentity(identity.id, showLevel, db),
     showActivity,
+    presence,
   };
 }
 
@@ -101,21 +124,22 @@ async function toFriendshipDto(
   row: FriendshipRow,
   me: string,
   db: DbClient,
+  viewerIsFriend: boolean,
 ): Promise<GrowthFriendshipDto> {
   const other = row.requesterId === me ? row.addressee : row.requester;
   return {
     id: row.id,
     status: row.status as GrowthFriendshipDto['status'],
     iAmRequester: row.requesterId === me,
-    friend: await toPublicDto(other, false, db),
+    friend: await toPublicDto(other, me, viewerIsFriend, db),
     createdAt: row.createdAt.toISOString(),
     respondedAt: row.respondedAt ? row.respondedAt.toISOString() : null,
   };
 }
 
 const friendInclude = {
-  requester: { include: { socialProfile: true } },
-  addressee: { include: { socialProfile: true } },
+  requester: { include: { socialProfile: true, presence: true } },
+  addressee: { include: { socialProfile: true, presence: true } },
 } as const;
 
 export async function listFriends(
@@ -146,7 +170,7 @@ export async function listFriends(
 
   for (const row of rows) {
     if (row.status === GrowthFriendshipStatus.BLOCKED) continue;
-    const dto = await toFriendshipDto(row, identityId, db);
+    const dto = await toFriendshipDto(row, identityId, db, row.status === GrowthFriendshipStatus.ACCEPTED);
     if (row.status === GrowthFriendshipStatus.ACCEPTED) {
       friends.push(dto);
     } else if (row.status === GrowthFriendshipStatus.PENDING) {
@@ -177,21 +201,43 @@ export async function searchFriends(
     where: {
       id: { not: identityId },
       OR: [
-        { email: { equals: q, mode: 'insensitive' } },
         { fullName: { contains: q, mode: 'insensitive' } },
-        { socialProfile: { handle: { equals: q, mode: 'insensitive' } } },
+        { socialProfile: { handle: { contains: q, mode: 'insensitive' } } },
       ],
     },
-    include: { socialProfile: true },
+    include: { socialProfile: true, presence: true },
     take: 10,
   });
 
+  const blocked = await db.growthFriendship.findMany({
+    where: {
+      status: GrowthFriendshipStatus.BLOCKED,
+      OR: [{ requesterId: identityId }, { addresseeId: identityId }],
+    },
+    select: { requesterId: true, addresseeId: true },
+  });
+  const blockedIds = new Set(
+    blocked.map((row) => (row.requesterId === identityId ? row.addresseeId : row.requesterId)),
+  );
+
+  const accepted = await db.growthFriendship.findMany({
+    where: {
+      status: GrowthFriendshipStatus.ACCEPTED,
+      OR: [{ requesterId: identityId }, { addresseeId: identityId }],
+    },
+    select: { requesterId: true, addresseeId: true },
+  });
+  const friendIds = new Set(
+    accepted.map((row) => (row.requesterId === identityId ? row.addresseeId : row.requesterId)),
+  );
+
   const items: GrowthFriendPublicDto[] = [];
   for (const identity of identities) {
+    if (blockedIds.has(identity.id)) continue;
     if (identity.socialProfile && identity.socialProfile.allowFriendRequests === false) {
       continue;
     }
-    items.push(await toPublicDto(identity, false, db));
+    items.push(await toPublicDto(identity, identityId, friendIds.has(identity.id), db));
   }
   return { items };
 }
@@ -204,18 +250,21 @@ export async function sendFriendRequest(
   now = new Date(),
 ): Promise<GrowthFriendshipDto> {
   await assertPersonalWorkspace(workspaceId, db);
-  const q = body.query.trim().replace(/^@/, '');
-  if (q.length < 2) throw ApiError.badRequest('Qidiruv juda qisqa');
+  const directId = body.identityId?.trim();
+  const q = (body.query ?? '').trim().replace(/^@/, '');
+  if (!directId && q.length < 2) throw ApiError.badRequest('Qidiruv juda qisqa');
 
-  const target = await db.identity.findFirst({
-    where: {
-      OR: [
-        { email: { equals: q, mode: 'insensitive' } },
-        { socialProfile: { handle: { equals: q, mode: 'insensitive' } } },
-      ],
-    },
-    include: { socialProfile: true },
-  });
+  const target = directId
+    ? await db.identity.findFirst({
+        where: { id: directId },
+        include: { socialProfile: true, presence: true },
+      })
+    : await db.identity.findFirst({
+        where: {
+          socialProfile: { handle: { equals: q, mode: 'insensitive' } },
+        },
+        include: { socialProfile: true, presence: true },
+      });
   if (!target) throw ApiError.notFound('Foydalanuvchi topilmadi');
   if (isSelfFriendRequest(identityId, target.id)) {
     throw ApiError.badRequest('O‘zingizga so‘rov yuborib bo‘lmaydi');
@@ -257,7 +306,7 @@ export async function sendFriendRequest(
       },
       include: friendInclude,
     })) as FriendshipRow;
-    return toFriendshipDto(row, identityId, db);
+    return toFriendshipDto(row, identityId, db, false);
   }
 
   const row = (await db.growthFriendship.create({
@@ -293,7 +342,7 @@ export async function sendFriendRequest(
     });
   }
 
-  return toFriendshipDto(row, identityId, db);
+  return toFriendshipDto(row, identityId, db, false);
 }
 
 async function loadOwnedFriendship(
@@ -364,7 +413,7 @@ export async function acceptFriendRequest(
     await tryEvaluateAchievements(workspaceId, identityId);
   }
 
-  return toFriendshipDto(row, identityId, db);
+  return toFriendshipDto(row, identityId, db, true);
 }
 
 export async function declineFriendRequest(
@@ -389,10 +438,10 @@ export async function declineFriendRequest(
       status: GrowthFriendshipStatus.DECLINED,
       respondedAt: now,
     },
-    include: friendInclude,
-  })) as FriendshipRow;
+      include: friendInclude,
+    })) as FriendshipRow;
 
-  return toFriendshipDto(row, identityId, db);
+  return toFriendshipDto(row, identityId, db, false);
 }
 
 export async function removeFriendship(
@@ -435,9 +484,9 @@ export async function blockFriendship(
       blockedById: identityId,
       respondedAt: now,
     },
-    include: friendInclude,
-  })) as FriendshipRow;
-  return toFriendshipDto(row, identityId, db);
+      include: friendInclude,
+    })) as FriendshipRow;
+  return toFriendshipDto(row, identityId, db, false);
 }
 
 async function ensureSocialProfile(identityId: string, db: DbClient) {
@@ -448,6 +497,28 @@ async function ensureSocialProfile(identityId: string, db: DbClient) {
   });
 }
 
+function toPrivacyDto(profile: {
+  handle: string | null;
+  bio: string | null;
+  showLevel: boolean;
+  showActivity: boolean;
+  allowFriendRequests: boolean;
+  onlineStatusVisibility?: PresenceVisibility;
+  lastSeenVisibility?: PresenceVisibility;
+  showInGlobalRanking?: boolean;
+}): GrowthSocialPrivacyDto {
+  return {
+    handle: profile.handle,
+    bio: profile.bio,
+    showLevel: profile.showLevel,
+    showActivity: profile.showActivity,
+    allowFriendRequests: profile.allowFriendRequests,
+    onlineStatusVisibility: profile.onlineStatusVisibility ?? PresenceVisibility.FRIENDS,
+    lastSeenVisibility: profile.lastSeenVisibility ?? PresenceVisibility.FRIENDS,
+    showInGlobalRanking: profile.showInGlobalRanking ?? true,
+  };
+}
+
 export async function getSocialPrivacy(
   workspaceId: string,
   identityId: string,
@@ -455,13 +526,7 @@ export async function getSocialPrivacy(
 ): Promise<GrowthSocialPrivacyDto> {
   await assertPersonalWorkspace(workspaceId, db);
   const profile = await ensureSocialProfile(identityId, db);
-  return {
-    handle: profile.handle,
-    bio: profile.bio,
-    showLevel: profile.showLevel,
-    showActivity: profile.showActivity,
-    allowFriendRequests: profile.allowFriendRequests,
-  };
+  return toPrivacyDto(profile);
 }
 
 export async function updateSocialPrivacy(
@@ -492,16 +557,19 @@ export async function updateSocialPrivacy(
       ...(body.allowFriendRequests !== undefined
         ? { allowFriendRequests: body.allowFriendRequests }
         : {}),
+      ...(body.onlineStatusVisibility !== undefined
+        ? { onlineStatusVisibility: body.onlineStatusVisibility }
+        : {}),
+      ...(body.lastSeenVisibility !== undefined
+        ? { lastSeenVisibility: body.lastSeenVisibility }
+        : {}),
+      ...(body.showInGlobalRanking !== undefined
+        ? { showInGlobalRanking: body.showInGlobalRanking }
+        : {}),
     },
   });
 
-  return {
-    handle: updated.handle,
-    bio: updated.bio,
-    showLevel: updated.showLevel,
-    showActivity: updated.showActivity,
-    allowFriendRequests: updated.allowFriendRequests,
-  };
+  return toPrivacyDto(updated);
 }
 
 export async function countAcceptedFriends(

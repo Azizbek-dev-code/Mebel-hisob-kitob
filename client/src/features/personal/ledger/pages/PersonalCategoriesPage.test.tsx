@@ -99,7 +99,7 @@ describe('PersonalCategoriesPage', () => {
       'href',
       '/personal/accounts',
     );
-    expect(await screen.findByText('Oziq-ovqat')).toBeInTheDocument();
+    expect((await screen.findAllByText('Oziq-ovqat')).length).toBeGreaterThan(0);
     expect(screen.getByText('Eski')).toBeInTheDocument();
     expect(screen.getAllByText('Yashirilgan').length).toBeGreaterThan(0);
     expect(await screen.findByRole('button', { name: 'Xarajatlar' })).toBeInTheDocument();

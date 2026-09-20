@@ -1,7 +1,7 @@
 import { GrowthFocusKind, GrowthFocusStatus, WorkspaceType } from '@furniture-erp/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { prismaMock, recordAuditMock } = vi.hoisted(() => ({
+const { prismaMock, recordAuditMock, createHabitLogMock, tryAwardXpMock } = vi.hoisted(() => ({
   prismaMock: {
     workspace: { findUnique: vi.fn() },
     growthFocusSession: {
@@ -15,14 +15,22 @@ const { prismaMock, recordAuditMock } = vi.hoisted(() => ({
       findFirst: vi.fn(),
       updateMany: vi.fn(),
     },
+    growthHabit: { findFirst: vi.fn() },
     expense: { findMany: vi.fn() },
     sale: { findMany: vi.fn() },
   },
   recordAuditMock: vi.fn(),
+  createHabitLogMock: vi.fn(),
+  tryAwardXpMock: vi.fn(),
 }));
 
 vi.mock('../../../lib/prisma.js', () => ({ prisma: prismaMock }));
 vi.mock('../../../services/audit.service.js', () => ({ recordAudit: recordAuditMock }));
+vi.mock('./personal-growth-habits.service.js', () => ({ createHabitLog: createHabitLogMock }));
+vi.mock('./personal-growth-xp.service.js', () => ({
+  tryAwardXp: tryAwardXpMock,
+  focusXpAmount: (minutes: number) => minutes,
+}));
 
 const { completeFocusSession, startFocusSession } = await import(
   './personal-growth-focus.service.js'
@@ -34,6 +42,7 @@ const RUNNING = {
   workspaceId: 'ws_1',
   identityId: 'idn_1',
   todoId: 'todo_1',
+  habitId: null,
   linkedGoalId: null,
   kind: GrowthFocusKind.FOCUS,
   status: GrowthFocusStatus.RUNNING,
@@ -47,6 +56,7 @@ const RUNNING = {
   createdAt: START,
   updatedAt: START,
   todo: { id: 'todo_1', title: 'React auth' },
+  habit: null,
 };
 
 beforeEach(() => {
@@ -61,6 +71,8 @@ beforeEach(() => {
   prismaMock.growthFocusSession.findMany.mockResolvedValue([]);
   prismaMock.growthFocusSession.count.mockResolvedValue(0);
   prismaMock.growthTodo.updateMany.mockResolvedValue({ count: 1 });
+  createHabitLogMock.mockResolvedValue({});
+  tryAwardXpMock.mockResolvedValue(null);
 });
 
 describe('startFocusSession', () => {
@@ -127,5 +139,42 @@ describe('completeFocusSession', () => {
     );
     expect(session.creditedMinutes).toBe(25);
     expect(session.discardReason).toBe('CAPPED_IDLE_TIMER');
+  });
+
+  it('logs credited minutes to a duration habit and skips focus XP', async () => {
+    const linked = {
+      ...RUNNING,
+      todoId: null,
+      habitId: 'habit_1',
+      todo: null,
+      habit: { id: 'habit_1', title: 'Ingliz tili' },
+    };
+    prismaMock.growthFocusSession.findFirst.mockResolvedValue(linked);
+    prismaMock.growthHabit.findFirst.mockResolvedValue({ id: 'habit_1', targetUnit: 'duration' });
+    const end = new Date('2026-09-17T10:20:00.000Z');
+    prismaMock.growthFocusSession.update.mockResolvedValue({
+      ...linked,
+      status: GrowthFocusStatus.INTERRUPTED,
+      endedAt: end,
+      durationSeconds: 20 * 60,
+      creditedMinutes: 20,
+    });
+    await completeFocusSession(
+      'ws_1',
+      'idn_1',
+      'focus_1',
+      { interrupted: true, clientReportedSeconds: 20 * 60 },
+      prismaMock as never,
+      end,
+    );
+    expect(createHabitLogMock).toHaveBeenCalledWith(
+      'ws_1',
+      'habit_1',
+      'idn_1',
+      { value: 20 },
+      expect.anything(),
+      end,
+    );
+    expect(tryAwardXpMock).not.toHaveBeenCalled();
   });
 });

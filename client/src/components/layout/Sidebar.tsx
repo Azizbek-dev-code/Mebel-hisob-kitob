@@ -40,7 +40,23 @@ export function Sidebar({ onNavigate, onRequestClose }: SidebarProps) {
   const { t } = useTranslation();
   const { pathname } = useLocation();
   const { data: user, isPending } = useCurrentUser();
-  const items = user ? navItemsForUser(user) : isPending ? [...NAV_ITEMS] : [];
+  // While auth is loading, show the owner rail (settings = Profil) so worker
+  // `/profile` and owner `/settings` never appear together under the same label.
+  const items = user
+    ? navItemsForUser(user)
+    : isPending
+      ? NAV_ITEMS.filter(
+          (item) =>
+            item.key !== 'my-sales' &&
+            item.key !== 'my-reports' &&
+            item.key !== 'profile' &&
+            item.key !== 'purchases' &&
+            item.key !== 'suppliers' &&
+            item.key !== 'debts' &&
+            item.key !== 'expenses' &&
+            item.key !== 'my-finances',
+        )
+      : [];
   const pending = usePendingStoreRequestCount(canReviewStoreCreationRequests(user));
   const pendingCount = pending.data?.pendingCount ?? 0;
   const tariffRequests = usePlatformSubscriptionRequests(

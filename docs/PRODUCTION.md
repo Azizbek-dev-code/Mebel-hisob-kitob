@@ -1,10 +1,17 @@
 # Production deployment checklist
 
 Target stack: **Vercel** (SPA + API as a serverless function) + **Neon** (Postgres) +
-**Vercel Blob** (images).
+**Vercel Blob** (images) or **Cloudinary**.
+
+Public production origin: **https://balancy.space**
 
 Do not deploy until every item below is configured. This file is the runbook; it
 does not perform a deploy.
+
+**V1 → V2:** use root [`DEPLOYMENT.md`](../DEPLOYMENT.md) and
+[`PRODUCTION_CHECKLIST.md`](../PRODUCTION_CHECKLIST.md). **Backup Neon before
+any migrate or GitHub push.** Cursor must not deploy, push, or apply production
+migrations.
 
 ## How the Vercel deployment is wired
 
@@ -48,6 +55,23 @@ skips `.env` loading when `VERCEL` is set, so everything must come from here.
 | `BACKUP_ENABLE_PG_DUMP` | Keep `false` — `pg_dump` is not available in the function runtime |
 | `TRIAL_DAYS` | Optional; default `7` |
 | `SEED_*` | Only needed for one-shot `npm run db:seed` — change passwords before seeding prod |
+| `TELEGRAM_BOT_TOKEN` | Optional. Telegram Bot API token for `@blancyspace_bot`. Leave unset to disable Telegram; the API still starts. **Never** expose this to the client, API responses, or logs. |
+| `TELEGRAM_WEBHOOK_SECRET` | Optional. Telegram webhook `secret_token` (not the bot token). Required before `setWebhook` / inbound updates work. |
+| `PUBLIC_APP_URL` | Public app origin (e.g. `https://balancy.space`). Used for `/app` links and the default webhook URL. |
+| `TELEGRAM_WEBHOOK_URL` | Optional override. Defaults to `${PUBLIC_APP_URL}/api/telegram/webhook`. |
+| `CRON_SECRET` | Protects cron routes (`POST /api/telegram/cron/*` and `POST /api/presence/cron/maintenance`). Send as `Authorization: Bearer <secret>` or `x-cron-secret`. |
+
+### Telegram webhook setup
+
+1. Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, and `PUBLIC_APP_URL=https://balancy.space` in the Vercel project env.
+2. Deploy so `/api/telegram/webhook` is live.
+3. Register the webhook once:
+   - Platform Admin: `POST /api/telegram/setup-webhook` (authenticated), or
+   - CLI from `server/`: `node scripts/telegram-set-webhook.mjs` (loads `server/.env`; prints ok/fail without the token).
+4. Confirm BotFather / `getWebhookInfo` shows the HTTPS URL and that updates arrive.
+5. Daily summary cron is declared in `vercel.json` (`0 3 * * *` → `/api/telegram/cron/daily-summary`). Configure Vercel to send `CRON_SECRET` (or use the Authorization header Vercel documents for cron).
+
+Users link Telegram from the app (`POST /api/telegram/link/start` → open deep-link → confirm in bot). Unlink via `POST /api/telegram/unlink` or `/unlink` in chat.
 
 Not needed on Vercel: `PORT` (the function runtime owns the socket) and `VITE_API_URL`
 (the client defaults to `/api`, which is same-origin here).
@@ -148,3 +172,12 @@ cd server && npm run start:prod   # migrate deploy + node dist/server.js
 ## Sale worker pay
 
 See [SALE_WORKER_PAY.md](./SALE_WORKER_PAY.md) for MANUAL Ish haqlari vs RULE compensation and P&L semantics.
+
+## V2 (Telegram / presence / analytics)
+
+- Telegram webhook path stays `/api/telegram/webhook`. Do not switch it to ngrok.
+- Seed automations are `enabled=false`. Turn them on in Platform Admin after `/start` works.
+- Presence heartbeat only counts `visible && active`. Idle open tabs are offline after 5 minutes.
+- Platform usage APIs are `requireAuth` + `requirePlatformAdmin`. Store ADMIN gets 403.
+- Analytics metadata is whitelist-only. Financial keys never persist.
+- Pending Prisma migrations apply on Vercel production **build**. Backup Neon first.

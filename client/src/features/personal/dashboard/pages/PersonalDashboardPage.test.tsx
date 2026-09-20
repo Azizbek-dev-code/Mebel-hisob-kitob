@@ -162,8 +162,13 @@ describe('PersonalDashboardPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Bugun' })).toBeInTheDocument();
     expect(await screen.findByText('React auth')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Barcha vazifalar' })).toHaveAttribute(
+      'href',
+      '/personal/growth/todos',
+    );
     expect(screen.getByText(/Bugungi moliya/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Bajarildi' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Bajarildi' }).className).toMatch(/size-11/);
+    expect(container.querySelector('.overflow-x-hidden')).toBeTruthy();
   });
 });

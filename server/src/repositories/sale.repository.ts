@@ -220,6 +220,20 @@ export function findSaleForUpdate(
   });
 }
 
+export async function listAssemblyTasksForStore(storeId: string): Promise<AssemblyTaskRecord[]> {
+  const rows = await prisma.assemblyTask.findMany({
+    where: {
+      storeId,
+      status: { in: [...ACTIVE_ASSEMBLY_TASK_STATUSES, 'COMPLETED'] },
+    },
+    include: assemblyTaskInclude,
+    orderBy: [{ status: 'asc' }, { assignedAt: 'desc' }],
+    take: 300,
+  });
+
+  return rows as AssemblyTaskRecord[];
+}
+
 export async function listAssemblyTasksForWorker(
   storeId: string,
   assigneeId: string,

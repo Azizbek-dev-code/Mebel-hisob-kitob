@@ -150,8 +150,7 @@ export function DeliveryPage() {
       <div>
         <h2 className="text-2xl font-semibold tracking-tight text-ink">Yetkazib berishlar</h2>
         <p className="mt-1 text-sm text-ink-muted">
-          Sizga biriktirilgan sotuv va kirim yetkazib berishlari. Ishni shu yerdan boshlang va
-          yakunlang.
+          Do‘kon bo‘yicha barcha yetkazib berish vazifalari. Har bir kartada mas’ul ishchi ko‘rinadi.
         </p>
         <Link
           to={ROUTES.profileFinances}
@@ -259,7 +258,7 @@ export function DeliveryPage() {
       {deliveries.data && isEmpty ? (
         <EmptyState
           icon={Truck}
-          title="Bugun sizga yetkazib berish tayinlanmagan."
+          title="Hozircha yetkazib berish yo‘q."
           description="Yangi vazifa biriktirilganda shu yerda chiqadi. Kirimlar uchun «Kirimlar» filtrini ham tekshiring."
         />
       ) : null}
@@ -360,6 +359,10 @@ function SaleDeliveryCard({
     >
       <dl className="grid gap-2 text-sm sm:grid-cols-2">
         <div>
+          <dt className="text-ink-muted">Mas'ul</dt>
+          <dd className="text-ink">{item.assigneeName ?? '—'}</dd>
+        </div>
+        <div>
           <dt className="text-ink-muted">Telefon</dt>
           <dd className="break-words text-ink">{item.customerPhone ?? '—'}</dd>
         </div>
@@ -459,6 +462,10 @@ function PurchaseDeliveryCard({
       action={<Badge tone={item.status === 'COMPLETED' ? 'success' : 'neutral'}>{statusLabel}</Badge>}
     >
       <dl className="grid gap-2 text-sm sm:grid-cols-2">
+        <div>
+          <dt className="text-ink-muted">Mas'ul</dt>
+          <dd className="text-ink">{item.assigneeName ?? '—'}</dd>
+        </div>
         <div>
           <dt className="text-ink-muted">Sana</dt>
           <dd className="text-ink">{formatDate(item.date)}</dd>
