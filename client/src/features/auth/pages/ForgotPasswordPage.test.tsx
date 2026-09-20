@@ -36,6 +36,7 @@ describe('ForgotPasswordPage', () => {
 
     expect(await screen.findByText(/Agar shu email bilan hisob bo‘lsa/)).toBeInTheDocument();
     expect(screen.getByLabelText('Tasdiqlash kodi')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Qayta kod yuborish' })).toBeInTheDocument();
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(JSON.parse(String(init.body))).toEqual({ email: 'aziz@example.com' });
   });

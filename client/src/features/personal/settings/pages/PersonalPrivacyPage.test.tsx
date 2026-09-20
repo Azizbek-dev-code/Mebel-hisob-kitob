@@ -72,6 +72,9 @@ describe('PersonalPrivacyPage', () => {
     );
 
     expect(await screen.findByRole('heading', { name: 'Maxfiylik' })).toBeInTheDocument();
+    expect(await screen.findByText('aziz@example.com')).toBeInTheDocument();
+    expect(screen.getByText('Tasdiqlanmagan')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Emailni tasdiqlash' })).toBeInTheDocument();
     expect(await screen.findByText('Onlayn holat')).toBeInTheDocument();
     expect(screen.getByText('Oxirgi faollik')).toBeInTheDocument();
     expect(screen.getByText('Meni global reytingda ko‘rsat')).toBeInTheDocument();

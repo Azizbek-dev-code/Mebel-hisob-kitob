@@ -2,18 +2,22 @@ import {
   AuthEmailCodePurpose,
   PERSONAL_PASSWORD_MAX,
   PERSONAL_PASSWORD_MIN,
+  StoreCreationRequestStatus,
   applicantFullName,
   isPersonalAuth,
   normalizeEmail,
   normalizePersonName,
   type AuthPrincipal,
   type ChangePasswordRequest,
+  type ConfirmEmailChangeRequest,
+  type RequestEmailChangeRequest,
   type ResetPasswordRequest,
   type UpdateAccountProfileRequest,
 } from '@furniture-erp/shared';
 
 import { hashPassword, verifyPassword } from '../lib/password.js';
 import { prisma } from '../lib/prisma.js';
+import { ensureIdentityForUser } from '../modules/accounts/account-layer.service.js';
 import { findPersonalSignInCandidate } from '../modules/personal-finance/billing/personal-subscription.service.js';
 import { findSignInCandidate } from '../repositories/user.repository.js';
 import { ApiError } from '../utils/api-error.js';
@@ -30,6 +34,59 @@ function assertNewPassword(password: string, confirmation: string): void {
     throw ApiError.validation('Parollar mos kelmadi', [
       { field: 'newPasswordConfirmation', message: 'Parollar mos kelmadi' },
     ]);
+  }
+}
+
+async function resolveIdentity(user: AuthPrincipal): Promise<{
+  id: string;
+  email: string;
+  emailVerifiedAt: Date | null;
+}> {
+  if (isPersonalAuth(user)) {
+    const identity = await prisma.identity.findUnique({
+      where: { id: user.identityId },
+      select: { id: true, email: true, emailVerifiedAt: true },
+    });
+    if (!identity) throw ApiError.unauthorized();
+    return identity;
+  }
+
+  const identityId = await ensureIdentityForUser(user.id);
+  const identity = await prisma.identity.findUnique({
+    where: { id: identityId },
+    select: { id: true, email: true, emailVerifiedAt: true },
+  });
+  if (!identity) throw ApiError.unauthorized();
+  return identity;
+}
+
+async function assertEmailAvailableForChange(
+  email: string,
+  except: { identityId: string; userId?: string },
+): Promise<void> {
+  const [identity, otherUser, pendingRequest] = await Promise.all([
+    prisma.identity.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' }, NOT: { id: except.identityId } },
+      select: { id: true },
+    }),
+    prisma.user.findFirst({
+      where: {
+        email: { equals: email, mode: 'insensitive' },
+        ...(except.userId ? { NOT: { id: except.userId } } : {}),
+      },
+      select: { id: true },
+    }),
+    prisma.storeCreationRequest.findFirst({
+      where: {
+        email: { equals: email, mode: 'insensitive' },
+        status: StoreCreationRequestStatus.PENDING,
+      },
+      select: { id: true },
+    }),
+  ]);
+
+  if (identity || otherUser || pendingRequest) {
+    throw ApiError.conflict('Bu email allaqachon ishlatilgan');
   }
 }
 
@@ -73,6 +130,7 @@ export async function changePasswordWithCurrent(
 
 /**
  * Always succeeds with the same message. Whether the email exists is not disclosed.
+ * Codes are issued only when an account exists, so unknown inboxes are not emailed.
  */
 export async function requestPasswordReset(emailRaw: string): Promise<void> {
   const email = normalizeEmail(emailRaw);
@@ -82,13 +140,12 @@ export async function requestPasswordReset(emailRaw: string): Promise<void> {
 
   const storeUser = await findSignInCandidate(email);
   const personal = storeUser ? null : await findPersonalSignInCandidate(email);
+  if (!storeUser && !personal) return;
 
   await issueEmailCode({
     email,
     purpose: AuthEmailCodePurpose.PASSWORD_RESET,
     identityId: personal?.id ?? null,
-    subject: 'Parolni tiklash kodi',
-    body: (code) => `Parolni tiklash kodi: ${code}. 15 daqiqa amal qiladi. Hech kimga bermang.`,
   });
 }
 
@@ -158,46 +215,28 @@ export async function updateAccountProfile(
       { field: 'email', message: "To'g'ri email kiriting" },
     ]);
   }
+  if (nextEmail && nextEmail !== user.email) {
+    throw ApiError.badRequest('Emailni tasdiqlash kodisiz o‘zgartirib bo‘lmaydi');
+  }
 
   if (isPersonalAuth(user)) {
     const fullName = resolveFullName(input, user.fullName);
     await prisma.identity.update({
       where: { id: user.identityId },
-      data: {
-        fullName,
-        ...(nextEmail && nextEmail !== user.email
-          ? { email: nextEmail, emailVerifiedAt: null }
-          : {}),
-      },
+      data: { fullName },
     });
-    return {
-      ...user,
-      fullName,
-      email: nextEmail && nextEmail !== user.email ? nextEmail : user.email,
-      emailVerified: nextEmail && nextEmail !== user.email ? false : user.emailVerified,
-    };
+    return { ...user, fullName };
   }
 
   const fullName = resolveFullName(input, user.fullName);
   const phone =
     input.phone === undefined ? undefined : input.phone?.trim() ? input.phone.trim() : null;
 
-  if (nextEmail && nextEmail !== user.email) {
-    const clash = await prisma.user.findFirst({
-      where: { storeId: user.storeId, email: nextEmail, NOT: { id: user.id } },
-      select: { id: true },
-    });
-    if (clash) {
-      throw ApiError.conflict('Bu email allaqachon band');
-    }
-  }
-
   await prisma.user.update({
     where: { id: user.id },
     data: {
       fullName,
       ...(phone !== undefined ? { phone } : {}),
-      ...(nextEmail && nextEmail !== user.email ? { email: nextEmail } : {}),
     },
   });
 
@@ -205,44 +244,108 @@ export async function updateAccountProfile(
     ...user,
     fullName,
     phone: phone === undefined ? user.phone : phone,
-    email: nextEmail && nextEmail !== user.email ? nextEmail : user.email,
   };
 }
 
 export async function requestEmailVerification(user: AuthPrincipal): Promise<void> {
-  if (!isPersonalAuth(user)) {
-    throw ApiError.badRequest('Email tasdiqlash shaxsiy hisob uchun');
-  }
-  if (user.emailVerified) {
-    throw ApiError.badRequest('Email allaqachon tasdiqlangan');
-  }
+  const identity = await resolveIdentity(user);
+  if (identity.emailVerifiedAt) return;
+
   await issueEmailCode({
     email: user.email,
     purpose: AuthEmailCodePurpose.EMAIL_VERIFY,
-    identityId: user.identityId,
-    subject: 'Email tasdiqlash kodi',
-    body: (code) => `Email tasdiqlash kodi: ${code}. 15 daqiqa amal qiladi.`,
+    identityId: identity.id,
   });
 }
 
 export async function confirmEmailVerification(user: AuthPrincipal, code: string): Promise<void> {
-  if (!isPersonalAuth(user)) {
-    throw ApiError.badRequest('Email tasdiqlash shaxsiy hisob uchun');
-  }
+  const identity = await resolveIdentity(user);
   await consumeEmailCode({
     email: user.email,
     purpose: AuthEmailCodePurpose.EMAIL_VERIFY,
     code,
   });
   await prisma.identity.update({
-    where: { id: user.identityId },
+    where: { id: identity.id },
     data: { emailVerifiedAt: new Date() },
   });
 }
 
+export async function requestEmailChange(
+  user: AuthPrincipal,
+  input: RequestEmailChangeRequest,
+): Promise<void> {
+  const nextEmail = normalizeEmail(input.newEmail);
+  if (!nextEmail) {
+    throw ApiError.validation("To'g'ri email kiriting", [
+      { field: 'newEmail', message: "To'g'ri email kiriting" },
+    ]);
+  }
+  if (nextEmail === user.email) {
+    throw ApiError.badRequest('Yangi email joriy email bilan bir xil');
+  }
+
+  const identity = await resolveIdentity(user);
+  await assertEmailAvailableForChange(nextEmail, {
+    identityId: identity.id,
+    userId: isPersonalAuth(user) ? undefined : user.id,
+  });
+
+  await issueEmailCode({
+    email: user.email,
+    purpose: AuthEmailCodePurpose.EMAIL_CHANGE,
+    identityId: identity.id,
+    newEmail: nextEmail,
+  });
+}
+
+export async function confirmEmailChange(
+  user: AuthPrincipal,
+  input: ConfirmEmailChangeRequest,
+): Promise<AuthPrincipal> {
+  const identity = await resolveIdentity(user);
+  const row = await consumeEmailCode({
+    email: user.email,
+    purpose: AuthEmailCodePurpose.EMAIL_CHANGE,
+    code: input.code,
+  });
+  const nextEmail = normalizeEmail(row.newEmail ?? '');
+  if (!nextEmail) {
+    throw ApiError.badRequest('Invalid or expired code');
+  }
+
+  await assertEmailAvailableForChange(nextEmail, {
+    identityId: identity.id,
+    userId: isPersonalAuth(user) ? undefined : user.id,
+  });
+
+  const verifiedAt = new Date();
+  await prisma.identity.update({
+    where: { id: identity.id },
+    data: { email: nextEmail, emailVerifiedAt: verifiedAt },
+  });
+
+  if (!isPersonalAuth(user)) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { email: nextEmail },
+    });
+  }
+
+  return {
+    ...user,
+    email: nextEmail,
+    emailVerified: true,
+  };
+}
+
 /** Logged-in password reset via email code (same codes as public forgot-password). */
 export async function requestInAppPasswordReset(user: AuthPrincipal): Promise<void> {
-  await requestPasswordReset(user.email);
+  await issueEmailCode({
+    email: user.email,
+    purpose: AuthEmailCodePurpose.PASSWORD_RESET,
+    identityId: isPersonalAuth(user) ? user.identityId : (await resolveIdentity(user)).id,
+  });
 }
 
 export async function confirmInAppPasswordReset(

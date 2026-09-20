@@ -24,8 +24,7 @@ export function ForgotPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  async function onRequest(event: FormEvent) {
-    event.preventDefault();
+  async function sendCode() {
     setError(null);
     setPending(true);
     try {
@@ -36,6 +35,11 @@ export function ForgotPasswordPage() {
     } finally {
       setPending(false);
     }
+  }
+
+  async function onRequest(event: FormEvent) {
+    event.preventDefault();
+    await sendCode();
   }
 
   async function onReset(event: FormEvent) {
@@ -106,7 +110,7 @@ export function ForgotPasswordPage() {
                   inputMode="numeric"
                   pattern="\d{6}"
                   value={code}
-                  onChange={(e) => setCode(e.target.value)}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   className={fieldClass}
                   required
                   autoComplete="one-time-code"
@@ -143,6 +147,14 @@ export function ForgotPasswordPage() {
               >
                 {pending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
                 {t('auth.resetPassword')}
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void sendCode()}
+                className="w-full text-sm font-medium text-brand-700 hover:underline disabled:opacity-60"
+              >
+                {t('auth.resendCode')}
               </button>
             </form>
           ) : null}

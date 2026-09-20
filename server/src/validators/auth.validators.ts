@@ -68,6 +68,10 @@ export const inAppResetPasswordBodySchema = z
     path: ['newPasswordConfirmation'],
   });
 
+export const requestEmailChangeBodySchema = z.object({
+  newEmail: z.string().trim().email("To'g'ri email kiriting").max(160),
+});
+
 export const updateAccountProfileBodySchema = z
   .object({
     firstName: z.string().trim().min(1).max(80).optional(),

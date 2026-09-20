@@ -35,6 +35,12 @@ export const accountService = {
   confirmEmailVerification: (code: string) =>
     apiClient.post<{ ok: true }>('/auth/verify-email/confirm', { body: { code } }),
 
+  requestEmailChange: (body: { newEmail: string }) =>
+    apiClient.post<{ ok: true }>('/auth/change-email/request', { body }),
+
+  confirmEmailChange: (body: { code: string }) =>
+    apiClient.post<CurrentUserResponse>('/auth/change-email/confirm', { body }),
+
   requestInAppPasswordReset: () => apiClient.post<{ ok: true }>('/auth/security/email-reset/request'),
 
   confirmInAppPasswordReset: (body: {

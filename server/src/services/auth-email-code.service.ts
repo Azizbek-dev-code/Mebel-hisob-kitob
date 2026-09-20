@@ -1,12 +1,12 @@
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 
-import type { AuthEmailCodePurpose } from '@furniture-erp/shared';
+import { AuthEmailCodePurpose } from '@furniture-erp/shared';
 
 import { env } from '../config/env.js';
 import { prisma as defaultPrisma } from '../lib/prisma.js';
 import { ApiError } from '../utils/api-error.js';
 import { logger } from '../utils/logger.js';
-import { sendTransactionalEmail } from './mailer.service.js';
+import { sendPasswordResetEmail, sendVerificationEmail } from './emailService.js';
 
 const CODE_TTL_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
@@ -44,15 +44,22 @@ function isUsable(row: CodeRow, now: Date): boolean {
   return !row.consumedAt && row.expiresAt.getTime() > now.getTime() && row.attemptCount < MAX_ATTEMPTS;
 }
 
+async function deliverCode(purpose: AuthEmailCodePurpose, to: string, code: string): Promise<void> {
+  if (purpose === AuthEmailCodePurpose.PASSWORD_RESET) {
+    await sendPasswordResetEmail(to, code);
+    return;
+  }
+  await sendVerificationEmail(to, code);
+}
+
 export async function issueEmailCode(input: {
   email: string;
   purpose: AuthEmailCodePurpose;
   identityId?: string | null;
   newEmail?: string | null;
-  subject: string;
-  body: (code: string) => string;
 }): Promise<void> {
   const email = input.email.trim().toLowerCase();
+  const newEmail = input.newEmail?.trim().toLowerCase() || null;
   const now = new Date();
   const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
@@ -74,18 +81,13 @@ export async function issueEmailCode(input: {
       email,
       purpose: input.purpose,
       codeHash: hashEmailCode(code),
-      newEmail: input.newEmail ?? null,
+      newEmail,
       expiresAt: new Date(now.getTime() + CODE_TTL_MS),
       identityId: input.identityId ?? null,
     },
   });
 
-  await sendTransactionalEmail({
-    to: email,
-    subject: input.subject,
-    text: input.body(code),
-    codeForDevLog: code,
-  });
+  await deliverCode(input.purpose, newEmail ?? email, code);
 }
 
 export async function consumeEmailCode(input: {

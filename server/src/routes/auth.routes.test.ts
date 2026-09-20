@@ -19,6 +19,7 @@ const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
     user: {
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
       update: vi.fn(),
     },
     identity: {
@@ -44,6 +45,9 @@ const { prismaMock } = vi.hoisted(() => ({
     subscriptionRequest: {
       findFirst: vi.fn(),
     },
+    storeCreationRequest: {
+      findFirst: vi.fn(),
+    },
   },
 }));
 
@@ -53,6 +57,11 @@ vi.mock('../lib/prisma.js', () => ({
   prisma: prismaMock,
   connectDatabase: vi.fn(),
   disconnectDatabase: vi.fn(),
+}));
+
+vi.mock('../services/emailService.js', () => ({
+  sendVerificationEmail: vi.fn(),
+  sendPasswordResetEmail: vi.fn(),
 }));
 
 const app = createApp();
@@ -117,6 +126,7 @@ function authCookie(response: request.Response): string | undefined {
 
 beforeEach(() => {
   prismaMock.user.findFirst.mockReset();
+  prismaMock.user.findUnique.mockReset();
   prismaMock.user.update.mockReset();
   prismaMock.identity.findFirst.mockReset();
   prismaMock.identity.findUnique.mockReset();
@@ -131,10 +141,26 @@ beforeEach(() => {
   prismaMock.personalSubscription.create.mockReset();
   prismaMock.personalSubscription.update.mockReset();
   prismaMock.subscriptionRequest.findFirst.mockReset();
+  prismaMock.storeCreationRequest.findFirst.mockReset();
   prismaMock.user.findFirst.mockResolvedValue(ADMIN_RECORD);
+  prismaMock.user.findUnique.mockResolvedValue({
+    id: ADMIN_RECORD.id,
+    email: ADMIN_RECORD.email,
+    fullName: ADMIN_RECORD.fullName,
+    identityId: 'idn_admin',
+  });
   prismaMock.user.update.mockResolvedValue(ADMIN_RECORD);
   prismaMock.identity.findFirst.mockResolvedValue(null);
+  prismaMock.identity.findUnique.mockResolvedValue({
+    id: 'idn_admin',
+    email: ADMIN_RECORD.email,
+    emailVerifiedAt: null,
+  });
   prismaMock.subscriptionRequest.findFirst.mockResolvedValue(null);
+  prismaMock.storeCreationRequest.findFirst.mockResolvedValue(null);
+  prismaMock.authEmailCode.count.mockResolvedValue(0);
+  prismaMock.authEmailCode.updateMany.mockResolvedValue({ count: 0 });
+  prismaMock.authEmailCode.create.mockResolvedValue({ id: 'c1' });
 });
 
 describe('POST /api/auth/login', () => {
@@ -156,6 +182,7 @@ describe('POST /api/auth/login', () => {
       storeId: 'store_1',
       storeName: 'Mebel Savdo',
       storeAccessStatus: 'ACTIVE',
+      emailVerified: false,
       subscription: {
         status: 'ACTIVE',
         storedStatus: 'ACTIVE',
@@ -447,5 +474,19 @@ describe('password change and reset', () => {
       .expect(200);
 
     expect(response.body.data.ok).toBe(true);
+    expect(prismaMock.authEmailCode.create).not.toHaveBeenCalled();
+  });
+
+  it('sends a hashed verification code for a signed-in store identity', async () => {
+    const agent = request.agent(app);
+    await agent.post('/api/auth/login').send({ identifier: 'admin', password: PASSWORD }).expect(200);
+
+    const response = await agent.post('/api/auth/verify-email/request').expect(200);
+    expect(response.body.data.ok).toBe(true);
+    expect(response.body.data).not.toHaveProperty('code');
+    const created = prismaMock.authEmailCode.create.mock.calls[0][0].data;
+    expect(created.purpose).toBe('EMAIL_VERIFY');
+    expect(created.codeHash).toHaveLength(64);
+    expect(created.codeHash).not.toMatch(/^\d{6}$/);
   });
 });

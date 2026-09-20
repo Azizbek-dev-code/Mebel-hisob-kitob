@@ -7,11 +7,13 @@ import {
   getCurrentUser,
   getAuthSessions,
   postChangePassword,
+  postConfirmEmailChange,
   postConfirmEmailVerification,
   postConfirmInAppPasswordReset,
   postForgotPassword,
   postLogin,
   postLogout,
+  postRequestEmailChange,
   postRequestEmailVerification,
   postRequestInAppPasswordReset,
   postResetPassword,
@@ -21,7 +23,15 @@ import {
 import { requireAuth } from '../middleware/require-auth.js';
 import { validate } from '../middleware/validate.js';
 import { ApiError } from '../utils/api-error.js';
-import { loginBodySchema, changePasswordBodySchema, forgotPasswordBodySchema, resetPasswordBodySchema, verifyEmailCodeBodySchema, inAppResetPasswordBodySchema } from '../validators/auth.validators.js';
+import {
+  loginBodySchema,
+  changePasswordBodySchema,
+  forgotPasswordBodySchema,
+  resetPasswordBodySchema,
+  verifyEmailCodeBodySchema,
+  inAppResetPasswordBodySchema,
+  requestEmailChangeBodySchema,
+} from '../validators/auth.validators.js';
 import { z } from 'zod';
 
 /**
@@ -65,6 +75,23 @@ const changePasswordRateLimiter = rateLimit({
   },
 });
 
+const emailCodeRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skip: () => env.isTest,
+  handler: (_req, _res, next) => {
+    next(
+      new ApiError(
+        429,
+        ApiErrorCode.RATE_LIMITED,
+        'Too many requests. Try again later.',
+      ),
+    );
+  },
+});
+
 export const authRouter = Router();
 
 authRouter.post('/login', loginRateLimiter, validate({ body: loginBodySchema }), postLogin);
@@ -101,17 +128,27 @@ authRouter.post(
   validate({ params: z.object({ id: z.string().trim().min(1).max(64) }) }),
   postRevokeAuthSession,
 );
-authRouter.post('/verify-email/request', requireAuth, postRequestEmailVerification);
+authRouter.post('/verify-email/request', requireAuth, emailCodeRateLimiter, postRequestEmailVerification);
 authRouter.post(
   '/verify-email/confirm',
   requireAuth,
+  emailCodeRateLimiter,
   validate({ body: verifyEmailCodeBodySchema }),
   postConfirmEmailVerification,
 );
-authRouter.post('/security/email-reset/request', requireAuth, postRequestInAppPasswordReset);
+authRouter.post('/change-email/request', requireAuth, emailCodeRateLimiter, validate({ body: requestEmailChangeBodySchema }), postRequestEmailChange);
+authRouter.post(
+  '/change-email/confirm',
+  requireAuth,
+  emailCodeRateLimiter,
+  validate({ body: verifyEmailCodeBodySchema }),
+  postConfirmEmailChange,
+);
+authRouter.post('/security/email-reset/request', requireAuth, emailCodeRateLimiter, postRequestInAppPasswordReset);
 authRouter.post(
   '/security/email-reset/confirm',
   requireAuth,
+  emailCodeRateLimiter,
   validate({ body: inAppResetPasswordBodySchema }),
   postConfirmInAppPasswordReset,
 );

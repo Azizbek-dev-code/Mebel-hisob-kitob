@@ -15,7 +15,10 @@ const { prismaMock, sendMailMock } = vi.hoisted(() => ({
 }));
 
 vi.mock('../lib/prisma.js', () => ({ prisma: prismaMock }));
-vi.mock('./mailer.service.js', () => ({ sendTransactionalEmail: sendMailMock }));
+vi.mock('./emailService.js', () => ({
+  sendVerificationEmail: sendMailMock,
+  sendPasswordResetEmail: sendMailMock,
+}));
 vi.mock('../config/env.js', () => ({
   env: {
     JWT_ACCESS_SECRET: 'test-secret-must-be-at-least-32-chars!!',
@@ -45,8 +48,6 @@ describe('auth email codes', () => {
     await issueEmailCode({
       email: 'aziz@example.com',
       purpose: AuthEmailCodePurpose.PASSWORD_RESET,
-      subject: 'test',
-      body: (code) => code,
     });
     const created = prismaMock.authEmailCode.create.mock.calls[0][0].data;
     expect(created.codeHash).toHaveLength(64);
@@ -104,9 +105,51 @@ describe('auth email codes', () => {
       issueEmailCode({
         email: 'aziz@example.com',
         purpose: AuthEmailCodePurpose.PASSWORD_RESET,
-        subject: 'test',
-        body: () => 'x',
       }),
     ).rejects.toMatchObject({ statusCode: 429 });
+  });
+
+  it('invalidates previous codes and emails the new address for email change', async () => {
+    await issueEmailCode({
+      email: 'old@example.com',
+      purpose: AuthEmailCodePurpose.EMAIL_CHANGE,
+      newEmail: 'new@example.com',
+      identityId: 'idn_1',
+    });
+    expect(prismaMock.authEmailCode.updateMany).toHaveBeenCalledWith({
+      where: {
+        email: 'old@example.com',
+        purpose: AuthEmailCodePurpose.EMAIL_CHANGE,
+        consumedAt: null,
+      },
+      data: { consumedAt: expect.any(Date) },
+    });
+    expect(sendMailMock).toHaveBeenCalledWith('new@example.com', expect.stringMatching(/^\d{6}$/));
+  });
+
+  it('locks a code after 5 failed attempts', async () => {
+    prismaMock.authEmailCode.findFirst.mockResolvedValue({
+      id: 'c3',
+      email: 'aziz@example.com',
+      purpose: AuthEmailCodePurpose.EMAIL_VERIFY,
+      codeHash: hashEmailCode('333333'),
+      newEmail: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      consumedAt: null,
+      attemptCount: 4,
+      identityId: 'idn_1',
+    });
+    prismaMock.authEmailCode.update.mockResolvedValue({ id: 'c3' });
+    await expect(
+      consumeEmailCode({
+        email: 'aziz@example.com',
+        purpose: AuthEmailCodePurpose.EMAIL_VERIFY,
+        code: '000000',
+      }),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    expect(prismaMock.authEmailCode.update).toHaveBeenCalledWith({
+      where: { id: 'c3' },
+      data: { attemptCount: 5, consumedAt: expect.any(Date) },
+    });
   });
 });

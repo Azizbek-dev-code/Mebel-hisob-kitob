@@ -62,6 +62,7 @@ const authUserSelect = {
     },
   },
   responsibilities: { select: { responsibility: true }, orderBy: { responsibility: 'asc' } },
+  identity: { select: { emailVerifiedAt: true } },
 } satisfies Prisma.UserSelect;
 
 export type AuthUserRecord = Prisma.UserGetPayload<{ select: typeof authUserSelect }>;
@@ -178,6 +179,11 @@ export function toAuthUser(record: AuthUserRecord): AuthUser {
         : undefined,
     storeAccessStatus: record.store.accessStatus ?? StoreAccessStatus.ACTIVE,
     subscription: toSubscriptionSnapshot(record),
+    emailVerified: Boolean(
+      'identity' in record && record.identity && 'emailVerifiedAt' in record.identity
+        ? record.identity.emailVerifiedAt
+        : false,
+    ),
   };
 }
 

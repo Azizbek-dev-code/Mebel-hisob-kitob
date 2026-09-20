@@ -73,10 +73,10 @@ describe('PersonalSecurityPage', () => {
     );
 
     expect(await screen.findByRole('heading', { name: 'Xavfsizlik' })).toBeInTheDocument();
-    expect(screen.getByText('Chrome · Windows')).toBeInTheDocument();
+    expect(await screen.findByText('Chrome · Windows')).toBeInTheDocument();
     expect(screen.getByText('Joriy')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Email orqali tiklash' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Kod yuborish' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Emailni tasdiqlash' })).toBeInTheDocument();
     expect(screen.getByText('Telefon raqamni tasdiqlash')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Profil ma’lumotlari' })).not.toBeInTheDocument();
   });

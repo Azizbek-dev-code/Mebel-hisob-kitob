@@ -161,3 +161,13 @@ export const postConfirmInAppPasswordReset = asyncHandler(async (req: Request, r
   await accountSecurity.confirmInAppPasswordReset(principal(req), req.body);
   sendSuccess(res, { ok: true });
 });
+
+export const postRequestEmailChange = asyncHandler(async (req: Request, res: Response) => {
+  await accountSecurity.requestEmailChange(principal(req), req.body);
+  sendSuccess(res, { ok: true });
+});
+
+export const postConfirmEmailChange = asyncHandler(async (req: Request, res: Response) => {
+  const next = await accountSecurity.confirmEmailChange(principal(req), req.body);
+  sendSuccess<CurrentUserResponse>(res, { user: next });
+});

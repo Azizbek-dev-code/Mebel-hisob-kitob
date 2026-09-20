@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { EmailAddressStatus, VerifyEmailForm } from '@/features/auth/components/AccountSecurityForms';
 import { useCurrentUser } from '@/features/auth/hooks/use-auth';
 import {
   useGrowthFriendsPrivacy,
@@ -46,6 +47,12 @@ export function PersonalPrivacyPage() {
         </h1>
         <p className="mt-1 text-sm text-ink-muted">{t('personal.privacyHint')}</p>
       </div>
+
+      <section className="space-y-3 rounded-2xl border border-line bg-surface p-4">
+        <h2 className="text-sm font-semibold text-ink">{t('auth.verifyEmail')}</h2>
+        <EmailAddressStatus />
+        <VerifyEmailForm />
+      </section>
 
       {privacy.isPending && !privacy.data ? (
         <Skeleton className="h-40 w-full" />

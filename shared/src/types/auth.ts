@@ -50,6 +50,8 @@ export interface AuthUser {
   /** Missing on older payloads is treated as ACTIVE. */
   storeAccessStatus?: StoreAccessStatus;
   subscription?: AuthSubscriptionSnapshot | null;
+  /** Identity-level verification. Absent on older payloads — treat as unverified. */
+  emailVerified?: boolean;
 }
 
 /**
@@ -87,6 +89,10 @@ export function isPersonalAuth(
 /** Platform Admin is a role, not an account row in the switcher. */
 export function isPlatformAdminAuth(user: AuthPrincipal | null | undefined): user is AuthUser {
   return Boolean(user && !isPersonalAuth(user) && user.role === 'PLATFORM_ADMIN');
+}
+
+export function isEmailVerified(user: AuthPrincipal | null | undefined): boolean {
+  return Boolean(user && 'emailVerified' in user && user.emailVerified);
 }
 
 export function homePathForAuth(user: AuthPrincipal): '/personal/dashboard' | '/dashboard' {
@@ -193,4 +199,12 @@ export interface InAppPasswordResetConfirmRequest {
   code: string;
   newPassword: string;
   newPasswordConfirmation: string;
+}
+
+export interface RequestEmailChangeRequest {
+  newEmail: string;
+}
+
+export interface ConfirmEmailChangeRequest {
+  code: string;
 }
