@@ -43,9 +43,19 @@ describe('resolveTelegramRuntime', () => {
 });
 
 describe('getPublicAppUrl / getTelegramWebhookUrl', () => {
-  it('defaults to balancy.space when PUBLIC_APP_URL is unset', () => {
+  it('defaults to the current production origin when PUBLIC_APP_URL is unset', () => {
     expect(getPublicAppUrl({})).toBe(DEFAULT_PUBLIC_APP_URL);
     expect(getTelegramWebhookUrl({})).toBe(`${DEFAULT_PUBLIC_APP_URL}/api/telegram/webhook`);
+  });
+
+  it('rewrites a legacy balancy.space origin to the current production host', () => {
+    expect(getPublicAppUrl({ PUBLIC_APP_URL: 'https://balancy.space' })).toBe(DEFAULT_PUBLIC_APP_URL);
+    expect(getPublicAppUrl({ PUBLIC_APP_URL: 'https://www.balancy.space/' })).toBe(DEFAULT_PUBLIC_APP_URL);
+    expect(
+      getTelegramWebhookUrl({
+        TELEGRAM_WEBHOOK_URL: 'https://balancy.space/api/telegram/webhook',
+      }),
+    ).toBe(`${DEFAULT_PUBLIC_APP_URL}/api/telegram/webhook`);
   });
 
   it('honours explicit TELEGRAM_WEBHOOK_URL', () => {

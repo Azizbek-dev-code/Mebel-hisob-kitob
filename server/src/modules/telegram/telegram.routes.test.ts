@@ -32,6 +32,14 @@ vi.mock('./telegram.config.js', async (importOriginal) => {
   };
 });
 
+vi.mock('./telegram.admin.service.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./telegram.admin.service.js')>();
+  return {
+    ...actual,
+    hydrateTelegramRuntimeFromDb: vi.fn().mockResolvedValue(undefined),
+  };
+});
+
 vi.mock('./telegram.commands.js', () => ({
   handleTelegramUpdate,
 }));

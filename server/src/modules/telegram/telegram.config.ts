@@ -3,6 +3,7 @@ import { env } from '../../config/env.js';
 import {
   DEFAULT_PUBLIC_APP_URL,
   EXPECTED_TELEGRAM_BOT_USERNAME,
+  LEGACY_PUBLIC_APP_HOSTS,
   type TelegramPublicConfig,
   type TelegramRuntimeConfig,
 } from './telegram.types.js';
@@ -76,6 +77,22 @@ export function readTelegramPublicConfig(
   };
 }
 
+function rewriteLegacyPublicOrigin(value: string): string {
+  const trimmed = value.replace(/\/+$/, '');
+  try {
+    const parsed = new URL(trimmed);
+    if ((LEGACY_PUBLIC_APP_HOSTS as readonly string[]).includes(parsed.hostname.toLowerCase())) {
+      parsed.protocol = 'https:';
+      parsed.hostname = new URL(DEFAULT_PUBLIC_APP_URL).hostname;
+      parsed.port = '';
+      return parsed.toString().replace(/\/+$/, '');
+    }
+  } catch {
+    return trimmed;
+  }
+  return trimmed;
+}
+
 /** Public SPA origin used for /app deep-links. Never includes secrets. */
 export function getPublicAppUrl(source?: TelegramEnvSource): string {
   // When a source object is passed (tests / overrides), only that object is read —
@@ -83,7 +100,7 @@ export function getPublicAppUrl(source?: TelegramEnvSource): string {
   const fromEnv = blankToUndefined(
     source ? source.PUBLIC_APP_URL : env.PUBLIC_APP_URL,
   );
-  if (fromEnv) return fromEnv.replace(/\/+$/, '');
+  if (fromEnv) return rewriteLegacyPublicOrigin(fromEnv);
   return DEFAULT_PUBLIC_APP_URL;
 }
 
@@ -92,6 +109,6 @@ export function getTelegramWebhookUrl(source?: TelegramEnvSource): string {
   const explicit = blankToUndefined(
     source ? source.TELEGRAM_WEBHOOK_URL : env.TELEGRAM_WEBHOOK_URL,
   );
-  if (explicit) return explicit;
+  if (explicit) return rewriteLegacyPublicOrigin(explicit);
   return `${getPublicAppUrl(source)}/api/telegram/webhook`;
 }

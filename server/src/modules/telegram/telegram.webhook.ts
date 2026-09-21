@@ -4,6 +4,7 @@ import type { Request } from 'express';
 
 import { ApiError } from '../../utils/api-error.js';
 import { logger } from '../../utils/logger.js';
+import { hydrateTelegramRuntimeFromDb } from './telegram.admin.service.js';
 import { handleTelegramUpdate } from './telegram.commands.js';
 import { readTelegramRuntime } from './telegram.config.js';
 import { sanitizeTelegramLogText } from './telegram.sanitize.js';
@@ -49,6 +50,15 @@ export function assertTelegramWebhookAuthorized(
   if (!telegramWebhookSecretsMatch(provided, runtime.webhookSecret)) {
     throw ApiError.unauthorized('Telegram webhook is not enabled');
   }
+}
+
+/**
+ * Serverless-safe gate: load the admin-saved token from DB before verifying
+ * Telegram's secret header. Never logs the token.
+ */
+export async function authorizeTelegramWebhook(req: Request): Promise<void> {
+  await hydrateTelegramRuntimeFromDb();
+  assertTelegramWebhookAuthorized(req);
 }
 
 /**

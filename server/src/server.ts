@@ -39,6 +39,7 @@ import { logger } from './utils/logger.js';
         .then((mod) => mod.hydrateTelegramRuntimeFromDb())
         .then(async () => {
           const service = await import('./modules/telegram/telegram.service.js');
+          void service.ensureTelegramWebhookOnce();
           await service.probeTelegramOnBoot();
           const broadcast = await import('./modules/telegram/telegram.broadcast.service.js');
           void broadcast.kickBroadcastProcessing().catch((tickError: unknown) => {

@@ -45,7 +45,7 @@ import {
   upsertTelegramMenuScreenSchema,
 } from './telegram.admin.validators.js';
 import { telegramUpdateSchema, updateTelegramPrefsSchema } from './telegram.validators.js';
-import { assertTelegramWebhookAuthorized } from './telegram.webhook.js';
+import { authorizeTelegramWebhook } from './telegram.webhook.js';
 
 const webhookRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -77,12 +77,9 @@ telegramRouter.post(
   '/webhook',
   webhookRateLimiter,
   (req, _res, next) => {
-    try {
-      assertTelegramWebhookAuthorized(req);
-      next();
-    } catch (error) {
-      next(error);
-    }
+    void authorizeTelegramWebhook(req)
+      .then(() => next())
+      .catch(next);
   },
   validate({ body: telegramUpdateSchema }),
   postTelegramWebhook,

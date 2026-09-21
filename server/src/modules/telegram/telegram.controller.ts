@@ -5,6 +5,7 @@ import { ApiError } from '../../utils/api-error.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 import { isCronSecretAuthorized } from '../../utils/cron-secret.js';
 import { sendSuccess } from '../../utils/http-response.js';
+import { hydrateTelegramRuntimeFromDb } from './telegram.admin.service.js';
 import { resolveIdentityIdForTelegram, startLinkForRequest } from './telegram.account.service.js';
 import {
   getConnectionStatus,
@@ -42,6 +43,7 @@ export const patchTelegramPrefs = asyncHandler(async (req: Request, res: Respons
 });
 
 export const postTelegramSetupWebhook = asyncHandler(async (_req: Request, res: Response) => {
+  await hydrateTelegramRuntimeFromDb();
   const result = await setTelegramWebhook();
   if (!result.ok) {
     throw ApiError.badRequest(result.reason === 'not_configured' ? 'Telegram sozlanmagan' : 'Webhook o‘rnatilmadi');

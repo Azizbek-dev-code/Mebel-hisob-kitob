@@ -13,7 +13,10 @@ export const TELEGRAM_WEBHOOK_SECRET_HEADER = 'x-telegram-bot-api-secret-token';
 
 export const TELEGRAM_LINKING_TOKEN_TTL_MS = 15 * 60 * 1000;
 
-export const DEFAULT_PUBLIC_APP_URL = 'https://balancy.space';
+export const DEFAULT_PUBLIC_APP_URL = 'https://www.mebelboshqaruv.uz';
+
+/** Previous production host. Webhook/app URLs that still point here are rewritten. */
+export const LEGACY_PUBLIC_APP_HOSTS = ['balancy.space', 'www.balancy.space'] as const;
 
 export const DEFAULT_TELEGRAM_START_TEXT =
   "👋 Balancy Space'ga xush kelibsiz!\n\n" +

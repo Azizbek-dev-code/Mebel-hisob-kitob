@@ -22,6 +22,7 @@ import { applyTelegramDbRuntime, getTelegramWebhookUrl, readTelegramRuntime } fr
 import { decryptTelegramSecret, encryptTelegramSecret } from './telegram.crypto.js';
 import { mediaKindFromUrl } from './telegram.content.js';
 import {
+  ensureTelegramWebhookOnce,
   getTelegramWebhookInfo,
   inspectTelegramBotToken,
   resetTelegramHealthCache,
@@ -34,15 +35,28 @@ import { DEFAULT_TELEGRAM_START_TEXT } from './telegram.types.js';
 const BOT_CONFIG_ID = 'default';
 const START_MESSAGE_ID = 'default';
 
-export async function hydrateTelegramRuntimeFromDb(): Promise<void> {
+function applyBotConfigRow(row: {
+  encryptedBotToken: string | null;
+  botUsername: string | null;
+} | null): void {
+  if (!row?.encryptedBotToken) return;
   try {
-    const row = await prisma.telegramBotConfig.findUnique({ where: { id: BOT_CONFIG_ID } });
-    if (!row?.encryptedBotToken) return;
     const token = decryptTelegramSecret(row.encryptedBotToken);
     applyTelegramDbRuntime({ token, botUsername: row.botUsername });
   } catch (error) {
     logger.warn('Telegram DB token hydrate failed; falling back to env', {
       message: error instanceof Error ? error.message : 'decrypt_failed',
+    });
+  }
+}
+
+export async function hydrateTelegramRuntimeFromDb(): Promise<void> {
+  try {
+    const row = await prisma.telegramBotConfig.findUnique({ where: { id: BOT_CONFIG_ID } });
+    applyBotConfigRow(row);
+  } catch (error) {
+    logger.warn('Telegram DB token hydrate failed; falling back to env', {
+      message: error instanceof Error ? error.message : 'hydrate_failed',
     });
   }
 }
@@ -54,8 +68,12 @@ function tokenSourceFromConfig(hasDatabaseToken: boolean, envConfigured: boolean
 }
 
 export async function getAdminBotStatus(): Promise<TelegramAdminBotStatus> {
-  const runtime = readTelegramRuntime();
   const config = await prisma.telegramBotConfig.findUnique({ where: { id: BOT_CONFIG_ID } });
+  applyBotConfigRow(config);
+  const runtime = readTelegramRuntime();
+  if (runtime.configured) {
+    await ensureTelegramWebhookOnce();
+  }
   const connectedUsers = await prisma.telegramConnection.count({ where: { isActive: true } });
   const hasDatabaseToken = Boolean(config?.encryptedBotToken);
   const source = tokenSourceFromConfig(hasDatabaseToken, runtime.configured);
@@ -132,7 +150,7 @@ export async function updateAdminBotToken(actorUserId: string, token: string): P
   resetTelegramWebhookEnsureCache();
 
   const runtime = readTelegramRuntime();
-  if (runtime.webhookSecret) {
+  if (runtime.token && runtime.webhookSecret) {
     await setTelegramWebhook();
   }
 
