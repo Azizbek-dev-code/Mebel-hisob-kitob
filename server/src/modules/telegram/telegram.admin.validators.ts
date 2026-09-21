@@ -3,10 +3,21 @@ import { z } from 'zod';
 import { env } from '../../config/env.js';
 import { TELEGRAM_BUTTON_TEXT_MAX_LENGTH, TELEGRAM_MESSAGE_MAX_LENGTH } from './telegram.types.js';
 
+/**
+ * Shared client types send `null` for empty optional fields. Accept null/empty
+ * and normalise to `undefined` so refine rules see a consistent shape.
+ */
 const optionalTrimmed = z
   .string()
   .trim()
-  .optional()
+  .nullish()
+  .transform((value) => (value ? value : undefined));
+
+const optionalButtonText = z
+  .string()
+  .trim()
+  .max(TELEGRAM_BUTTON_TEXT_MAX_LENGTH)
+  .nullish()
   .transform((value) => (value ? value : undefined));
 
 function isAllowedImageUrl(value: string): boolean {
@@ -34,12 +45,7 @@ const telegramRichContentObjectSchema = z
     text: z.string().trim().max(TELEGRAM_MESSAGE_MAX_LENGTH).default(''),
     mediaKind: z.enum(['NONE', 'IMAGE', 'VIDEO', 'DOCUMENT']).optional(),
     imageUrl: optionalTrimmed,
-    buttonText: z
-      .string()
-      .trim()
-      .max(TELEGRAM_BUTTON_TEXT_MAX_LENGTH)
-      .optional()
-      .transform((value) => (value ? value : undefined)),
+    buttonText: optionalButtonText,
     buttonUrl: optionalTrimmed,
   })
   .strict();
