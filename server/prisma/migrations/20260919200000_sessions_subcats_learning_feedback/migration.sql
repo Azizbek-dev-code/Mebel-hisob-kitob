@@ -193,11 +193,13 @@ SELECT
   a."workspaceId",
   a."title",
   a."note",
-  'CUSTOM',
+  -- Bare string / CASE expressions are typed as text; Postgres will not
+  -- auto-cast them into enums on INSERT … SELECT (error 42804 / P3018).
+  'CUSTOM'::"GrowthLearningCategory",
   CASE
-    WHEN a."status" = 'COMPLETED' THEN 'COMPLETED'
-    WHEN a."status" = 'ARCHIVED' THEN 'ARCHIVED'
-    ELSE 'ACTIVE'
+    WHEN a."status" = 'COMPLETED' THEN 'COMPLETED'::"GrowthLearningGoalStatus"
+    WHEN a."status" = 'ARCHIVED' THEN 'ARCHIVED'::"GrowthLearningGoalStatus"
+    ELSE 'ACTIVE'::"GrowthLearningGoalStatus"
   END,
   1,
   'goal',
