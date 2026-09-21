@@ -326,6 +326,8 @@ export const NAV_FEATURE_MAP: Record<string, FeatureKey | null> = {
   billing: null,
   profile: null,
   settings: null,
+  /** Platform attribution — never a paid-plan module (trial or paid). */
+  referral: null,
   'my-sales': FeatureKey.SALES,
   'my-reports': FeatureKey.SALES,
   'my-finances': null,

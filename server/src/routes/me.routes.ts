@@ -3,7 +3,10 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 
 import { env } from '../config/env.js';
-import { deleteOwnAccount } from '../controllers/account-deletion.controller.js';
+import {
+  deleteBusinessAccount,
+  deleteOwnAccount,
+} from '../controllers/account-deletion.controller.js';
 import { patchMyAccount } from '../controllers/auth.controller.js';
 import {
   getMyProfile,
@@ -21,7 +24,10 @@ import {
 import { requireAuth } from '../middleware/require-auth.js';
 import { validate } from '../middleware/validate.js';
 import { ApiError } from '../utils/api-error.js';
-import { deleteAccountBodySchema } from '../validators/account-deletion.validators.js';
+import {
+  deleteAccountBodySchema,
+  deleteBusinessAccountBodySchema,
+} from '../validators/account-deletion.validators.js';
 import { updateAccountProfileBodySchema } from '../validators/auth.validators.js';
 import { workerSalesQuerySchema, sellerReportQuerySchema } from '../validators/workers.validators.js';
 import {
@@ -85,4 +91,12 @@ meRouter.delete(
   accountDeleteLimiter,
   validate({ body: deleteAccountBodySchema }),
   deleteOwnAccount,
+);
+
+/** Owner closes current Business workspace + store. Identity / Personal stay. */
+meRouter.delete(
+  '/business-account',
+  accountDeleteLimiter,
+  validate({ body: deleteBusinessAccountBodySchema }),
+  deleteBusinessAccount,
 );

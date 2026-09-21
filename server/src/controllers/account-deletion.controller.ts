@@ -5,14 +5,34 @@ import * as accountDeletionService from '../services/account-deletion.service.js
 import { ApiError } from '../utils/api-error.js';
 import { asyncHandler } from '../utils/async-handler.js';
 import { sendNoContent, sendSuccess } from '../utils/http-response.js';
-import type { DeleteAccountBody } from '../validators/account-deletion.validators.js';
+import type {
+  DeleteAccountBody,
+  DeleteBusinessAccountBody,
+} from '../validators/account-deletion.validators.js';
 
 export const deleteOwnAccount = asyncHandler(async (req: Request, res: Response) => {
   if (!req.auth) throw ApiError.unauthorized();
   const body = req.body as DeleteAccountBody;
   await accountDeletionService.deleteOwnAccount(
     { id: req.auth.id, storeId: req.auth.storeId, role: req.auth.role },
-    body,
+    {
+      ...body,
+      confirmation: body.confirmation as 'DELETE MY ACCOUNT',
+    },
+  );
+  clearAuthCookie(res);
+  sendNoContent(res);
+});
+
+export const deleteBusinessAccount = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.auth) throw ApiError.unauthorized();
+  const body = req.body as DeleteBusinessAccountBody;
+  await accountDeletionService.deleteBusinessAccount(
+    { id: req.auth.id, storeId: req.auth.storeId, role: req.auth.role },
+    {
+      ...body,
+      confirmation: body.confirmation as 'DELETE MY BUSINESS',
+    },
   );
   clearAuthCookie(res);
   sendNoContent(res);

@@ -13,7 +13,7 @@ import type {
   TelegramMenuScreenDto,
 } from '@furniture-erp/shared';
 
-import { composerError, TelegramComposer, type TelegramComposerValue } from '../components/TelegramComposer';
+import { composerError, TelegramComposer, validateTelegramComposerFields, type TelegramComposerValue } from '../components/TelegramComposer';
 import { MetricList, MetricRow } from '../components/MetricList';
 import {
   useCancelTelegramBroadcast,
@@ -147,11 +147,23 @@ export function PlatformTelegramBotPage() {
               Status: {data?.connected ? t('platformAdmin.telegram.connected') : t('platformAdmin.telegram.notConnected')}
             </p>
             {data?.webhook ? (
-              <p className="break-all text-sm text-ink-muted">
-                {t('platformAdmin.telegram.webhook')}: {data.webhook.configuredUrl}
-                <br />
-                {t('platformAdmin.telegram.lastChecked')}: {formatDate(data.webhook.lastCheckedAt)}
-              </p>
+              <div className="space-y-1 break-all text-sm text-ink-muted">
+                <p>
+                  {t('platformAdmin.telegram.webhook')}: {data.webhook.url || data.webhook.configuredUrl}
+                </p>
+                {data.webhook.url && data.webhook.url !== data.webhook.configuredUrl ? (
+                  <p>Expected: {data.webhook.configuredUrl}</p>
+                ) : null}
+                {typeof data.webhook.pendingUpdateCount === 'number' ? (
+                  <p>Pending updates: {data.webhook.pendingUpdateCount}</p>
+                ) : null}
+                {data.webhook.lastErrorMessage ? (
+                  <p className="text-danger-700">{data.webhook.lastErrorMessage}</p>
+                ) : null}
+                <p>
+                  {t('platformAdmin.telegram.lastChecked')}: {formatDate(data.webhook.lastCheckedAt)}
+                </p>
+              </div>
             ) : null}
             <input
               type="password"
@@ -219,21 +231,29 @@ export function PlatformTelegramStartPage() {
             error={error}
             onSubmit={async () => {
               setError(null);
+              const localError = validateTelegramComposerFields(value);
+              if (localError) {
+                setError(localError);
+                return;
+              }
+              const buttonText = value.buttonText.trim() || null;
+              const buttonUrl = value.buttonUrl.trim() || null;
+              const imageUrl = value.imageUrl.trim() || null;
               try {
                 await save.mutateAsync({
                   text: value.text,
-                  mediaKind: value.imageUrl ? 'IMAGE' : 'NONE',
-                  imageUrl: value.imageUrl || null,
-                  buttonText: value.buttonText || null,
-                  buttonUrl: value.buttonUrl || null,
+                  mediaKind: imageUrl ? 'IMAGE' : 'NONE',
+                  imageUrl,
+                  buttonText,
+                  buttonUrl,
                   buttons: [
                     {
-                      text: value.buttonText || '🚀 Dasturga kirish',
+                      text: buttonText || '🚀 Dasturga kirish',
                       action: 'URL',
-                      url: value.buttonUrl || 'https://balancy.space',
+                      url: buttonUrl || 'https://www.mebelboshqaruv.uz',
                     },
                     {
-                      text: detailButton || '📚 Batafsil',
+                      text: detailButton.trim() || '📚 Batafsil',
                       action: 'MENU',
                       targetSlug: 'details',
                     },
@@ -290,14 +310,19 @@ export function PlatformTelegramBroadcastPage() {
           error={error}
           onSubmit={async () => {
             setError(null);
+            const localError = validateTelegramComposerFields(value);
+            if (localError) {
+              setError(localError);
+              return;
+            }
             try {
               await create.mutateAsync({
                 name: name || null,
                 text: value.text,
-                mediaKind: value.imageUrl ? 'IMAGE' : 'NONE',
-                imageUrl: value.imageUrl || null,
-                buttonText: value.buttonText || null,
-                buttonUrl: value.buttonUrl || null,
+                mediaKind: value.imageUrl.trim() ? 'IMAGE' : 'NONE',
+                imageUrl: value.imageUrl.trim() || null,
+                buttonText: value.buttonText.trim() || null,
+                buttonUrl: value.buttonUrl.trim() || null,
                 audience,
                 timezone: 'Asia/Tashkent',
                 sendNow,

@@ -8,6 +8,14 @@ export interface DeleteAccountRequest {
   reasonDetail?: string;
 }
 
+/** Closes the current Business workspace + store. Does not touch Identity or Personal Finance. */
+export interface DeleteBusinessAccountRequest {
+  password: string;
+  confirmation: 'DELETE MY BUSINESS';
+  reasonCode: AccountDeletionReasonCode;
+  reasonDetail?: string;
+}
+
 export interface AccountDeletionItem {
   id: string;
   storeId: string | null;

@@ -7,6 +7,9 @@
 
 export const ACCOUNT_DELETE_CONFIRMATION = 'DELETE MY ACCOUNT';
 
+/** Owner confirmation to close the current Business workspace + store (Identity / Personal stay). */
+export const BUSINESS_DELETE_CONFIRMATION = 'DELETE MY BUSINESS';
+
 export const AccountDeletionReasonCode = {
   NOT_NEEDED: 'NOT_NEEDED',
   TOO_HARD: 'TOO_HARD',

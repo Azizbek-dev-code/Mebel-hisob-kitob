@@ -285,22 +285,30 @@ export async function grantFirstPaymentCommission(
   if (amount <= 0n) return;
 
   try {
-    await db.referralCommission.create({
-      data: {
-        attributionId: attribution.id,
-        referrerIdentityId: attribution.referrerIdentityId,
-        amountSom: amount,
-        commissionPercent: program.percent,
-        sourceAmountSom: input.sourceAmountSom,
-        sourceType: input.sourceType,
-        sourceId: input.sourceId,
-        status: ReferralCommissionStatus.AVAILABLE,
-      },
-    });
-    await db.referralAttribution.updateMany({
-      where: { id: attribution.id, firstPaidAt: null },
-      data: { firstPaidAt: new Date() },
-    });
+    // Prefer the caller's transaction when already nested (billing approve paths).
+    const write = async (tx: DbClient) => {
+      await tx.referralCommission.create({
+        data: {
+          attributionId: attribution.id,
+          referrerIdentityId: attribution.referrerIdentityId,
+          amountSom: amount,
+          commissionPercent: program.percent,
+          sourceAmountSom: input.sourceAmountSom,
+          sourceType: input.sourceType,
+          sourceId: input.sourceId,
+          status: ReferralCommissionStatus.AVAILABLE,
+        },
+      });
+      await tx.referralAttribution.updateMany({
+        where: { id: attribution.id, firstPaidAt: null },
+        data: { firstPaidAt: new Date() },
+      });
+    };
+    if ('$transaction' in db && typeof db.$transaction === 'function') {
+      await db.$transaction(write);
+    } else {
+      await write(db);
+    }
   } catch (error) {
     if (!isUniqueViolation(error)) throw error;
   }

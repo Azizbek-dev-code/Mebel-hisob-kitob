@@ -22,7 +22,9 @@ function allowedWhileStoreBlocked(req: Request): boolean {
     path.startsWith('/api/accounts') ||
     path.startsWith('/api/onboarding') ||
     path.startsWith('/api/referrals') ||
-    path.startsWith('/api/presence')
+    path.startsWith('/api/presence') ||
+    path === '/api/me/account' ||
+    path === '/api/me/business-account'
   );
 }
 
@@ -42,7 +44,10 @@ function allowedWithoutActiveSubscription(req: Request): boolean {
     path.startsWith('/api/health') ||
     path.startsWith('/api/referrals') ||
     path.startsWith('/api/telegram') ||
-    path.startsWith('/api/presence')
+    path.startsWith('/api/presence') ||
+    // Account / business self-delete must work after trial expiry.
+    path === '/api/me/account' ||
+    path === '/api/me/business-account'
   );
 }
 

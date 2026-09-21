@@ -402,6 +402,7 @@ export function OnboardingPage() {
         sessionStorage.removeItem(TOKEN_KEY);
         if (result.user) {
           queryClient.setQueryData(authQueryKeys.currentUser, result.user);
+          queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== 'auth' });
           navigate(ROUTES.personalDashboard, { replace: true });
           return;
         }
@@ -421,6 +422,7 @@ export function OnboardingPage() {
       sessionStorage.removeItem(TOKEN_KEY);
       if (result.user) {
         queryClient.setQueryData(authQueryKeys.currentUser, result.user);
+        queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== 'auth' });
         navigate(ROUTES.personalDashboard, { replace: true });
         return;
       }

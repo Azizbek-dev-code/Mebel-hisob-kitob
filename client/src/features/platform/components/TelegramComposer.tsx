@@ -128,5 +128,50 @@ export function TelegramComposer({
 }
 
 export function composerError(caught: unknown, fallback: string): string {
-  return caught instanceof ApiClientError ? caught.message : fallback;
+  if (!(caught instanceof ApiClientError)) return fallback;
+  const detailMessages = caught.details
+    ?.map((detail) => detail.message?.trim())
+    .filter((message): message is string => Boolean(message));
+  if (detailMessages?.length) {
+    return detailMessages.join('; ');
+  }
+  return caught.message || fallback;
+}
+
+/** Client-side checks that mirror backend start/broadcast rich-content rules. */
+export function validateTelegramComposerFields(value: TelegramComposerValue): string | null {
+  const text = value.text.trim();
+  const imageUrl = value.imageUrl.trim();
+  if (!text && !imageUrl) {
+    return 'Matn yoki rasm kerak';
+  }
+  if (imageUrl) {
+    try {
+      const parsed = new URL(imageUrl);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        return 'Rasm URL https bo‘lishi kerak';
+      }
+    } catch {
+      return 'Rasm URL https bo‘lishi kerak';
+    }
+  }
+
+  const buttonText = value.buttonText.trim();
+  const buttonUrl = value.buttonUrl.trim();
+  if (Boolean(buttonText) !== Boolean(buttonUrl)) {
+    return buttonText
+      ? 'Tugma URL kiriting (masalan: https://www.mebelboshqaruv.uz)'
+      : 'Tugma matni ham kiriting';
+  }
+  if (buttonUrl) {
+    try {
+      const parsed = new URL(buttonUrl);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        return 'Tugma URL http(s) bo‘lishi kerak (masalan: https://www.mebelboshqaruv.uz)';
+      }
+    } catch {
+      return 'Tugma URL noto‘g‘ri. Format: https://www.mebelboshqaruv.uz';
+    }
+  }
+  return null;
 }

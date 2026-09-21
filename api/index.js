@@ -1,11 +1,24 @@
 let app;
+let appReady;
 
 async function getApp() {
-  if (!app) {
-    const { createApp } = await import('../server/dist/app.js');
-    app = createApp();
+  if (!appReady) {
+    appReady = (async () => {
+      const { createApp } = await import('../server/dist/app.js');
+      const expressApp = createApp();
+      const { hydrateTelegramRuntimeFromDb } = await import(
+        '../server/dist/modules/telegram/telegram.admin.service.js'
+      );
+      await hydrateTelegramRuntimeFromDb();
+      const { ensureTelegramWebhookOnce } = await import(
+        '../server/dist/modules/telegram/telegram.service.js'
+      );
+      void ensureTelegramWebhookOnce();
+      app = expressApp;
+      return expressApp;
+    })();
   }
-  return app;
+  return appReady;
 }
 
 export default async function handler(req, res) {

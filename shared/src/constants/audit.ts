@@ -22,6 +22,8 @@ export const AuditEventType = {
   USER_ROLE_CHANGED: 'USER_ROLE_CHANGED',
   USER_DISABLED: 'USER_DISABLED',
   ACCOUNT_DELETED: 'ACCOUNT_DELETED',
+  BUSINESS_ACCOUNT_DELETED: 'BUSINESS_ACCOUNT_DELETED',
+  STORE_DELETED: 'STORE_DELETED',
 
   // --- Customers -----------------------------------------------------------
   CUSTOMER_CREATED: 'CUSTOMER_CREATED',

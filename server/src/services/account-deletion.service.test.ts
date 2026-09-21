@@ -1,7 +1,11 @@
 import {
   ACCOUNT_DELETE_CONFIRMATION,
+  BUSINESS_DELETE_CONFIRMATION,
   AccountDeletionReasonCode,
+  StoreAccessStatus,
   UserRole,
+  WorkspaceStatus,
+  WorkspaceType,
   type DeleteAccountRequest,
 } from '@furniture-erp/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,8 +14,12 @@ import { ApiError } from '../utils/api-error.js';
 
 const { prismaMock, verifyPasswordMock, hashPasswordMock, recordAuditMock } = vi.hoisted(() => ({
   prismaMock: {
-    user: { findFirst: vi.fn(), count: vi.fn(), update: vi.fn() },
+    user: { findFirst: vi.fn(), findMany: vi.fn(), count: vi.fn(), update: vi.fn() },
     identity: { update: vi.fn() },
+    store: { findUnique: vi.fn(), update: vi.fn() },
+    workspace: { findUnique: vi.fn(), update: vi.fn() },
+    workspaceMembership: { deleteMany: vi.fn() },
+    authSession: { updateMany: vi.fn() },
     accountDeletion: { create: vi.fn(), findMany: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -33,9 +41,8 @@ vi.mock('./audit.service.js', () => ({
   recordAudit: recordAuditMock,
 }));
 
-const { deleteOwnAccount, listAccountDeletions, assertAccountNotDeleted } = await import(
-  './account-deletion.service.js'
-);
+const { deleteOwnAccount, deleteBusinessAccount, listAccountDeletions, assertAccountNotDeleted } =
+  await import('./account-deletion.service.js');
 
 const USER = {
   id: 'user_ali',
@@ -47,6 +54,7 @@ const USER = {
   passwordHash: 'hash',
   isActive: true,
   deletedAt: null,
+  identityId: null as string | null,
 };
 
 const BODY = {
@@ -67,6 +75,7 @@ beforeEach(() => {
   prismaMock.user.count.mockResolvedValue(1);
   prismaMock.accountDeletion.create.mockResolvedValue({ id: 'del_1' });
   prismaMock.user.update.mockResolvedValue({ ...USER, isActive: false });
+  prismaMock.authSession.updateMany.mockResolvedValue({ count: 0 });
 });
 
 describe('deleteOwnAccount', () => {
@@ -101,25 +110,14 @@ describe('deleteOwnAccount', () => {
         metadata: expect.not.objectContaining({ password: expect.anything() }),
       }),
     );
-    expect(prismaMock.identity.update).not.toHaveBeenCalled();
   });
 
-  it('anonymises a linked Identity so email does not remain on the overlay', async () => {
+  it('never scrambles Identity — Personal Finance must stay usable', async () => {
     prismaMock.user.findFirst.mockResolvedValue({ ...USER, identityId: 'idn_ali' });
-    prismaMock.identity.update.mockResolvedValue({ id: 'idn_ali' });
 
     await deleteOwnAccount({ id: USER.id, storeId: USER.storeId, role: USER.role }, BODY);
 
-    expect(prismaMock.identity.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'idn_ali' },
-        data: expect.objectContaining({
-          email: `deleted.${USER.id}@invalid.local`,
-          fullName: 'Deleted user',
-          passwordHash: 'scrambled',
-        }),
-      }),
-    );
+    expect(prismaMock.identity.update).not.toHaveBeenCalled();
   });
 
   it('rejects a wrong password', async () => {
@@ -140,7 +138,7 @@ describe('deleteOwnAccount', () => {
     expect(prismaMock.user.update).not.toHaveBeenCalled();
   });
 
-  it('blocks deleting the last store admin', async () => {
+  it('blocks deleting the last store admin login (use business delete instead)', async () => {
     prismaMock.user.findFirst.mockResolvedValue({ ...USER, role: UserRole.ADMIN });
     prismaMock.user.count.mockResolvedValue(0);
 
@@ -169,6 +167,104 @@ describe('deleteOwnAccount', () => {
         { ...BODY, reasonCode: AccountDeletionReasonCode.OTHER },
       ),
     ).rejects.toMatchObject({ statusCode: 422 });
+  });
+});
+
+describe('deleteBusinessAccount', () => {
+  const ADMIN = {
+    ...USER,
+    role: UserRole.ADMIN,
+    identityId: 'idn_owner',
+  };
+
+  const BUSINESS_BODY = {
+    password: 'Ali12345!',
+    confirmation: BUSINESS_DELETE_CONFIRMATION,
+    reasonCode: AccountDeletionReasonCode.NOT_NEEDED,
+  } as const;
+
+  beforeEach(() => {
+    prismaMock.user.findFirst.mockResolvedValue(ADMIN);
+    prismaMock.user.findMany.mockResolvedValue([
+      {
+        id: ADMIN.id,
+        email: ADMIN.email,
+        username: ADMIN.username,
+        fullName: ADMIN.fullName,
+        role: ADMIN.role,
+      },
+      {
+        id: 'user_worker',
+        email: 'worker@example.com',
+        username: 'worker',
+        fullName: 'Worker',
+        role: UserRole.EMPLOYEE,
+      },
+    ]);
+    prismaMock.store.findUnique.mockResolvedValue({
+      id: 'store_1',
+      name: 'Do‘kon A',
+      isActive: true,
+    });
+    prismaMock.workspace.findUnique.mockResolvedValue({
+      id: 'ws_biz',
+      type: WorkspaceType.BUSINESS,
+    });
+    prismaMock.workspace.update.mockResolvedValue({});
+    prismaMock.workspaceMembership.deleteMany.mockResolvedValue({ count: 1 });
+    prismaMock.store.update.mockResolvedValue({});
+  });
+
+  it('closes the store without requiring another admin and preserves Identity', async () => {
+    await deleteBusinessAccount(
+      { id: ADMIN.id, storeId: ADMIN.storeId, role: UserRole.ADMIN },
+      BUSINESS_BODY,
+    );
+
+    expect(prismaMock.identity.update).not.toHaveBeenCalled();
+    expect(prismaMock.store.update).toHaveBeenCalledWith({
+      where: { id: 'store_1' },
+      data: {
+        isActive: false,
+        accessStatus: StoreAccessStatus.MANUALLY_BLOCKED,
+      },
+    });
+    expect(prismaMock.workspace.update).toHaveBeenCalledWith({
+      where: { id: 'ws_biz' },
+      data: { status: WorkspaceStatus.ARCHIVED },
+    });
+    expect(prismaMock.workspaceMembership.deleteMany).toHaveBeenCalledWith({
+      where: { workspaceId: 'ws_biz' },
+    });
+    expect(prismaMock.user.update).toHaveBeenCalledTimes(2);
+    expect(recordAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          scope: 'business',
+          identityPreserved: true,
+        }),
+      }),
+    );
+  });
+
+  it('rejects non-admin members', async () => {
+    await expect(
+      deleteBusinessAccount(
+        { id: USER.id, storeId: USER.storeId, role: UserRole.EMPLOYEE },
+        BUSINESS_BODY,
+      ),
+    ).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it('rejects a wrong password', async () => {
+    verifyPasswordMock.mockResolvedValue(false);
+    await expect(
+      deleteBusinessAccount(
+        { id: ADMIN.id, storeId: ADMIN.storeId, role: UserRole.ADMIN },
+        BUSINESS_BODY,
+      ),
+    ).rejects.toMatchObject({ statusCode: 401 });
+    expect(prismaMock.store.update).not.toHaveBeenCalled();
   });
 });
 

@@ -1,6 +1,7 @@
 import { SubscriptionStatus, UserRole, planAllowsFeature } from '@furniture-erp/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 
 import { authQueryKeys, useCurrentUser } from '@/features/auth/hooks/use-auth';
 import { storeBillingService } from '@/services/store-billing.service';
@@ -14,6 +15,7 @@ import {
 
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { data: user } = useCurrentUser();
+  const { pathname } = useLocation();
   const queryClient = useQueryClient();
   const [gateOpen, setGateOpen] = useState(false);
   const [gateReason, setGateReason] = useState<SubscriptionGateReason>('expired');
@@ -63,6 +65,12 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('furniture-erp:feature-not-included', onFeature);
     };
   }, [openGate]);
+
+  // Stale FEATURE_NOT_INCLUDED from another module must not linger on always-open
+  // screens (referral, settings, billing) — trial users were reading that as "referral locked".
+  useEffect(() => {
+    setGateOpen(false);
+  }, [pathname]);
 
   async function onStartWelcome() {
     setWelcomeDismissed(true);

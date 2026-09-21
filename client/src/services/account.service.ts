@@ -53,6 +53,15 @@ export const accountService = {
     await apiClient.delete('/me/account', { body });
   },
 
+  async deleteBusinessAccount(body: {
+    password: string;
+    confirmation: 'DELETE MY BUSINESS';
+    reasonCode: DeleteAccountRequest['reasonCode'];
+    reasonDetail?: string;
+  }): Promise<void> {
+    await apiClient.delete('/me/business-account', { body });
+  },
+
   async listDeletions(signal?: AbortSignal) {
     const { items } = await apiClient.get<AccountDeletionListResponse>(
       '/platform/account-deletions',

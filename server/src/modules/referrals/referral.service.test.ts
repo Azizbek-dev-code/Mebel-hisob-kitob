@@ -200,6 +200,22 @@ describe('first payment commission', () => {
     expect(prismaMock.sale.create).not.toHaveBeenCalled();
   });
 
+  it('does not commission when attribution already had a first paid payment', async () => {
+    prismaMock.referralCommission.findUnique.mockResolvedValue(null);
+    prismaMock.referralAttribution.findUnique.mockResolvedValue({
+      ...attribution,
+      firstPaidAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+    await grantFirstPaymentCommission({
+      referredIdentityId: 'idn_new',
+      sourceType: ReferralPaymentSourceType.PLATFORM_INVOICE,
+      sourceId: 'inv_renewal',
+      sourceAmountSom: 100000n,
+      paid: true,
+    });
+    expect(prismaMock.referralCommission.create).not.toHaveBeenCalled();
+  });
+
   it('does not commission a duplicate payment or a later recurring source', async () => {
     prismaMock.referralCommission.findUnique.mockResolvedValue({ id: 'com_1' });
     await grantFirstPaymentCommission({

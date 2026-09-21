@@ -49,6 +49,8 @@ export function useLogin() {
       // The login response is the same principal `/auth/me` would return, so
       // seeding the cache here spares the guard an extra round trip.
       queryClient.setQueryData(authQueryKeys.currentUser, user);
+      // Drop any previous Personal/Business query cache so contexts never mix.
+      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== 'auth' });
     },
   });
 }
