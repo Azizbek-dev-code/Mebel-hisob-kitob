@@ -4,8 +4,10 @@ import {
   AuditEventType,
   type CreateTelegramBroadcastRequest,
   type TelegramAutomationKind,
+  type TelegramAutoMessagePreviewRequest,
   type UpdateTelegramAutomationRequest,
   type UpdateTelegramStartMessageRequest,
+  type UpsertTelegramAutoMessageRequest,
   type UpsertTelegramMenuScreenRequest,
 } from '@furniture-erp/shared';
 
@@ -14,6 +16,7 @@ import { ApiError } from '../../utils/api-error.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 import { isCronSecretAuthorized } from '../../utils/cron-secret.js';
 import { sendSuccess } from '../../utils/http-response.js';
+import { resolveIdentityIdForTelegram } from './telegram.account.service.js';
 import {
   getAdminBotStatus,
   getAdminStartMessage,
@@ -25,6 +28,17 @@ import {
 } from './telegram.admin.service.js';
 import { createBroadcast, cancelBroadcast, getBroadcast, listBroadcasts, processBroadcastQueue } from './telegram.broadcast.service.js';
 import { listAutomations, updateAutomation, runTelegramAutomationTick } from './telegram.automation.service.js';
+import {
+  createAutoMessage,
+  deleteAutoMessage,
+  duplicateAutoMessage,
+  listAutoMessageCatalog,
+  listAutoMessages,
+  previewAutoMessage,
+  runTelegramAutoMessageTick,
+  testSendAutoMessage,
+  updateAutoMessage,
+} from './telegram.auto-message.service.js';
 import { listMenuScreens, upsertMenuScreen } from './telegram.menu.js';
 
 function requirePlatformActor(req: Request): { id: string } {
@@ -136,6 +150,44 @@ export const getTelegramAdminStats = asyncHandler(async (_req: Request, res: Res
   sendSuccess(res, await getAdminTelegramStats());
 });
 
+export const getTelegramAdminAutoMessages = asyncHandler(async (_req: Request, res: Response) => {
+  sendSuccess(res, await listAutoMessages());
+});
+
+export const getTelegramAdminAutoMessageCatalog = asyncHandler(async (req: Request, res: Response) => {
+  const accountType = String(req.query.accountType ?? 'PERSONAL');
+  sendSuccess(res, listAutoMessageCatalog(accountType));
+});
+
+export const postTelegramAdminAutoMessage = asyncHandler(async (req: Request, res: Response) => {
+  sendSuccess(res, await createAutoMessage(req.body as UpsertTelegramAutoMessageRequest));
+});
+
+export const putTelegramAdminAutoMessage = asyncHandler(async (req: Request, res: Response) => {
+  sendSuccess(res, await updateAutoMessage(req.params.id!, req.body as UpsertTelegramAutoMessageRequest));
+});
+
+export const postTelegramAdminAutoMessageDuplicate = asyncHandler(async (req: Request, res: Response) => {
+  sendSuccess(res, await duplicateAutoMessage(req.params.id!));
+});
+
+export const deleteTelegramAdminAutoMessage = asyncHandler(async (req: Request, res: Response) => {
+  await deleteAutoMessage(req.params.id!);
+  sendSuccess(res, { ok: true });
+});
+
+export const postTelegramAdminAutoMessagePreview = asyncHandler(async (req: Request, res: Response) => {
+  sendSuccess(res, previewAutoMessage(req.body as TelegramAutoMessagePreviewRequest));
+});
+
+export const postTelegramAdminAutoMessageTestSend = asyncHandler(async (req: Request, res: Response) => {
+  const identityId = await resolveIdentityIdForTelegram(req);
+  sendSuccess(
+    res,
+    await testSendAutoMessage(identityId, req.body as TelegramAutoMessagePreviewRequest),
+  );
+});
+
 export const postTelegramBroadcastCron = asyncHandler(async (req: Request, res: Response) => {
   if (!isCronSecretAuthorized(req)) {
     throw ApiError.unauthorized('Cron unauthorized');
@@ -147,5 +199,13 @@ export const postTelegramAutomationCron = asyncHandler(async (req: Request, res:
   if (!isCronSecretAuthorized(req)) {
     throw ApiError.unauthorized('Cron unauthorized');
   }
-  sendSuccess(res, await runTelegramAutomationTick());
+  // Legacy fixed kinds (if any still enabled) + universal Auto Message builder.
+  const legacy = await runTelegramAutomationTick();
+  const universal = await runTelegramAutoMessageTick();
+  sendSuccess(res, {
+    sent: legacy.sent + universal.sent,
+    ran: legacy.ran + universal.ran,
+    legacy,
+    universal,
+  });
 });

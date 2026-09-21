@@ -1,3 +1,8 @@
+import {
+  handleAccountsCallback,
+  handleAccountsCommand,
+  isTelegramAccountsCallback,
+} from './telegram.accounts.bot.js';
 import { getPublicAppUrl } from './telegram.config.js';
 import { sendMenuScreen } from './telegram.menu.js';
 import {
@@ -115,9 +120,10 @@ async function handleHelp(chatId: string): Promise<void> {
     chatId,
     '<b>Yordam</b>\n' +
       '/start — boshlash / ulash\n' +
+      '/accounts — ulangan akkauntlar\n' +
       '/settings — holat va sozlamalar\n' +
       '/app — ilovani ochish\n' +
-      '/unlink — hisobni uzish\n' +
+      '/unlink — butun hisobni uzish\n' +
       '/help — shu yordam',
   );
 }
@@ -267,6 +273,9 @@ async function handleMessage(message: TelegramMessage): Promise<void> {
     case 'settings':
       await handleSettings(message);
       break;
+    case 'accounts':
+      await handleAccountsCommand(message);
+      break;
     case 'app':
       await handleApp(chatId);
       break;
@@ -294,6 +303,10 @@ async function handleCallback(query: TelegramCallbackQuery): Promise<void> {
   }
   if (data === TELEGRAM_CB_UNLINK_NO) {
     await handleUnlinkConfirm(query, false);
+    return;
+  }
+  if (isTelegramAccountsCallback(data)) {
+    await handleAccountsCallback(query, data);
     return;
   }
   if (data.startsWith(TELEGRAM_CB_MENU)) {

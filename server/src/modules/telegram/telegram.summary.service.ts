@@ -188,7 +188,12 @@ export async function personalWorkspacesForIdentity(identityId: string) {
 
 export async function businessStoresForIdentity(identityId: string) {
   const users = await prisma.user.findMany({
-    where: { identityId },
+    where: {
+      identityId,
+      deletedAt: null,
+      isActive: true,
+      store: { isActive: true },
+    },
     select: { storeId: true, store: { select: { id: true, name: true, businessType: true } } },
   });
   const unique = new Map<string, { id: string; name: string; businessType: string }>();

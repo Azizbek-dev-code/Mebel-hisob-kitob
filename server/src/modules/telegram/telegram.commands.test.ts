@@ -17,7 +17,15 @@ const {
   getPendingLink,
   markLinkTokenUsed,
 } = vi.hoisted(() => ({
-  prismaMock: {},
+  prismaMock: {
+    telegramAccountPreference: {
+      upsert: vi.fn().mockResolvedValue({}),
+      deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
+    telegramConnection: {
+      update: vi.fn().mockResolvedValue({}),
+    },
+  },
   sendTelegramMessage: vi.fn(),
   sendTelegramContent: vi.fn(),
   getActiveStartMessage: vi.fn(),
@@ -64,6 +72,30 @@ vi.mock('./telegram.menu.js', () => ({
 }));
 vi.mock('./telegram.config.js', () => ({
   getPublicAppUrl: () => 'https://balancy.space',
+}));
+vi.mock('./telegram.account-pref.service.js', () => ({
+  listAccountPreferences: vi.fn().mockResolvedValue([
+    {
+      workspaceId: 'ws_p',
+      type: 'PERSONAL',
+      name: 'Shaxsiy moliya',
+      storeId: null,
+      businessType: null,
+      notifyEnabled: true,
+    },
+    {
+      workspaceId: 'ws_b',
+      type: 'BUSINESS',
+      name: 'Fayz Mebel',
+      storeId: 'st_b',
+      businessType: 'FURNITURE',
+      notifyEnabled: true,
+    },
+  ]),
+}));
+vi.mock('./telegram.cleanup.service.js', () => ({
+  countValidTelegramAccountContexts: vi.fn().mockResolvedValue(2),
+  unlinkTelegramForIdentity: vi.fn().mockResolvedValue(true),
 }));
 
 import { handleTelegramUpdate } from './telegram.commands.js';
@@ -237,5 +269,29 @@ describe('handleTelegramUpdate /start content', () => {
       },
     });
     expect(sendMenuScreen).toHaveBeenCalledWith('71', 'details');
+  });
+
+  it('lists connected accounts via /accounts', async () => {
+    findActiveByTelegramUserId.mockResolvedValue({
+      id: 'conn_1',
+      identityId: 'idn_1',
+      isActive: true,
+    });
+    await handleTelegramUpdate({
+      update_id: 20,
+      message: {
+        message_id: 20,
+        text: '/accounts',
+        chat: { id: 90, type: 'private' },
+        from: { id: 90, first_name: 'Ali' },
+      },
+    });
+    expect(sendTelegramMessage).toHaveBeenCalledWith(
+      '90',
+      expect.stringContaining('Ulangan akkauntlar'),
+      expect.objectContaining({
+        inline_keyboard: expect.any(Array),
+      }),
+    );
   });
 });

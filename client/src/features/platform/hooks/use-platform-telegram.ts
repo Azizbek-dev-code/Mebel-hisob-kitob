@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   CreateTelegramBroadcastRequest,
+  TelegramAutoMessagePreviewRequest,
   UpdateTelegramAutomationRequest,
   UpdateTelegramBotTokenRequest,
   UpdateTelegramStartMessageRequest,
+  UpsertTelegramAutoMessageRequest,
   UpsertTelegramMenuScreenRequest,
 } from '@furniture-erp/shared';
 
@@ -15,6 +17,9 @@ export const platformTelegramKeys = {
   start: ['platform-telegram-start'] as const,
   menu: ['platform-telegram-menu'] as const,
   automations: ['platform-telegram-automations'] as const,
+  autoMessages: ['platform-telegram-auto-messages'] as const,
+  autoMessageCatalog: (accountType: string) =>
+    ['platform-telegram-auto-message-catalog', accountType] as const,
   users: (page: number) => ['platform-telegram-users', page] as const,
   broadcasts: (page: number) => ['platform-telegram-broadcasts', page] as const,
 };
@@ -99,6 +104,81 @@ export function useUpdateTelegramAutomation() {
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: platformTelegramKeys.automations });
     },
+  });
+}
+
+export function usePlatformTelegramAutoMessages(enabled = true) {
+  return useQuery({
+    queryKey: platformTelegramKeys.autoMessages,
+    queryFn: ({ signal }) => platformTelegramService.autoMessages(signal),
+    enabled,
+  });
+}
+
+export function usePlatformTelegramAutoMessageCatalog(accountType: string, enabled = true) {
+  return useQuery({
+    queryKey: platformTelegramKeys.autoMessageCatalog(accountType),
+    queryFn: ({ signal }) => platformTelegramService.autoMessageCatalog(accountType, signal),
+    enabled: enabled && Boolean(accountType),
+  });
+}
+
+export function useCreateTelegramAutoMessage() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: UpsertTelegramAutoMessageRequest) =>
+      platformTelegramService.createAutoMessage(body),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: platformTelegramKeys.autoMessages });
+      void client.invalidateQueries({ queryKey: platformTelegramKeys.stats });
+    },
+  });
+}
+
+export function useUpdateTelegramAutoMessage() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: UpsertTelegramAutoMessageRequest }) =>
+      platformTelegramService.updateAutoMessage(id, body),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: platformTelegramKeys.autoMessages });
+      void client.invalidateQueries({ queryKey: platformTelegramKeys.stats });
+    },
+  });
+}
+
+export function useDuplicateTelegramAutoMessage() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => platformTelegramService.duplicateAutoMessage(id),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: platformTelegramKeys.autoMessages });
+    },
+  });
+}
+
+export function useDeleteTelegramAutoMessage() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => platformTelegramService.deleteAutoMessage(id),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: platformTelegramKeys.autoMessages });
+      void client.invalidateQueries({ queryKey: platformTelegramKeys.stats });
+    },
+  });
+}
+
+export function usePreviewTelegramAutoMessage() {
+  return useMutation({
+    mutationFn: (body: TelegramAutoMessagePreviewRequest) =>
+      platformTelegramService.previewAutoMessage(body),
+  });
+}
+
+export function useTestSendTelegramAutoMessage() {
+  return useMutation({
+    mutationFn: (body: TelegramAutoMessagePreviewRequest) =>
+      platformTelegramService.testSendAutoMessage(body),
   });
 }
 

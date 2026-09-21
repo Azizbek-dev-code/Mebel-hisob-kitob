@@ -301,6 +301,110 @@ export interface UpdateTelegramAutomationRequest {
   ctaPath?: string | null;
 }
 
+/** Universal Auto Message account scope. */
+export const TelegramAutoMessageAccountType = {
+  PERSONAL: 'PERSONAL',
+  BUSINESS: 'BUSINESS',
+} as const;
+export type TelegramAutoMessageAccountType =
+  (typeof TelegramAutoMessageAccountType)[keyof typeof TelegramAutoMessageAccountType];
+
+export const TelegramAutoMessageRecurrence = {
+  EVERY_DAY: 'EVERY_DAY',
+  EVERY_WEEK: 'EVERY_WEEK',
+  EVERY_MONTH: 'EVERY_MONTH',
+  EVERY_15_DAYS: 'EVERY_15_DAYS',
+  ONE_TIME: 'ONE_TIME',
+} as const;
+export type TelegramAutoMessageRecurrence =
+  (typeof TelegramAutoMessageRecurrence)[keyof typeof TelegramAutoMessageRecurrence];
+
+export interface TelegramAutoMessageThresholdConfig {
+  /** Which selected result key drives HIGH/MEDIUM/LOW messages. */
+  resultKey: string;
+  high?: number | null;
+  medium?: number | null;
+  low?: number | null;
+  highMessage?: string | null;
+  mediumMessage?: string | null;
+  lowMessage?: string | null;
+}
+
+export interface TelegramAutoMessageResultCatalogItem {
+  key: string;
+  label: string;
+  description: string;
+  accountType: TelegramAutoMessageAccountType;
+  dataType: 'money' | 'count' | 'percent' | 'duration' | 'text';
+}
+
+export interface TelegramAutoMessageDto {
+  id: string;
+  title: string;
+  accountType: TelegramAutoMessageAccountType;
+  enabled: boolean;
+  recurrence: TelegramAutoMessageRecurrence;
+  hour: number;
+  minute: number;
+  timezone: string;
+  weekday: number | null;
+  monthDay: number | null;
+  startDate: string | null;
+  messageBody: string;
+  resultKeys: string[];
+  thresholdConfig: TelegramAutoMessageThresholdConfig | null;
+  ctaEnabled: boolean;
+  ctaLabel: string | null;
+  ctaPath: string | null;
+  legacyKind: string | null;
+  createdAt: IsoDateString;
+  updatedAt: IsoDateString;
+}
+
+export interface UpsertTelegramAutoMessageRequest {
+  title: string;
+  accountType: TelegramAutoMessageAccountType;
+  enabled?: boolean;
+  recurrence: TelegramAutoMessageRecurrence;
+  hour: number;
+  minute: number;
+  timezone?: string;
+  weekday?: number | null;
+  monthDay?: number | null;
+  startDate?: string | null;
+  messageBody: string;
+  resultKeys: string[];
+  thresholdConfig?: TelegramAutoMessageThresholdConfig | null;
+  ctaEnabled?: boolean;
+  ctaLabel?: string | null;
+  ctaPath?: string | null;
+}
+
+export interface TelegramAutoMessagePreviewRequest {
+  title?: string;
+  accountType: TelegramAutoMessageAccountType;
+  messageBody: string;
+  resultKeys: string[];
+  thresholdConfig?: TelegramAutoMessageThresholdConfig | null;
+  ctaEnabled?: boolean;
+  ctaLabel?: string | null;
+  ctaPath?: string | null;
+}
+
+export interface TelegramAutoMessagePreviewResponse {
+  preview: true;
+  text: string;
+  unresolvedPlaceholders: string[];
+  ctaLabel: string | null;
+  ctaPath: string | null;
+}
+
+export interface TelegramAutoMessageTestSendResponse {
+  sent: boolean;
+  reason?: 'not_connected' | 'send_failed';
+  message?: string;
+}
+
 export interface TelegramAdminStats {
   connectedUsers: number;
   inactiveUsers: number;

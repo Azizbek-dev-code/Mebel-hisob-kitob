@@ -4,6 +4,11 @@ import type {
   TelegramAdminConnectedUsersResponse,
   TelegramAdminStats,
   TelegramAutomationDto,
+  TelegramAutoMessageDto,
+  TelegramAutoMessagePreviewRequest,
+  TelegramAutoMessagePreviewResponse,
+  TelegramAutoMessageResultCatalogItem,
+  TelegramAutoMessageTestSendResponse,
   TelegramBroadcastDetail,
   TelegramBroadcastListResponse,
   TelegramMediaUploadResponse,
@@ -12,6 +17,7 @@ import type {
   UpdateTelegramAutomationRequest,
   UpdateTelegramBotTokenRequest,
   UpdateTelegramStartMessageRequest,
+  UpsertTelegramAutoMessageRequest,
   UpsertTelegramMenuScreenRequest,
 } from '@furniture-erp/shared';
 
@@ -44,6 +50,38 @@ export const platformTelegramService = {
   },
   updateAutomation(kind: string, body: UpdateTelegramAutomationRequest) {
     return apiClient.put<TelegramAutomationDto>(`/telegram/admin/automations/${kind}`, { body });
+  },
+  autoMessages(signal?: AbortSignal) {
+    return apiClient.get<TelegramAutoMessageDto[]>('/telegram/admin/auto-messages', { signal });
+  },
+  autoMessageCatalog(accountType: string, signal?: AbortSignal) {
+    return apiClient.get<TelegramAutoMessageResultCatalogItem[]>(
+      '/telegram/admin/auto-messages/catalog',
+      { signal, searchParams: { accountType } },
+    );
+  },
+  createAutoMessage(body: UpsertTelegramAutoMessageRequest) {
+    return apiClient.post<TelegramAutoMessageDto>('/telegram/admin/auto-messages', { body });
+  },
+  updateAutoMessage(id: string, body: UpsertTelegramAutoMessageRequest) {
+    return apiClient.put<TelegramAutoMessageDto>(`/telegram/admin/auto-messages/${id}`, { body });
+  },
+  duplicateAutoMessage(id: string) {
+    return apiClient.post<TelegramAutoMessageDto>(`/telegram/admin/auto-messages/${id}/duplicate`);
+  },
+  deleteAutoMessage(id: string) {
+    return apiClient.delete<{ ok: boolean }>(`/telegram/admin/auto-messages/${id}`);
+  },
+  previewAutoMessage(body: TelegramAutoMessagePreviewRequest) {
+    return apiClient.post<TelegramAutoMessagePreviewResponse>('/telegram/admin/auto-messages/preview', {
+      body,
+    });
+  },
+  testSendAutoMessage(body: TelegramAutoMessagePreviewRequest) {
+    return apiClient.post<TelegramAutoMessageTestSendResponse>(
+      '/telegram/admin/auto-messages/test-send',
+      { body },
+    );
   },
   users(page = 1, signal?: AbortSignal) {
     return apiClient.get<TelegramAdminConnectedUsersResponse>('/telegram/admin/users', {

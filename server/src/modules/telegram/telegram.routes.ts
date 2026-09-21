@@ -22,16 +22,24 @@ import {
   getTelegramAdminBroadcast,
   getTelegramAdminBroadcasts,
   getTelegramAdminAutomations,
+  getTelegramAdminAutoMessageCatalog,
+  getTelegramAdminAutoMessages,
   getTelegramAdminMenu,
   getTelegramAdminStart,
   getTelegramAdminStats,
   getTelegramAdminStatus,
   getTelegramAdminUsers,
+  postTelegramAdminAutoMessage,
+  postTelegramAdminAutoMessageDuplicate,
+  postTelegramAdminAutoMessagePreview,
+  postTelegramAdminAutoMessageTestSend,
   postTelegramAdminBroadcast,
   postTelegramAdminBroadcastCancel,
   postTelegramAdminMedia,
   postTelegramAutomationCron,
   postTelegramBroadcastCron,
+  deleteTelegramAdminAutoMessage,
+  putTelegramAdminAutoMessage,
   putTelegramAdminAutomation,
   putTelegramAdminMenuScreen,
   putTelegramAdminStart,
@@ -39,9 +47,11 @@ import {
 } from './telegram.admin.controller.js';
 import {
   createTelegramBroadcastSchema,
+  previewTelegramAutoMessageSchema,
   updateTelegramAutomationSchema,
   updateTelegramBotTokenSchema,
   updateTelegramStartMessageSchema,
+  upsertTelegramAutoMessageSchema,
   upsertTelegramMenuScreenSchema,
 } from './telegram.admin.validators.js';
 import { telegramUpdateSchema, updateTelegramPrefsSchema } from './telegram.validators.js';
@@ -159,5 +169,52 @@ telegramRouter.put(
   requirePlatformAdmin,
   validate({ body: updateTelegramAutomationSchema }),
   putTelegramAdminAutomation,
+);
+telegramRouter.get('/admin/auto-messages', requireAuth, requirePlatformAdmin, getTelegramAdminAutoMessages);
+telegramRouter.get(
+  '/admin/auto-messages/catalog',
+  requireAuth,
+  requirePlatformAdmin,
+  getTelegramAdminAutoMessageCatalog,
+);
+telegramRouter.post(
+  '/admin/auto-messages',
+  requireAuth,
+  requirePlatformAdmin,
+  validate({ body: upsertTelegramAutoMessageSchema }),
+  postTelegramAdminAutoMessage,
+);
+telegramRouter.put(
+  '/admin/auto-messages/:id',
+  requireAuth,
+  requirePlatformAdmin,
+  validate({ body: upsertTelegramAutoMessageSchema }),
+  putTelegramAdminAutoMessage,
+);
+telegramRouter.post(
+  '/admin/auto-messages/:id/duplicate',
+  requireAuth,
+  requirePlatformAdmin,
+  postTelegramAdminAutoMessageDuplicate,
+);
+telegramRouter.delete(
+  '/admin/auto-messages/:id',
+  requireAuth,
+  requirePlatformAdmin,
+  deleteTelegramAdminAutoMessage,
+);
+telegramRouter.post(
+  '/admin/auto-messages/preview',
+  requireAuth,
+  requirePlatformAdmin,
+  validate({ body: previewTelegramAutoMessageSchema }),
+  postTelegramAdminAutoMessagePreview,
+);
+telegramRouter.post(
+  '/admin/auto-messages/test-send',
+  requireAuth,
+  requirePlatformAdmin,
+  validate({ body: previewTelegramAutoMessageSchema }),
+  postTelegramAdminAutoMessageTestSend,
 );
 telegramRouter.get('/admin/stats', requireAuth, requirePlatformAdmin, getTelegramAdminStats);

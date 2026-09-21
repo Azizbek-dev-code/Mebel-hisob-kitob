@@ -169,6 +169,75 @@ export const updateTelegramAutomationSchema = z
   })
   .strict();
 
+const thresholdConfigSchema = z
+  .object({
+    resultKey: z.string().trim().min(1).max(64),
+    high: z.number().nullable().optional(),
+    medium: z.number().nullable().optional(),
+    low: z.number().nullable().optional(),
+    highMessage: z.string().trim().max(500).nullable().optional(),
+    mediumMessage: z.string().trim().max(500).nullable().optional(),
+    lowMessage: z.string().trim().max(500).nullable().optional(),
+  })
+  .strict()
+  .nullable()
+  .optional();
+
+export const upsertTelegramAutoMessageSchema = z
+  .object({
+    title: z.string().trim().min(2).max(120),
+    accountType: z.enum(['PERSONAL', 'BUSINESS']),
+    enabled: z.boolean().optional(),
+    recurrence: z.enum(['EVERY_DAY', 'EVERY_WEEK', 'EVERY_MONTH', 'EVERY_15_DAYS', 'ONE_TIME']),
+    hour: z.number().int().min(0).max(23),
+    minute: z.number().int().min(0).max(59),
+    timezone: z.string().trim().max(64).optional(),
+    weekday: z.number().int().min(1).max(7).nullable().optional(),
+    monthDay: z.number().int().min(1).max(31).nullable().optional(),
+    startDate: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .optional(),
+    messageBody: z.string().max(TELEGRAM_MESSAGE_MAX_LENGTH).default(''),
+    resultKeys: z.array(z.string().trim().min(1).max(64)).max(40),
+    thresholdConfig: thresholdConfigSchema,
+    ctaEnabled: z.boolean().optional(),
+    ctaLabel: z.string().trim().max(TELEGRAM_BUTTON_TEXT_MAX_LENGTH).nullable().optional(),
+    ctaPath: z
+      .string()
+      .trim()
+      .max(240)
+      .nullable()
+      .optional()
+      .refine((value) => !value || (value.startsWith('/') && !value.startsWith('//')), {
+        message: 'CTA path ichki yo‘l bo‘lishi kerak',
+      }),
+  })
+  .strict();
+
+export const previewTelegramAutoMessageSchema = z
+  .object({
+    title: z.string().trim().max(120).optional(),
+    accountType: z.enum(['PERSONAL', 'BUSINESS']),
+    messageBody: z.string().max(TELEGRAM_MESSAGE_MAX_LENGTH).default(''),
+    resultKeys: z.array(z.string().trim().min(1).max(64)).max(40),
+    thresholdConfig: thresholdConfigSchema,
+    ctaEnabled: z.boolean().optional(),
+    ctaLabel: z.string().trim().max(TELEGRAM_BUTTON_TEXT_MAX_LENGTH).nullable().optional(),
+    ctaPath: z
+      .string()
+      .trim()
+      .max(240)
+      .nullable()
+      .optional()
+      .refine((value) => !value || (value.startsWith('/') && !value.startsWith('//')), {
+        message: 'CTA path ichki yo‘l bo‘lishi kerak',
+      }),
+  })
+  .strict();
+
 export const telegramAdminListQuerySchema = z.object({
   page: z.coerce.number().int().positive().optional(),
   pageSize: z.coerce.number().int().positive().max(100).optional(),

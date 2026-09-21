@@ -370,6 +370,26 @@ enum TelegramAutomationLogStatus {
   SKIPPED
 }
 
+enum TelegramAutoMessageAccountType {
+  PERSONAL
+  BUSINESS
+}
+
+enum TelegramAutoMessageRecurrence {
+  EVERY_DAY
+  EVERY_WEEK
+  EVERY_MONTH
+  EVERY_15_DAYS
+  ONE_TIME
+}
+
+enum TelegramAutoMessageExecutionStatus {
+  SENT
+  FAILED
+  SKIPPED
+  NO_CONNECTION
+}
+
 enum ReferralCommissionStatus {
   PENDING
   AVAILABLE
@@ -3472,6 +3492,63 @@ model TelegramAutomationLog {
   @@index([automationId, createdAt])
   @@index([identityId, createdAt])
   @@map("telegram_automation_logs")
+}
+
+/// Universal Auto Message (replaces fixed Morning/Evening/Weekly/Monthly cards in admin).
+model TelegramAutoMessage {
+  id              String                         @id @default(cuid())
+  title           String
+  accountType     TelegramAutoMessageAccountType
+  enabled         Boolean                        @default(false)
+  recurrence      TelegramAutoMessageRecurrence  @default(EVERY_DAY)
+  hour            Int                            @default(8)
+  minute          Int                            @default(0)
+  timezone        String                         @default("Asia/Tashkent")
+  /// 1=Monday … 7=Sunday. EVERY_WEEK only.
+  weekday         Int?
+  /// 1–31. EVERY_MONTH only; clamped to last day of month at runtime.
+  monthDay        Int?
+  /// Local calendar date (YYYY-MM-DD stored as Date @db.Date conceptually via DateTime midnight UTC).
+  /// Used as anchor for EVERY_15_DAYS and as the date for ONE_TIME.
+  startDate       DateTime?
+  messageBody     String                         @default("")
+  /// Ordered result keys, e.g. ["balance","income"]. Validated against accountType catalog.
+  resultKeys      Json                           @default("[]")
+  /// Optional threshold rules: { resultKey, high?, medium?, low?, highMessage?, mediumMessage?, lowMessage? }
+  thresholdConfig Json?
+  ctaEnabled      Boolean                        @default(false)
+  ctaLabel        String?
+  ctaPath         String?
+  /// When migrated from a fixed TelegramAutomationKind, keeps a stable link (unique).
+  legacyKind      String?                        @unique
+  createdAt       DateTime                       @default(now())
+  updatedAt       DateTime                       @updatedAt
+
+  executions TelegramAutoMessageExecution[]
+
+  @@index([enabled, accountType])
+  @@index([enabled, recurrence])
+  @@map("telegram_auto_messages")
+}
+
+/// Idempotent send ledger: one row per (autoMessage, identity, account, period).
+model TelegramAutoMessageExecution {
+  id            String                             @id @default(cuid())
+  autoMessageId String
+  identityId    String
+  /// PERSONAL → workspaceId; BUSINESS → storeId.
+  accountId     String
+  periodKey     String
+  status        TelegramAutoMessageExecutionStatus
+  error         String?
+  createdAt     DateTime                           @default(now())
+
+  autoMessage TelegramAutoMessage @relation(fields: [autoMessageId], references: [id], onDelete: Cascade)
+
+  @@unique([autoMessageId, identityId, accountId, periodKey])
+  @@index([autoMessageId, createdAt])
+  @@index([identityId, createdAt])
+  @@map("telegram_auto_message_executions")
 }
 
 model TelegramBroadcast {

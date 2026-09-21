@@ -317,7 +317,7 @@ export async function getAdminTelegramStats() {
       orderBy: { completedAt: 'desc' },
       select: { completedAt: true },
     }),
-    prisma.telegramAutomation.count({ where: { enabled: true } }),
+    prisma.telegramAutoMessage.count({ where: { enabled: true } }),
   ]);
 
   let personalConnected = 0;

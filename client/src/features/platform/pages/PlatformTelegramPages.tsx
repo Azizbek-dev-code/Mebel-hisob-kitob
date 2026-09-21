@@ -18,14 +18,12 @@ import { MetricList, MetricRow } from '../components/MetricList';
 import {
   useCancelTelegramBroadcast,
   useCreateTelegramBroadcast,
-  usePlatformTelegramAutomations,
   usePlatformTelegramBroadcasts,
   usePlatformTelegramMenu,
   usePlatformTelegramStart,
   usePlatformTelegramStats,
   usePlatformTelegramStatus,
   usePlatformTelegramUsers,
-  useUpdateTelegramAutomation,
   useUpdateTelegramBotToken,
   useUpdateTelegramMenuScreen,
   useUpdateTelegramStartMessage,
@@ -605,89 +603,7 @@ export function PlatformTelegramMenuPage() {
   );
 }
 
-export function PlatformTelegramAutomationsPage() {
-  const { t } = useTranslation();
-  const query = usePlatformTelegramAutomations();
-  const save = useUpdateTelegramAutomation();
-  return (
-    <PageContainer className="space-y-6 overflow-x-hidden">
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight text-ink">{t('platformAdmin.telegram.automations')}</h2>
-        <p className="mt-1 text-sm text-ink-muted">{t('platformAdmin.telegram.automationsHint')}</p>
-      </div>
-      <div className="space-y-3">
-        {(query.data ?? []).map((item) => (
-          <SectionCard key={item.kind} title={item.kind.replaceAll('_', ' ')}>
-            <div className="grid gap-3 sm:grid-cols-4">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={item.enabled}
-                  onChange={(event) =>
-                    void save.mutateAsync({ kind: item.kind, body: { enabled: event.target.checked } })
-                  }
-                />
-                {t('platformAdmin.telegram.active')}
-              </label>
-              <label className="block text-sm">
-                {t('platformAdmin.telegram.time')}
-                <input
-                  className={fieldClass}
-                  type="time"
-                  value={`${String(item.hour).padStart(2, '0')}:${String(item.minute).padStart(2, '0')}`}
-                  onChange={(event) => {
-                    const [hour, minute] = event.target.value.split(':').map(Number);
-                    void save.mutateAsync({ kind: item.kind, body: { hour, minute } });
-                  }}
-                />
-              </label>
-              <label className="block text-sm">
-                {t('platformAdmin.telegram.timezone')}
-                <input
-                  className={fieldClass}
-                  defaultValue={item.timezone}
-                  onBlur={(event) => {
-                    const timezone = event.target.value.trim();
-                    if (timezone && timezone !== item.timezone) {
-                      void save.mutateAsync({ kind: item.kind, body: { timezone } });
-                    }
-                  }}
-                />
-              </label>
-              <label className="block text-sm sm:col-span-2">
-                {t('platformAdmin.telegram.ctaLabel')}
-                <input
-                  className={fieldClass}
-                  defaultValue={item.ctaLabel ?? ''}
-                  onBlur={(event) => {
-                    const ctaLabel = event.target.value.trim() || null;
-                    if (ctaLabel !== item.ctaLabel) {
-                      void save.mutateAsync({ kind: item.kind, body: { ctaLabel } });
-                    }
-                  }}
-                />
-              </label>
-              <label className="block text-sm sm:col-span-4">
-                {t('platformAdmin.telegram.template')}
-                <textarea
-                  className={fieldClass}
-                  rows={3}
-                  defaultValue={item.messageTemplate ?? ''}
-                  onBlur={(event) => {
-                    const messageTemplate = event.target.value.trim() || null;
-                    if (messageTemplate !== item.messageTemplate) {
-                      void save.mutateAsync({ kind: item.kind, body: { messageTemplate } });
-                    }
-                  }}
-                />
-              </label>
-            </div>
-          </SectionCard>
-        ))}
-      </div>
-    </PageContainer>
-  );
-}
+export { PlatformTelegramAutomationsPage } from './PlatformTelegramAutoMessagesPage';
 
 export function PlatformTelegramStatsPage() {
   const { t } = useTranslation();

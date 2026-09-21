@@ -17,6 +17,10 @@ import { randomBytes } from 'node:crypto';
 
 import { hashPassword, verifyPassword } from '../lib/password.js';
 import { prisma } from '../lib/prisma.js';
+import {
+  cleanupTelegramAfterBusinessDeleted,
+  cleanupTelegramAfterUserAccountDeleted,
+} from '../modules/telegram/telegram.cleanup.service.js';
 import { ApiError } from '../utils/api-error.js';
 import { recordAudit } from './audit.service.js';
 
@@ -183,6 +187,13 @@ export async function deleteOwnAccount(
       where: { userId: user.id, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+
+    // Identity-scoped Telegram: only unlink when no valid Personal/Business contexts remain.
+    await cleanupTelegramAfterUserAccountDeleted({
+      identityId: user.identityId,
+      storeId: user.storeId,
+      db: tx,
+    });
   });
 
   await recordAudit({
@@ -311,6 +322,14 @@ export async function deleteBusinessAccount(
       // Drop memberships so the account switcher no longer lists this business.
       await tx.workspaceMembership.deleteMany({
         where: { workspaceId: workspace.id },
+      });
+
+      // Pref cleanup for this workspace; unlink Telegram only if Identity has no
+      // remaining Personal / other Business contexts.
+      await cleanupTelegramAfterBusinessDeleted({
+        identityId: user.identityId,
+        workspaceId: workspace.id,
+        db: tx,
       });
     }
   });
