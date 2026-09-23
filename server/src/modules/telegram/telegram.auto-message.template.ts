@@ -14,6 +14,18 @@ export function extractPlaceholders(template: string): string[] {
   return [...found];
 }
 
+/** Replace {{key}} only — does not append unused result rows. */
+export function renderPlaceholdersOnly(
+  template: string,
+  results: ResolvedAutoMessageResult[],
+): string {
+  const byKey = new Map(results.map((row) => [row.key, row]));
+  return template.replace(PLACEHOLDER_RE, (full, key: string) => {
+    const row = byKey.get(key);
+    return row ? row.formatted : full;
+  });
+}
+
 /**
  * Render message body with {{key}} placeholders.
  * Missing placeholders are left as-is and reported — never silently swallowed.
@@ -47,11 +59,22 @@ export function renderAutoMessageTemplate(
   return { text: finalText, unresolvedPlaceholders: [...new Set(unresolved)] };
 }
 
+/**
+ * Pick HIGH / MEDIUM / LOW band message for the configured result key.
+ * Empty / missing threshold config → null (no error, no message).
+ * Threshold text may include {{placeholders}} from selected results.
+ */
 export function pickThresholdMessage(
   results: ResolvedAutoMessageResult[],
   config: TelegramAutoMessageThresholdConfig | null | undefined,
 ): string | null {
   if (!config?.resultKey) return null;
+  const hasAnyBand =
+    (config.high != null && Boolean(config.highMessage?.trim())) ||
+    (config.medium != null && Boolean(config.mediumMessage?.trim())) ||
+    (config.low != null && Boolean(config.lowMessage?.trim()));
+  if (!hasAnyBand) return null;
+
   const row = results.find((item) => item.key === config.resultKey);
   if (!row || row.rawValue == null || !Number.isFinite(row.rawValue)) return null;
 
@@ -60,20 +83,44 @@ export function pickThresholdMessage(
   const medium = config.medium;
   const low = config.low;
 
+  let raw: string | null = null;
   if (high != null && value >= high && config.highMessage?.trim()) {
-    return config.highMessage.trim();
+    raw = config.highMessage.trim();
+  } else if (medium != null && value >= medium && config.mediumMessage?.trim()) {
+    raw = config.mediumMessage.trim();
+  } else if (low != null && value >= low && config.lowMessage?.trim()) {
+    raw = config.lowMessage.trim();
+  } else if (
+    low != null &&
+    value < low &&
+    config.lowMessage?.trim() &&
+    high == null &&
+    medium == null
+  ) {
+    // Below low — still show low message if only low is configured.
+    raw = config.lowMessage.trim();
   }
-  if (medium != null && value >= medium && config.mediumMessage?.trim()) {
-    return config.mediumMessage.trim();
+
+  if (!raw) return null;
+  return renderPlaceholdersOnly(raw, results);
+}
+
+export function describeThresholdMiss(
+  results: ResolvedAutoMessageResult[],
+  config: TelegramAutoMessageThresholdConfig | null | undefined,
+): string | null {
+  if (!config?.resultKey) return null;
+  const hasAnyBand =
+    (config.high != null && Boolean(config.highMessage?.trim())) ||
+    (config.medium != null && Boolean(config.mediumMessage?.trim())) ||
+    (config.low != null && Boolean(config.lowMessage?.trim()));
+  if (!hasAnyBand) {
+    return 'Chegara xabari uchun kamida bitta HIGH/MEDIUM/LOW qiymat va matn kerak.';
   }
-  if (low != null && value >= low && config.lowMessage?.trim()) {
-    return config.lowMessage.trim();
-  }
-  // Below low — still show low message if only low is configured as "good" band
-  if (low != null && value < low && config.lowMessage?.trim() && high == null && medium == null) {
-    return config.lowMessage.trim();
-  }
-  return null;
+  if (pickThresholdMessage(results, config)) return null;
+  const row = results.find((item) => item.key === config.resultKey);
+  const sample = row?.rawValue;
+  return `Namuna qiymat (${sample ?? '—'}) hech qaysi chegaraga yetmadi — shu sababli qo‘shimcha matn qo‘shilmadi.`;
 }
 
 export function composeAutoMessageText(opts: {
@@ -82,7 +129,12 @@ export function composeAutoMessageText(opts: {
   results: ResolvedAutoMessageResult[];
   thresholdConfig?: TelegramAutoMessageThresholdConfig | null;
   previewBanner?: boolean;
-}): { text: string; unresolvedPlaceholders: string[] } {
+}): {
+  text: string;
+  unresolvedPlaceholders: string[];
+  thresholdApplied: string | null;
+  thresholdNote: string | null;
+} {
   const rendered = renderAutoMessageTemplate(opts.messageBody, opts.results);
   const threshold = pickThresholdMessage(opts.results, opts.thresholdConfig);
   const parts: string[] = [];
@@ -97,6 +149,10 @@ export function composeAutoMessageText(opts: {
   return {
     text: parts.join('\n\n'),
     unresolvedPlaceholders: rendered.unresolvedPlaceholders,
+    thresholdApplied: threshold,
+    thresholdNote: opts.previewBanner
+      ? describeThresholdMiss(opts.results, opts.thresholdConfig)
+      : null,
   };
 }
 

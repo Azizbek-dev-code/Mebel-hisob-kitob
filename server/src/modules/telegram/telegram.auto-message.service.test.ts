@@ -131,6 +131,7 @@ describe('auto message preview schema', () => {
     expect(preview.text).toContain('PREVIEW');
     expect(preview.text).toContain('Income');
     expect(preview.unresolvedPlaceholders).toEqual([]);
+    expect(preview.thresholdApplied).toBeNull();
   });
 });
 
@@ -166,10 +167,24 @@ describe('auto message template', () => {
       thresholdConfig: {
         resultKey: 'budget_usage',
         high: 80,
-        highMessage: 'Xarajatlar yuqori',
+        highMessage: 'Xarajatlar yuqori: {{budget_usage}}',
       },
     });
     expect(composed.text).toContain('Xarajatlar yuqori');
+    expect(composed.text).toContain('90%');
+    expect(composed.thresholdApplied).toContain('Xarajatlar yuqori');
+  });
+
+  it('skips empty threshold without error', () => {
+    const results = [{ key: 'budget_usage', label: 'Budget Usage', rawValue: 90, formatted: '90%' }];
+    const composed = composeAutoMessageText({
+      title: 'Alert',
+      messageBody: 'Body',
+      results,
+      thresholdConfig: { resultKey: 'budget_usage' },
+    });
+    expect(composed.thresholdApplied).toBeNull();
+    expect(composed.text).toContain('Body');
   });
 });
 

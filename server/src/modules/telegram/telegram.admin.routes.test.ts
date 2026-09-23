@@ -1,4 +1,4 @@
-import { UserRole, WorkerResponsibility } from '@furniture-erp/shared';
+﻿import { UserRole, WorkerResponsibility } from '@furniture-erp/shared';
 import bcrypt from 'bcryptjs';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -70,10 +70,11 @@ describe('Telegram admin authorization', () => {
     vi.clearAllMocks();
     adminService.getAdminBotStatus.mockResolvedValue({
       connected: true,
-      botUsername: '@blancyspace_bot',
+      botUsername: '@balancyspace_bot',
       tokenConfigured: true,
       tokenSource: 'env',
       hasDatabaseToken: false,
+      publicAppUrl: 'https://balancy.space',
       webhook: null,
       connectedUsers: 0,
       lastValidatedAt: null,

@@ -25,6 +25,7 @@ import {
   usePlatformTelegramStatus,
   usePlatformTelegramUsers,
   useUpdateTelegramBotToken,
+  useSetupTelegramWebhook,
   useUpdateTelegramMenuScreen,
   useUpdateTelegramStartMessage,
 } from '../hooks/use-platform-telegram';
@@ -113,17 +114,32 @@ export function PlatformTelegramBotPage() {
   const { t } = useTranslation();
   const query = usePlatformTelegramStatus();
   const save = useUpdateTelegramBotToken();
+  const setupWebhook = useSetupTelegramWebhook();
   const [token, setToken] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [okMessage, setOkMessage] = useState<string | null>(null);
   const data = query.data;
 
   async function onSave() {
     setError(null);
+    setOkMessage(null);
     try {
       await save.mutateAsync({ token });
       setToken('');
+      setOkMessage('Bot token saqlandi. Username Telegram getMe orqali yangilandi.');
     } catch (caught) {
       setError(composerError(caught, t('platformAdmin.telegram.tokenInvalid')));
+    }
+  }
+
+  async function onReconfigureWebhook() {
+    setError(null);
+    setOkMessage(null);
+    try {
+      await setupWebhook.mutateAsync();
+      setOkMessage('Webhook yangi public URL bilan qayta o‘rnatildi.');
+    } catch (caught) {
+      setError(composerError(caught, 'Webhook o‘rnatilmadi'));
     }
   }
 
@@ -136,52 +152,106 @@ export function PlatformTelegramBotPage() {
       {query.isPending && !data ? (
         <Skeleton className="h-40 w-full" />
       ) : (
-        <SectionCard title={t('platformAdmin.telegram.tokenLabel')}>
-          <div className="max-w-lg space-y-3">
-            <p className="text-sm text-ink">
-              Bot token: {data?.tokenConfigured ? '••••••••••••' : '—'}
-            </p>
-            <p className="text-sm text-ink-muted">
-              Status: {data?.connected ? t('platformAdmin.telegram.connected') : t('platformAdmin.telegram.notConnected')}
-            </p>
-            {data?.webhook ? (
-              <div className="space-y-1 break-all text-sm text-ink-muted">
-                <p>
-                  {t('platformAdmin.telegram.webhook')}: {data.webhook.url || data.webhook.configuredUrl}
-                </p>
-                {data.webhook.url && data.webhook.url !== data.webhook.configuredUrl ? (
-                  <p>Expected: {data.webhook.configuredUrl}</p>
-                ) : null}
-                {typeof data.webhook.pendingUpdateCount === 'number' ? (
-                  <p>Pending updates: {data.webhook.pendingUpdateCount}</p>
-                ) : null}
-                {data.webhook.lastErrorMessage ? (
-                  <p className="text-danger-700">{data.webhook.lastErrorMessage}</p>
-                ) : null}
-                <p>
-                  {t('platformAdmin.telegram.lastChecked')}: {formatDate(data.webhook.lastCheckedAt)}
-                </p>
+        <>
+          <SectionCard title="Bot">
+            <div className="max-w-lg space-y-3 text-sm">
+              <p className="text-ink">
+                Status:{' '}
+                {data?.connected
+                  ? `🟢 ${t('platformAdmin.telegram.connected')}`
+                  : `⚪ ${t('platformAdmin.telegram.notConnected')}`}
+              </p>
+              <p className="text-ink">
+                Username: <span className="font-medium">{data?.botUsername ?? '—'}</span>
+                <span className="mt-1 block text-xs text-ink-muted">
+                  Token saqlanganda Telegram getMe dan avtomatik olinadi (readonly).
+                </span>
+              </p>
+              <p className="text-ink">
+                Public URL: <span className="break-all font-medium">{data?.publicAppUrl ?? '—'}</span>
+              </p>
+              <p className="text-ink-muted">
+                Bot token: {data?.tokenConfigured ? '••••••••••••' : '—'}
+                {data?.tokenSource ? ` (${data.tokenSource})` : null}
+              </p>
+            </div>
+          </SectionCard>
+
+          <SectionCard title={t('platformAdmin.telegram.webhook')}>
+            <div className="max-w-lg space-y-2 break-all text-sm text-ink-muted">
+              {data?.webhook ? (
+                <>
+                  <p>
+                    Holat: {data.webhook.active ? '🟢 Active' : '⚪ Inactive'}
+                  </p>
+                  <p>
+                    Current: {data.webhook.url || '—'}
+                  </p>
+                  <p>
+                    Expected: {data.webhook.configuredUrl}
+                  </p>
+                  {data.webhook.url && data.webhook.url !== data.webhook.configuredUrl ? (
+                    <p className="text-danger-700">
+                      Webhook URL expected bilan mos emas — “Reconfigure Webhook” bosing.
+                    </p>
+                  ) : null}
+                  {typeof data.webhook.pendingUpdateCount === 'number' ? (
+                    <p>Pending updates: {data.webhook.pendingUpdateCount}</p>
+                  ) : null}
+                  {data.webhook.lastErrorMessage ? (
+                    <p className="text-danger-700">{data.webhook.lastErrorMessage}</p>
+                  ) : null}
+                  <p>
+                    {t('platformAdmin.telegram.lastChecked')}: {formatDate(data.webhook.lastCheckedAt)}
+                  </p>
+                </>
+              ) : (
+                <p>—</p>
+              )}
+            </div>
+          </SectionCard>
+
+          <SectionCard title={t('platformAdmin.telegram.tokenLabel')}>
+            <div className="max-w-lg space-y-3">
+              <input
+                type="password"
+                autoComplete="off"
+                className={fieldClass}
+                placeholder={t('platformAdmin.telegram.tokenPlaceholder')}
+                value={token}
+                onChange={(event) => setToken(event.target.value)}
+              />
+              {error ? <p role="alert" className="text-sm text-danger-700">{error}</p> : null}
+              {okMessage ? <p className="text-sm text-success">{okMessage}</p> : null}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={save.isPending || token.trim().length < 20}
+                  onClick={() => void onSave()}
+                  className="rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+                >
+                  {t('platformAdmin.telegram.save')}
+                </button>
+                <button
+                  type="button"
+                  disabled={query.isFetching}
+                  onClick={() => void query.refetch()}
+                  className="rounded-input border border-line px-3 py-2 text-sm text-ink disabled:opacity-60"
+                >
+                  Refresh Bot Info
+                </button>
+                <button
+                  type="button"
+                  disabled={setupWebhook.isPending || !data?.tokenConfigured}
+                  onClick={() => void onReconfigureWebhook()}
+                  className="rounded-input border border-line px-3 py-2 text-sm text-ink disabled:opacity-60"
+                >
+                  {setupWebhook.isPending ? 'Webhook…' : 'Reconfigure Webhook'}
+                </button>
               </div>
-            ) : null}
-            <input
-              type="password"
-              autoComplete="off"
-              className={fieldClass}
-              placeholder={t('platformAdmin.telegram.tokenPlaceholder')}
-              value={token}
-              onChange={(event) => setToken(event.target.value)}
-            />
-            {error ? <p role="alert" className="text-sm text-danger-700">{error}</p> : null}
-            <button
-              type="button"
-              disabled={save.isPending || token.trim().length < 20}
-              onClick={() => void onSave()}
-              className="rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
-            >
-              {t('platformAdmin.telegram.save')}
-            </button>
-          </div>
-        </SectionCard>
+            </div>
+          </SectionCard>
+        </>
       )}
     </PageContainer>
   );
@@ -248,7 +318,7 @@ export function PlatformTelegramStartPage() {
                     {
                       text: buttonText || '🚀 Dasturga kirish',
                       action: 'URL',
-                      url: buttonUrl || 'https://www.mebelboshqaruv.uz',
+                      url: buttonUrl || 'https://balancy.space',
                     },
                     {
                       text: detailButton.trim() || '📚 Batafsil',

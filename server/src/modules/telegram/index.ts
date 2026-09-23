@@ -1,9 +1,13 @@
 export {
   getPublicAppUrl,
   getTelegramWebhookUrl,
+  getActiveBotUsername,
+  normaliseBotUsername,
   readTelegramPublicConfig,
   readTelegramRuntime,
   resolveTelegramRuntime,
+  applyTelegramDbRuntime,
+  clearTelegramDbRuntimeOverride,
 } from './telegram.config.js';
 export {
   hashTelegramLinkingToken,

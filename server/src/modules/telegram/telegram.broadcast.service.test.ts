@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { prismaMock, sendTelegramContent, deactivateByTelegramUserId, recordAudit } = vi.hoisted(() => ({
   prismaMock: {
@@ -34,7 +34,7 @@ vi.mock('./telegram.connection.service.js', () => ({ deactivateByTelegramUserId 
 vi.mock('./telegram.config.js', () => ({
   readTelegramRuntime: () => ({
     configured: true,
-    expectedUsername: 'blancyspace_bot',
+    expectedUsername: 'balancyspace_bot',
     token: 'token',
   }),
 }));

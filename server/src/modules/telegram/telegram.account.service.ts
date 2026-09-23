@@ -1,4 +1,4 @@
-import type { TelegramLinkStartResponse } from '@furniture-erp/shared';
+﻿import type { TelegramLinkStartResponse } from '@furniture-erp/shared';
 import type { Request } from 'express';
 
 import { ensureIdentityForUser } from '../accounts/account-layer.service.js';

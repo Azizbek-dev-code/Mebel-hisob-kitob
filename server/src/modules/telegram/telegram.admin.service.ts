@@ -18,7 +18,7 @@ import { PRODUCT_IMAGE_MAX_BYTES, PRODUCT_IMAGE_MIME_TYPES } from '../../lib/sto
 import { recordAudit } from '../../services/audit.service.js';
 import { ApiError } from '../../utils/api-error.js';
 import { logger } from '../../utils/logger.js';
-import { applyTelegramDbRuntime, getTelegramWebhookUrl, readTelegramRuntime } from './telegram.config.js';
+import { applyTelegramDbRuntime, getPublicAppUrl, getTelegramWebhookUrl, readTelegramRuntime } from './telegram.config.js';
 import { decryptTelegramSecret, encryptTelegramSecret } from './telegram.crypto.js';
 import { mediaKindFromUrl } from './telegram.content.js';
 import {
@@ -112,6 +112,7 @@ export async function getAdminBotStatus(): Promise<TelegramAdminBotStatus> {
     tokenConfigured: runtime.configured,
     tokenSource: source,
     hasDatabaseToken,
+    publicAppUrl: getPublicAppUrl(),
     webhook,
     connectedUsers,
     lastValidatedAt: config?.lastValidatedAt?.toISOString() ?? null,

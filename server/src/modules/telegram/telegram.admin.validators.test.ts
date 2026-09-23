@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 
 import {
   createTelegramBroadcastSchema,
@@ -17,7 +17,7 @@ describe('updateTelegramStartMessageSchema', () => {
         {
           text: '🚀 Dasturga kirish',
           action: 'URL',
-          url: 'https://www.mebelboshqaruv.uz',
+          url: 'https://balancy.space',
         },
         {
           text: '📚 Batafsil',

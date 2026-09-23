@@ -33,10 +33,16 @@ export function clearTelegramDbRuntimeOverride(): void {
   dbBotUsernameOverride = undefined;
 }
 
+/** Normalise Telegram usernames: strip @, lowercase. */
+export function normaliseBotUsername(value: string | null | undefined): string {
+  return (value ?? '').trim().replace(/^@+/, '').toLowerCase();
+}
+
 /** Applies a decrypted DB token for subsequent Bot API calls. Never logs the token. */
 export function applyTelegramDbRuntime(input: { token?: string; botUsername?: string | null }): void {
   dbTokenOverride = blankToUndefined(input.token);
-  dbBotUsernameOverride = blankToUndefined(input.botUsername ?? undefined);
+  const normalised = normaliseBotUsername(input.botUsername);
+  dbBotUsernameOverride = normalised || undefined;
 }
 
 export function resolveTelegramRuntime(source: TelegramEnvSource): TelegramRuntimeConfig {
@@ -50,6 +56,10 @@ export function resolveTelegramRuntime(source: TelegramEnvSource): TelegramRunti
   };
 }
 
+/**
+ * Active runtime: admin DB token/username overlay env fallbacks.
+ * Bot username source of truth after admin saves token: DB (from Telegram getMe).
+ */
 export function readTelegramRuntime(): TelegramRuntimeConfig {
   const envRuntime = resolveTelegramRuntime({
     TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN,
@@ -58,23 +68,37 @@ export function readTelegramRuntime(): TelegramRuntimeConfig {
   const token = dbTokenOverride ?? envRuntime.token;
   return {
     configured: Boolean(token),
-    expectedUsername: dbBotUsernameOverride || envRuntime.expectedUsername,
+    expectedUsername:
+      normaliseBotUsername(dbBotUsernameOverride) ||
+      normaliseBotUsername(envRuntime.expectedUsername) ||
+      EXPECTED_TELEGRAM_BOT_USERNAME,
     token,
     webhookSecret: envRuntime.webhookSecret,
   };
 }
 
-export function readTelegramPublicConfig(
-  source: TelegramEnvSource = {
-    TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN,
-    TELEGRAM_WEBHOOK_SECRET: env.TELEGRAM_WEBHOOK_SECRET,
-  },
-): TelegramPublicConfig {
-  const runtime = resolveTelegramRuntime(source);
+/**
+ * Public (non-secret) bot identity for deep-links.
+ * Uses the same active runtime as Bot API calls (DB username when hydrated).
+ */
+export function readTelegramPublicConfig(source?: TelegramEnvSource): TelegramPublicConfig {
+  if (source) {
+    const runtime = resolveTelegramRuntime(source);
+    return {
+      configured: runtime.configured,
+      expectedUsername: normaliseBotUsername(runtime.expectedUsername) || EXPECTED_TELEGRAM_BOT_USERNAME,
+    };
+  }
+  const runtime = readTelegramRuntime();
   return {
     configured: runtime.configured,
     expectedUsername: runtime.expectedUsername,
   };
+}
+
+/** Active bot username for t.me deep-links (no @). */
+export function getActiveBotUsername(): string {
+  return readTelegramPublicConfig().expectedUsername;
 }
 
 function rewriteLegacyPublicOrigin(value: string): string {
@@ -97,9 +121,7 @@ function rewriteLegacyPublicOrigin(value: string): string {
 export function getPublicAppUrl(source?: TelegramEnvSource): string {
   // When a source object is passed (tests / overrides), only that object is read —
   // do not fall back to process env, so callers can assert defaults.
-  const fromEnv = blankToUndefined(
-    source ? source.PUBLIC_APP_URL : env.PUBLIC_APP_URL,
-  );
+  const fromEnv = blankToUndefined(source ? source.PUBLIC_APP_URL : env.PUBLIC_APP_URL);
   if (fromEnv) return rewriteLegacyPublicOrigin(fromEnv);
   return DEFAULT_PUBLIC_APP_URL;
 }

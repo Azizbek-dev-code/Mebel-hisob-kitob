@@ -29,6 +29,8 @@ export const getTelegramStatus = asyncHandler(async (req: Request, res: Response
 });
 
 export const postTelegramLinkStart = asyncHandler(async (req: Request, res: Response) => {
+  // Hydrate admin-saved bot username before building t.me deep-link (serverless-safe).
+  await hydrateTelegramRuntimeFromDb();
   sendSuccess(res, await startLinkForRequest(req));
 });
 
@@ -46,9 +48,12 @@ export const postTelegramSetupWebhook = asyncHandler(async (_req: Request, res: 
   await hydrateTelegramRuntimeFromDb();
   const result = await setTelegramWebhook();
   if (!result.ok) {
-    throw ApiError.badRequest(result.reason === 'not_configured' ? 'Telegram sozlanmagan' : 'Webhook o‘rnatilmadi');
+    throw ApiError.badRequest(
+      result.reason === 'not_configured' ? 'Telegram sozlanmagan' : 'Webhook o‘rnatilmadi',
+    );
   }
-  sendSuccess(res, { ok: true });
+  const { getAdminBotStatus } = await import('./telegram.admin.service.js');
+  sendSuccess(res, await getAdminBotStatus());
 });
 
 export const postTelegramDailySummaryCron = asyncHandler(async (req: Request, res: Response) => {

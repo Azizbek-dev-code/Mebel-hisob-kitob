@@ -1,4 +1,4 @@
-import request from 'supertest';
+﻿import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApp } from '../../app.js';
@@ -110,7 +110,7 @@ describe('POST /api/telegram/webhook', () => {
   it('rejects an unauthenticated webhook without a configured secret', async () => {
     readTelegramRuntime.mockReturnValue({
       configured: true,
-      expectedUsername: 'blancyspace_bot',
+      expectedUsername: 'balancyspace_bot',
       token: '123456:TEST-TELEGRAM-BOT-TOKEN-DO-NOT-LEAK',
     });
 
@@ -123,7 +123,7 @@ describe('POST /api/telegram/webhook', () => {
   it('accepts a validated update when the Telegram secret header matches', async () => {
     readTelegramRuntime.mockReturnValue({
       configured: true,
-      expectedUsername: 'blancyspace_bot',
+      expectedUsername: 'balancyspace_bot',
       token: '123456:TEST-TELEGRAM-BOT-TOKEN-DO-NOT-LEAK',
       webhookSecret: 'test-webhook-secret',
     });
@@ -143,7 +143,7 @@ describe('POST /api/telegram/webhook', () => {
   it('still acks when the command handler throws', async () => {
     readTelegramRuntime.mockReturnValue({
       configured: true,
-      expectedUsername: 'blancyspace_bot',
+      expectedUsername: 'balancyspace_bot',
       token: '123456:TEST-TELEGRAM-BOT-TOKEN-DO-NOT-LEAK',
       webhookSecret: 'test-webhook-secret',
     });
@@ -161,7 +161,7 @@ describe('POST /api/telegram/webhook', () => {
   it('rejects an invalid update payload after the secret is verified', async () => {
     readTelegramRuntime.mockReturnValue({
       configured: true,
-      expectedUsername: 'blancyspace_bot',
+      expectedUsername: 'balancyspace_bot',
       token: '123456:TEST-TELEGRAM-BOT-TOKEN-DO-NOT-LEAK',
       webhookSecret: 'test-webhook-secret',
     });
@@ -184,7 +184,7 @@ describe('authenticated Telegram account routes', () => {
     getConnectionStatus.mockResolvedValue(disconnected);
     unlinkConnection.mockResolvedValue(disconnected);
     startLinkForRequest.mockResolvedValue({
-      deepLink: 'https://t.me/blancyspace_bot?start=abc',
+      deepLink: 'https://t.me/balancyspace_bot?start=abc',
       expiresAt: '2026-09-20T12:00:00.000Z',
     });
     updateTelegramPrefs.mockResolvedValue({ ...disconnected, connected: true, bizNotifySales: false });
@@ -200,7 +200,7 @@ describe('authenticated Telegram account routes', () => {
   it('POST /link/start returns deepLink + expiresAt only', async () => {
     const response = await request(app).post('/api/telegram/link/start').expect(200);
     expect(response.body.data).toEqual({
-      deepLink: 'https://t.me/blancyspace_bot?start=abc',
+      deepLink: 'https://t.me/balancyspace_bot?start=abc',
       expiresAt: '2026-09-20T12:00:00.000Z',
     });
     expect(response.body.data.tokenHash).toBeUndefined();

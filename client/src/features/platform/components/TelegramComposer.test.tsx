@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 
 import { ApiClientError } from '@/lib/api-client';
 
@@ -34,7 +34,7 @@ describe('validateTelegramComposerFields', () => {
         buttonText: 'Kirish',
         buttonUrl: 'bad',
       }),
-    ).toMatch(/https:\/\/www\.mebelboshqaruv\.uz/);
+    ).toMatch(/https:\/\/balancy\.space/);
   });
 });
 

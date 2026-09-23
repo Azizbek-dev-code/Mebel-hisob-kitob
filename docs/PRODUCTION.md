@@ -1,4 +1,4 @@
-# Production deployment checklist
+﻿# Production deployment checklist
 
 Target stack: **Vercel** (SPA + API as a serverless function) + **Neon** (Postgres) +
 **Vercel Blob** (images) or **Cloudinary**.
@@ -55,7 +55,7 @@ skips `.env` loading when `VERCEL` is set, so everything must come from here.
 | `BACKUP_ENABLE_PG_DUMP` | Keep `false` — `pg_dump` is not available in the function runtime |
 | `TRIAL_DAYS` | Optional; default `7` |
 | `SEED_*` | Only needed for one-shot `npm run db:seed` — change passwords before seeding prod |
-| `TELEGRAM_BOT_TOKEN` | Optional. Telegram Bot API token for `@blancyspace_bot`. Leave unset to disable Telegram; the API still starts. **Never** expose this to the client, API responses, or logs. |
+| `TELEGRAM_BOT_TOKEN` | Optional. Telegram Bot API token for `@balancyspace_bot`. Leave unset to disable Telegram; the API still starts. **Never** expose this to the client, API responses, or logs. |
 | `TELEGRAM_WEBHOOK_SECRET` | Optional. Telegram webhook `secret_token` (not the bot token). Required before `setWebhook` / inbound updates work. |
 | `PUBLIC_APP_URL` | Public app origin (e.g. `https://balancy.space`). Used for `/app` links and the default webhook URL. |
 | `TELEGRAM_WEBHOOK_URL` | Optional override. Defaults to `${PUBLIC_APP_URL}/api/telegram/webhook`. |

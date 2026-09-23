@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { env } from '../../config/env.js';
 import {
+  applyTelegramDbRuntime,
+  clearTelegramDbRuntimeOverride,
+  getActiveBotUsername,
   getPublicAppUrl,
   getTelegramWebhookUrl,
+  readTelegramPublicConfig,
   resolveTelegramRuntime,
 } from './telegram.config.js';
 import { DEFAULT_PUBLIC_APP_URL, EXPECTED_TELEGRAM_BOT_USERNAME } from './telegram.types.js';
@@ -46,16 +50,26 @@ describe('getPublicAppUrl / getTelegramWebhookUrl', () => {
   it('defaults to the current production origin when PUBLIC_APP_URL is unset', () => {
     expect(getPublicAppUrl({})).toBe(DEFAULT_PUBLIC_APP_URL);
     expect(getTelegramWebhookUrl({})).toBe(`${DEFAULT_PUBLIC_APP_URL}/api/telegram/webhook`);
+    expect(DEFAULT_PUBLIC_APP_URL).toBe('https://balancy.space');
   });
 
-  it('rewrites a legacy balancy.space origin to the current production host', () => {
-    expect(getPublicAppUrl({ PUBLIC_APP_URL: 'https://balancy.space' })).toBe(DEFAULT_PUBLIC_APP_URL);
-    expect(getPublicAppUrl({ PUBLIC_APP_URL: 'https://www.balancy.space/' })).toBe(DEFAULT_PUBLIC_APP_URL);
+  it('rewrites legacy mebelboshqaruv.uz origin to balancy.space', () => {
+    expect(getPublicAppUrl({ PUBLIC_APP_URL: 'https://mebelboshqaruv.uz' })).toBe(DEFAULT_PUBLIC_APP_URL);
+    expect(getPublicAppUrl({ PUBLIC_APP_URL: 'https://www.mebelboshqaruv.uz/' })).toBe(
+      DEFAULT_PUBLIC_APP_URL,
+    );
     expect(
       getTelegramWebhookUrl({
-        TELEGRAM_WEBHOOK_URL: 'https://balancy.space/api/telegram/webhook',
+        TELEGRAM_WEBHOOK_URL: 'https://mebelboshqaruv.uz/api/telegram/webhook',
       }),
     ).toBe(`${DEFAULT_PUBLIC_APP_URL}/api/telegram/webhook`);
+  });
+
+  it('keeps balancy.space as-is', () => {
+    expect(getPublicAppUrl({ PUBLIC_APP_URL: 'https://balancy.space' })).toBe('https://balancy.space');
+    expect(getPublicAppUrl({ PUBLIC_APP_URL: 'https://www.balancy.space/' })).toBe(
+      'https://www.balancy.space',
+    );
   });
 
   it('honours explicit TELEGRAM_WEBHOOK_URL', () => {
@@ -65,5 +79,21 @@ describe('getPublicAppUrl / getTelegramWebhookUrl', () => {
         TELEGRAM_WEBHOOK_URL: 'https://hooks.example.com/tg',
       }),
     ).toBe('https://hooks.example.com/tg');
+  });
+});
+
+describe('active bot username', () => {
+  it('uses DB username override for deep-links after admin token save', () => {
+    clearTelegramDbRuntimeOverride();
+    applyTelegramDbRuntime({ token: '123:ABC', botUsername: '@balancyspace_bot' });
+    expect(getActiveBotUsername()).toBe('balancyspace_bot');
+    expect(readTelegramPublicConfig().expectedUsername).toBe('balancyspace_bot');
+    clearTelegramDbRuntimeOverride();
+  });
+
+  it('never returns old blancyspace_bot as the code default', () => {
+    clearTelegramDbRuntimeOverride();
+    expect(EXPECTED_TELEGRAM_BOT_USERNAME).toBe('balancyspace_bot');
+    expect(getActiveBotUsername()).toBe('balancyspace_bot');
   });
 });

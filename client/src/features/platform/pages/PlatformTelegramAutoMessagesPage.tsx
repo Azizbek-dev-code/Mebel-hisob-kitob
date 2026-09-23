@@ -188,6 +188,7 @@ function AutoMessageForm({
     label: null,
     path: null,
   });
+  const [thresholdNote, setThresholdNote] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -290,6 +291,7 @@ function AutoMessageForm({
       const res = await previewMut.mutateAsync(toPreviewPayload(form));
       setPreviewText(res.text);
       setPreviewCta({ label: res.ctaLabel, path: res.ctaPath });
+      setThresholdNote(res.thresholdNote);
       if (res.unresolvedPlaceholders.length) {
         setFormError(
           `Noma’lum placeholder: ${res.unresolvedPlaceholders.map((k) => `{{${k}}}`).join(', ')}`,
@@ -540,7 +542,8 @@ function AutoMessageForm({
           </summary>
           <p className="mt-2 text-xs text-ink-muted">
             Tanlangan natija qiymati HIGH / MEDIUM / LOW chegarasiga yetganda qo‘shimcha matn
-            qo‘shiladi. Masalan Budget usage ≥ 80 → HIGH.
+            xabarga qo‘shiladi (masalan Budget usage ≥ 80 → HIGH). Bo‘sh qoldirilsa hech narsa
+            yuborilmaydi. Matnda {'{{key}}'} placeholderlar ishlaydi.
           </p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <label className="block text-sm text-ink sm:col-span-2">
@@ -668,6 +671,7 @@ function AutoMessageForm({
               yubormaydi.
             </p>
           )}
+          {thresholdNote ? <p className="text-sm text-ink-muted">{thresholdNote}</p> : null}
 
           <div className="flex flex-wrap gap-2">
             <button

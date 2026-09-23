@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   prismaMock,
@@ -34,11 +34,12 @@ vi.mock('./telegram.config.js', async (importOriginal) => {
     ...actual,
     readTelegramRuntime: vi.fn(() => ({
       configured: true,
-      expectedUsername: 'blancyspace_bot',
+      expectedUsername: 'balancyspace_bot',
       token: 'env-token-not-for-logs',
       webhookSecret: 'hook-secret',
     })),
     getTelegramWebhookUrl: () => 'https://example.ngrok.app/api/telegram/webhook',
+    getPublicAppUrl: () => 'https://balancy.space',
     applyTelegramDbRuntime: vi.fn(),
   };
 });
@@ -72,25 +73,25 @@ describe('telegram admin token', () => {
   it('saves a valid token without returning or auditing the secret', async () => {
     inspectTelegramBotToken.mockResolvedValue({
       ok: true,
-      bot: { id: 1, username: 'blancyspace_bot', firstName: 'Balancy' },
+      bot: { id: 1, username: 'balancyspace_bot', firstName: 'Balancy' },
     });
     prismaMock.telegramBotConfig.upsert.mockResolvedValue({});
     prismaMock.telegramBotConfig.findUnique.mockResolvedValue({
       encryptedBotToken: 'v1:iv:tag:cipher',
-      botUsername: 'blancyspace_bot',
+      botUsername: 'balancyspace_bot',
       botFirstName: 'Balancy',
       lastValidatedAt: new Date('2026-09-21T00:00:00.000Z'),
     });
     setTelegramWebhook.mockResolvedValue({ ok: true });
 
     const status = await updateAdminBotToken('user_platform', '123456:VALID-TELEGRAM-BOT-TOKEN-SECRET');
-    expect(status.botUsername).toBe('@blancyspace_bot');
+    expect(status.botUsername).toBe('@balancyspace_bot');
     expect(status.hasDatabaseToken).toBe(true);
     expect(JSON.stringify(status)).not.toContain('123456:VALID-TELEGRAM-BOT-TOKEN-SECRET');
     expect(recordAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: 'TELEGRAM_BOT_TOKEN_UPDATED',
-        metadata: { botUsername: 'blancyspace_bot' },
+        metadata: { botUsername: 'balancyspace_bot' },
       }),
     );
     expect(JSON.stringify(recordAudit.mock.calls)).not.toContain('123456:VALID-TELEGRAM-BOT-TOKEN-SECRET');
@@ -107,7 +108,7 @@ describe('telegram admin token', () => {
     const dbToken = '123456:DB-TELEGRAM-BOT-TOKEN-NOT-FOR-LOGS';
     prismaMock.telegramBotConfig.findUnique.mockResolvedValue({
       encryptedBotToken: encryptTelegramSecret(dbToken),
-      botUsername: 'blancyspace_bot',
+      botUsername: 'balancyspace_bot',
       botFirstName: 'Balancy',
       lastValidatedAt: new Date('2026-09-21T00:00:00.000Z'),
     });
@@ -115,7 +116,7 @@ describe('telegram admin token', () => {
     const status = await getAdminBotStatus();
     expect(applyTelegramDbRuntime).toHaveBeenCalledWith({
       token: dbToken,
-      botUsername: 'blancyspace_bot',
+      botUsername: 'balancyspace_bot',
     });
     expect(status.hasDatabaseToken).toBe(true);
     expect(JSON.stringify(status)).not.toContain(dbToken);

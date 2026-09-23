@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 
 import { prisma } from '../../lib/prisma.js';
-import { readTelegramPublicConfig } from './telegram.config.js';
+import { getActiveBotUsername } from './telegram.config.js';
 import {
   EXPECTED_TELEGRAM_BOT_USERNAME,
   TELEGRAM_LINKING_TOKEN_TTL_MS,
@@ -11,7 +11,8 @@ import {
 /**
  * One-time, random, expiring linking tokens keyed by Identity.
  *
- * Deep-links look like `https://t.me/blancyspace_bot?start=<token>`.
+ * Deep-links look like `https://t.me/<active_bot_username>?start=<token>`.
+ * Username comes from admin-saved getMe / runtime config — never hardcode a stale bot.
  * Never put `userId` / `identityId` in that start payload — only the SHA-256
  * hash is stored server-side.
  */
@@ -22,8 +23,12 @@ export function hashTelegramLinkingToken(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex');
 }
 
-export function buildTelegramStartLink(startPayload: string, username = EXPECTED_TELEGRAM_BOT_USERNAME): string {
-  return `https://t.me/${username}?start=${encodeURIComponent(startPayload)}`;
+export function buildTelegramStartLink(
+  startPayload: string,
+  username: string = EXPECTED_TELEGRAM_BOT_USERNAME,
+): string {
+  const clean = username.trim().replace(/^@+/, '').toLowerCase() || EXPECTED_TELEGRAM_BOT_USERNAME;
+  return `https://t.me/${clean}?start=${encodeURIComponent(startPayload)}`;
 }
 
 /**
@@ -40,7 +45,7 @@ export function issueTelegramLinkingToken(
     identityId,
     tokenHash: hashTelegramLinkingToken(startPayload),
     startPayload,
-    deepLink: buildTelegramStartLink(startPayload, readTelegramPublicConfig().expectedUsername),
+    deepLink: buildTelegramStartLink(startPayload, getActiveBotUsername()),
     expiresAt: new Date(issuedAt.getTime() + TELEGRAM_LINKING_TOKEN_TTL_MS),
   };
 }

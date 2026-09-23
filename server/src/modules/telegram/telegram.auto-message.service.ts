@@ -670,6 +670,8 @@ export function previewAutoMessage(
     unresolvedPlaceholders: composed.unresolvedPlaceholders,
     ctaLabel: normalized.ctaEnabled ? normalized.ctaLabel ?? null : null,
     ctaPath: normalized.ctaEnabled ? normalized.ctaPath ?? null : null,
+    thresholdApplied: composed.thresholdApplied,
+    thresholdNote: composed.thresholdNote,
   };
 }
 

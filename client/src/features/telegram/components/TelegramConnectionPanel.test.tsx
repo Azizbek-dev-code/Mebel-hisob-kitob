@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+﻿import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { mockApi } from '@/test/mock-api';
 import { renderWithProviders, screen, waitFor } from '@/test/test-utils';
@@ -83,7 +83,7 @@ describe('TelegramConnectionPanel', () => {
         body: {
           success: true,
           data: {
-            deepLink: 'https://t.me/blancyspace_bot?start=abc',
+            deepLink: 'https://t.me/balancyspace_bot?start=abc',
             expiresAt: new Date(Date.now() + 60_000).toISOString(),
           },
         },
@@ -96,14 +96,14 @@ describe('TelegramConnectionPanel', () => {
 
     await waitFor(() => {
       expect(open).toHaveBeenCalledWith(
-        'https://t.me/blancyspace_bot?start=abc',
+        'https://t.me/balancyspace_bot?start=abc',
         '_blank',
         'noopener,noreferrer',
       );
     });
     expect(await screen.findByRole('link', { name: /Telegramda ochish|Открыть в Telegram/i })).toHaveAttribute(
       'href',
-      'https://t.me/blancyspace_bot?start=abc',
+      'https://t.me/balancyspace_bot?start=abc',
     );
   });
 });

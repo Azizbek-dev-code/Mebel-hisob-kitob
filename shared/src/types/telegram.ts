@@ -184,6 +184,8 @@ export interface TelegramAdminBotStatus {
   tokenConfigured: boolean;
   tokenSource: TelegramTokenSource;
   hasDatabaseToken: boolean;
+  /** Active public origin used for CTAs and default webhook host. */
+  publicAppUrl: string;
   webhook: TelegramWebhookAdminStatus | null;
   connectedUsers: number;
   lastValidatedAt: IsoDateString | null;
@@ -418,6 +420,10 @@ export interface TelegramAutoMessagePreviewResponse {
   unresolvedPlaceholders: string[];
   ctaLabel: string | null;
   ctaPath: string | null;
+  /** Threshold band message applied for sample data, or null if not triggered. */
+  thresholdApplied: string | null;
+  /** Human hint when threshold is configured but sample data did not hit a band. */
+  thresholdNote: string | null;
 }
 
 export interface TelegramAutoMessageTestSendResponse {

@@ -1,4 +1,4 @@
-import path from 'node:path';
+﻿import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { config as loadDotenv } from 'dotenv';
@@ -87,7 +87,7 @@ const envSchema = z.object({
   TELEGRAM_WEBHOOK_SECRET: optionalSecret,
   /**
    * Public app origin for /app links and default webhook URL.
-   * Production default used in code when unset: https://www.mebelboshqaruv.uz
+   * Production default used in code when unset: https://balancy.space
    */
   PUBLIC_APP_URL: optionalSecret,
   /** Explicit webhook URL; defaults to `${PUBLIC_APP_URL}/api/telegram/webhook`. */

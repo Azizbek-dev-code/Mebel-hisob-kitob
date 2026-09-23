@@ -34,6 +34,9 @@ export const platformTelegramService = {
   updateToken(body: UpdateTelegramBotTokenRequest) {
     return apiClient.put<TelegramAdminBotStatus>('/telegram/admin/token', { body });
   },
+  setupWebhook() {
+    return apiClient.post<TelegramAdminBotStatus>('/telegram/setup-webhook');
+  },
   startMessage(signal?: AbortSignal) {
     return apiClient.get<TelegramStartMessageDto>('/telegram/admin/start-message', { signal });
   },

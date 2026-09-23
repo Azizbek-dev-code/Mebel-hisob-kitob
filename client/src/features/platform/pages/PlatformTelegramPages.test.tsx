@@ -1,4 +1,4 @@
-import { MemoryRouter } from 'react-router-dom';
+﻿import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TEST_PLATFORM_ADMIN } from '@/test/auth-fixtures';
@@ -21,11 +21,12 @@ describe('PlatformTelegramPage', () => {
           success: true,
           data: {
             connected: true,
-            botUsername: '@blancyspace_bot',
+            botUsername: '@balancyspace_bot',
             botFirstName: 'Balancy',
             tokenConfigured: true,
             tokenSource: 'env',
             hasDatabaseToken: false,
+            publicAppUrl: 'https://balancy.space',
             webhook: {
               url: 'https://example.ngrok.app/api/telegram/webhook',
               configuredUrl: 'https://example.ngrok.app/api/telegram/webhook',
@@ -47,7 +48,7 @@ describe('PlatformTelegramPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('@blancyspace_bot')).toBeInTheDocument();
+    expect(await screen.findByText('@balancyspace_bot')).toBeInTheDocument();
     expect(screen.getByText('12')).toBeInTheDocument();
     expect(screen.queryByText(/123456:/)).not.toBeInTheDocument();
   });
