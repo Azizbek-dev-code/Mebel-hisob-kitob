@@ -26,7 +26,7 @@ describe('PlatformTelegramPage', () => {
             tokenConfigured: true,
             tokenSource: 'env',
             hasDatabaseToken: false,
-            publicAppUrl: 'https://balancy.space',
+            publicAppUrl: 'https://www.mebelboshqaruv.uz',
             webhook: {
               url: 'https://example.ngrok.app/api/telegram/webhook',
               configuredUrl: 'https://example.ngrok.app/api/telegram/webhook',

@@ -50,29 +50,34 @@ describe('getPublicAppUrl / getTelegramWebhookUrl', () => {
   it('defaults to the current production origin when PUBLIC_APP_URL is unset', () => {
     expect(getPublicAppUrl({})).toBe(DEFAULT_PUBLIC_APP_URL);
     expect(getTelegramWebhookUrl({})).toBe(`${DEFAULT_PUBLIC_APP_URL}/api/telegram/webhook`);
-    expect(DEFAULT_PUBLIC_APP_URL).toBe('https://balancy.space');
+    expect(DEFAULT_PUBLIC_APP_URL).toBe('https://www.mebelboshqaruv.uz');
   });
 
-  it('rewrites legacy mebelboshqaruv.uz origin to balancy.space', () => {
-    expect(getPublicAppUrl({ PUBLIC_APP_URL: 'https://mebelboshqaruv.uz' })).toBe(DEFAULT_PUBLIC_APP_URL);
-    expect(getPublicAppUrl({ PUBLIC_APP_URL: 'https://www.mebelboshqaruv.uz/' })).toBe(
-      DEFAULT_PUBLIC_APP_URL,
+  it('keeps mebelboshqaruv.uz production hosts as-is', () => {
+    expect(getPublicAppUrl({ PUBLIC_APP_URL: 'https://www.mebelboshqaruv.uz' })).toBe(
+      'https://www.mebelboshqaruv.uz',
+    );
+    expect(getPublicAppUrl({ PUBLIC_APP_URL: 'https://mebelboshqaruv.uz/' })).toBe(
+      'https://mebelboshqaruv.uz',
     );
     expect(
       getTelegramWebhookUrl({
-        TELEGRAM_WEBHOOK_URL: 'https://mebelboshqaruv.uz/api/telegram/webhook',
+        PUBLIC_APP_URL: 'https://www.mebelboshqaruv.uz',
+      }),
+    ).toBe('https://www.mebelboshqaruv.uz/api/telegram/webhook');
+  });
+
+  it('rewrites retired balancy.space origin to current production host', () => {
+    expect(getPublicAppUrl({ PUBLIC_APP_URL: 'https://balancy.space' })).toBe(DEFAULT_PUBLIC_APP_URL);
+    expect(getPublicAppUrl({ PUBLIC_APP_URL: 'https://www.balancy.space/' })).toBe(DEFAULT_PUBLIC_APP_URL);
+    expect(
+      getTelegramWebhookUrl({
+        TELEGRAM_WEBHOOK_URL: 'https://balancy.space/api/telegram/webhook',
       }),
     ).toBe(`${DEFAULT_PUBLIC_APP_URL}/api/telegram/webhook`);
   });
 
-  it('keeps balancy.space as-is', () => {
-    expect(getPublicAppUrl({ PUBLIC_APP_URL: 'https://balancy.space' })).toBe('https://balancy.space');
-    expect(getPublicAppUrl({ PUBLIC_APP_URL: 'https://www.balancy.space/' })).toBe(
-      'https://www.balancy.space',
-    );
-  });
-
-  it('honours explicit TELEGRAM_WEBHOOK_URL', () => {
+  it('honours explicit TELEGRAM_WEBHOOK_URL on non-legacy hosts', () => {
     expect(
       getTelegramWebhookUrl({
         PUBLIC_APP_URL: 'https://example.com',

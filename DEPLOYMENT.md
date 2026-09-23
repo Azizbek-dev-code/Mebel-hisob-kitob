@@ -3,7 +3,7 @@
 This is the **manual** runbook. Cursor / local agents must not deploy, push, or
 connect to production. You run these steps yourself after a database backup.
 
-Production app origin: **https://balancy.space**
+Production app origin: **https://www.mebelboshqaruv.uz**
 
 Target stack: **Vercel** (SPA + `/api` serverless) + **Neon** (Postgres) +
 **Cloudinary or Vercel Blob** (uploads) + **Telegram Bot API**.
@@ -73,10 +73,10 @@ See `.env.example` and `docs/PRODUCTION.md`. Required production names:
 - `DATABASE_URL` (and optional `DIRECT_URL`)
 - `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `COOKIE_SECRET`
 - `COOKIE_SECURE=true`, `COOKIE_SAME_SITE=lax`
-- `CORS_ORIGIN=https://balancy.space`
+- `CORS_ORIGIN=https://www.mebelboshqaruv.uz`
 - `STORAGE_DRIVER=cloudinary` or `vercel-blob`
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`
-- `PUBLIC_APP_URL=https://balancy.space`
+- `PUBLIC_APP_URL=https://www.mebelboshqaruv.uz`
 - `CRON_SECRET`
 
 Optional: `TELEGRAM_WEBHOOK_URL`, `PRESENCE_OFFLINE_AFTER_SECONDS` (default 300),
@@ -105,7 +105,7 @@ If `P3005` (schema not empty / never baselined): stop. Follow
 Current path (unchanged from V1): `POST /api/telegram/webhook`
 
 1. After V2 is live, check BotFather / `getWebhookInfo`.
-2. Expected URL: `https://balancy.space/api/telegram/webhook`
+2. Expected URL: `https://www.mebelboshqaruv.uz/api/telegram/webhook`
 3. Only call `POST /api/telegram/setup-webhook` (Platform Admin) or
    `node scripts/telegram-set-webhook.mjs` if the URL/secret is missing.
 4. Do not point the webhook at localhost or ngrok.
@@ -127,7 +127,7 @@ Automations do nothing until you enable them in Platform Admin.
 
 ## 9. Production verification
 
-1. `GET https://balancy.space/api/health` → `status` is `ok`, no secrets in JSON.
+1. `GET https://www.mebelboshqaruv.uz/api/health` → `status` is `ok`, no secrets in JSON.
 2. Login / logout / `/api/auth/me`.
 3. Personal: transaction, habit, todo, focus, budget.
 4. Business: sale, product, customer, delivery, assembly, report.

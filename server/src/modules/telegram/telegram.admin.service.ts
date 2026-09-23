@@ -22,7 +22,6 @@ import { applyTelegramDbRuntime, getPublicAppUrl, getTelegramWebhookUrl, readTel
 import { decryptTelegramSecret, encryptTelegramSecret } from './telegram.crypto.js';
 import { mediaKindFromUrl } from './telegram.content.js';
 import {
-  ensureTelegramWebhookOnce,
   getTelegramWebhookInfo,
   inspectTelegramBotToken,
   resetTelegramHealthCache,
@@ -67,46 +66,61 @@ function tokenSourceFromConfig(hasDatabaseToken: boolean, envConfigured: boolean
   return TelegramTokenSource.NONE;
 }
 
+function normaliseWebhookUrl(value: string): string {
+  return value.trim().replace(/\/+$/, '').toLowerCase();
+}
+
 export async function getAdminBotStatus(): Promise<TelegramAdminBotStatus> {
   const config = await prisma.telegramBotConfig.findUnique({ where: { id: BOT_CONFIG_ID } });
   applyBotConfigRow(config);
   const runtime = readTelegramRuntime();
-  if (runtime.configured) {
-    await ensureTelegramWebhookOnce();
-  }
   const connectedUsers = await prisma.telegramConnection.count({ where: { isActive: true } });
   const hasDatabaseToken = Boolean(config?.encryptedBotToken);
   const source = tokenSourceFromConfig(hasDatabaseToken, runtime.configured);
+  const configuredUrl = getTelegramWebhookUrl();
 
   let webhook: TelegramAdminBotStatus['webhook'] = {
     url: '',
-    configuredUrl: getTelegramWebhookUrl(),
+    configuredUrl,
     active: false,
     pendingUpdateCount: 0,
     lastErrorMessage: null,
     lastCheckedAt: new Date().toISOString(),
   };
 
-  let connected = false;
+  let botApiReachable = false;
   if (runtime.configured) {
+    // Prefer live Telegram getWebhookInfo — never invent "active" from DB alone.
     const info = await getTelegramWebhookInfo();
     webhook.lastCheckedAt = new Date().toISOString();
     if (info.ok) {
-      connected = true;
+      botApiReachable = true;
+      const currentUrl = info.url || '';
+      const urlsMatch =
+        Boolean(currentUrl) &&
+        normaliseWebhookUrl(currentUrl) === normaliseWebhookUrl(configuredUrl);
       webhook = {
-        ...webhook,
-        url: info.url,
-        active: Boolean(info.url),
+        url: currentUrl,
+        configuredUrl,
+        // Active only when Telegram reports a webhook URL that matches our expected endpoint.
+        active: urlsMatch,
         pendingUpdateCount: info.pendingUpdateCount,
         lastErrorMessage: info.lastErrorMessage,
+        lastCheckedAt: webhook.lastCheckedAt,
+      };
+    } else {
+      webhook = {
+        ...webhook,
+        lastErrorMessage: 'Telegram getWebhookInfo muvaffaqiyatsiz',
       };
     }
   }
 
-  const username = config?.botUsername || runtime.expectedUsername || null;
+  // Display username from DB (persisted getMe) — never invent from unrelated sources.
+  const username = config?.botUsername || null;
 
   return {
-    connected: connected && runtime.configured,
+    connected: botApiReachable && runtime.configured,
     botUsername: username ? `@${username.replace(/^@/, '')}` : null,
     botFirstName: config?.botFirstName ?? null,
     tokenConfigured: runtime.configured,
@@ -152,7 +166,12 @@ export async function updateAdminBotToken(actorUserId: string, token: string): P
 
   const runtime = readTelegramRuntime();
   if (runtime.token && runtime.webhookSecret) {
-    await setTelegramWebhook();
+    const webhookResult = await setTelegramWebhook();
+    if (!webhookResult.ok) {
+      logger.warn('Telegram setWebhook after token save failed', { reason: webhookResult.reason });
+    }
+  } else if (runtime.token && !runtime.webhookSecret) {
+    logger.warn('Telegram token saved but TELEGRAM_WEBHOOK_SECRET is missing; webhook not registered');
   }
 
   await recordAudit({

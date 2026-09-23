@@ -11,7 +11,7 @@ vi.mock('../../lib/prisma.js', () => ({
 }));
 
 vi.mock('./telegram.config.js', () => ({
-  getPublicAppUrl: () => 'https://balancy.space',
+  getPublicAppUrl: () => 'https://www.mebelboshqaruv.uz',
 }));
 
 import { TelegramMenuButtonAction } from '@furniture-erp/shared';
@@ -26,7 +26,7 @@ describe('default Telegram menus', () => {
   it('welcome content has app + details buttons', () => {
     const content = defaultStartContent();
     expect(content.text).toContain('Balancy Space');
-    expect(content.buttons?.some((button) => button.url === 'https://balancy.space')).toBe(true);
+    expect(content.buttons?.some((button) => button.url === 'https://www.mebelboshqaruv.uz')).toBe(true);
     expect(content.buttons?.some((button) => button.callbackData === 'tg:m:details')).toBe(true);
   });
 

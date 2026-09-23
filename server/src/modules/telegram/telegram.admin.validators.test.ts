@@ -17,7 +17,7 @@ describe('updateTelegramStartMessageSchema', () => {
         {
           text: '🚀 Dasturga kirish',
           action: 'URL',
-          url: 'https://balancy.space',
+          url: 'https://www.mebelboshqaruv.uz',
         },
         {
           text: '📚 Batafsil',

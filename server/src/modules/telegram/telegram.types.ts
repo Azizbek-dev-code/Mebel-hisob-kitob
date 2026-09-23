@@ -5,7 +5,7 @@
  * identity until account linking stores them on `TelegramConnection` (not on `User`).
  */
 
-/** Fallback when DB/getMe username is not yet hydrated. Active bot comes from admin token → getMe. */
+/** Fallback only when DB has no getMe username yet. Prefer admin-saved token → getMe. */
 export const EXPECTED_TELEGRAM_BOT_USERNAME = 'balancyspace_bot';
 
 export const TELEGRAM_API_ORIGIN = 'https://api.telegram.org';
@@ -14,14 +14,14 @@ export const TELEGRAM_WEBHOOK_SECRET_HEADER = 'x-telegram-bot-api-secret-token';
 
 export const TELEGRAM_LINKING_TOKEN_TTL_MS = 15 * 60 * 1000;
 
-/** Production SPA origin used when PUBLIC_APP_URL is unset. */
-export const DEFAULT_PUBLIC_APP_URL = 'https://balancy.space';
+/**
+ * Production SPA origin used when PUBLIC_APP_URL is unset.
+ * Must match the live deployment host — never a retired domain.
+ */
+export const DEFAULT_PUBLIC_APP_URL = 'https://www.mebelboshqaruv.uz';
 
-/** Former production hosts — rewritten to DEFAULT_PUBLIC_APP_URL. */
-export const LEGACY_PUBLIC_APP_HOSTS = [
-  'mebelboshqaruv.uz',
-  'www.mebelboshqaruv.uz',
-] as const;
+/** Retired hosts — rewritten to DEFAULT_PUBLIC_APP_URL so stale env cannot break webhooks. */
+export const LEGACY_PUBLIC_APP_HOSTS = ['balancy.space', 'www.balancy.space'] as const;
 
 export const DEFAULT_TELEGRAM_START_TEXT =
   "👋 Balancy Space'ga xush kelibsiz!\n\n" +

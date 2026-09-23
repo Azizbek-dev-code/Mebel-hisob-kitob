@@ -39,7 +39,7 @@ vi.mock('./telegram.config.js', async (importOriginal) => {
       webhookSecret: 'hook-secret',
     })),
     getTelegramWebhookUrl: () => 'https://example.ngrok.app/api/telegram/webhook',
-    getPublicAppUrl: () => 'https://balancy.space',
+    getPublicAppUrl: () => 'https://www.mebelboshqaruv.uz',
     applyTelegramDbRuntime: vi.fn(),
   };
 });
@@ -101,7 +101,22 @@ describe('telegram admin token', () => {
     const status = await getAdminBotStatus();
     expect(status.connectedUsers).toBe(3);
     expect(status.webhook?.configuredUrl).toContain('/api/telegram/webhook');
+    expect(status.webhook?.active).toBe(true);
+    expect(status.connected).toBe(true);
     expect(JSON.stringify(status)).not.toContain('env-token-not-for-logs');
+  });
+
+  it('marks webhook inactive when Telegram URL does not match expected', async () => {
+    getTelegramWebhookInfo.mockResolvedValue({
+      ok: true,
+      url: 'https://balancy.space/api/telegram/webhook',
+      pendingUpdateCount: 0,
+      lastErrorMessage: null,
+    });
+    const status = await getAdminBotStatus();
+    expect(status.webhook?.active).toBe(false);
+    expect(status.webhook?.url).toContain('balancy.space');
+    expect(status.webhook?.configuredUrl).toBe('https://example.ngrok.app/api/telegram/webhook');
   });
 
   it('hydrates a database token before reporting status', async () => {
@@ -135,7 +150,7 @@ describe('telegram start message admin', () => {
       mediaKind: 'IMAGE',
       imageUrl: 'https://cdn.example.com/a.jpg',
       buttonText: 'Open',
-      buttonUrl: 'https://balancy.space',
+      buttonUrl: 'https://www.mebelboshqaruv.uz',
       buttons: [],
       updatedAt: new Date('2026-09-21T00:00:00.000Z'),
     });
@@ -144,7 +159,7 @@ describe('telegram start message admin', () => {
       mediaKind: 'IMAGE',
       imageUrl: 'https://cdn.example.com/a.jpg',
       buttonText: 'Open',
-      buttonUrl: 'https://balancy.space',
+      buttonUrl: 'https://www.mebelboshqaruv.uz',
     });
     expect(dto.imageUrl).toBe('https://cdn.example.com/a.jpg');
     expect(recordAudit).toHaveBeenCalledWith(

@@ -2,7 +2,7 @@
 
 Print this. Check each box yourself. Do not skip backup.
 
-Production domain: `https://balancy.space`
+Production domain: `https://www.mebelboshqaruv.uz`
 
 ## Before anything
 
@@ -25,13 +25,13 @@ Production domain: `https://balancy.space`
 - [ ] `COOKIE_SECRET` (≥16)
 - [ ] `COOKIE_SECURE=true`
 - [ ] `COOKIE_SAME_SITE=lax`
-- [ ] `CORS_ORIGIN=https://balancy.space`
+- [ ] `CORS_ORIGIN=https://www.mebelboshqaruv.uz`
 - [ ] `STORAGE_DRIVER=cloudinary` or `vercel-blob` (never `local` / `supabase`)
 - [ ] Cloudinary trio **or** Blob token
 - [ ] `BACKUP_DIR=/tmp/backups`
 - [ ] `TELEGRAM_BOT_TOKEN`
 - [ ] `TELEGRAM_WEBHOOK_SECRET` (not the bot token)
-- [ ] `PUBLIC_APP_URL=https://balancy.space` (not localhost, not ngrok)
+- [ ] `PUBLIC_APP_URL=https://www.mebelboshqaruv.uz` (not localhost, not ngrok)
 - [ ] `TELEGRAM_WEBHOOK_URL` optional; default `${PUBLIC_APP_URL}/api/telegram/webhook`
 - [ ] `CRON_SECRET`
 - [ ] Optional: `PRESENCE_OFFLINE_AFTER_SECONDS=300`, `ANALYTICS_IDLE_TIMEOUT=300`
@@ -53,7 +53,7 @@ Production domain: `https://balancy.space`
 - [ ] Admin (store) cannot open `/api/platform/usage/*` (403)
 - [ ] Platform Admin usage pages show counts/time only — **no so'm**
 - [ ] Telegram `/start` still answers
-- [ ] Webhook URL still `https://balancy.space/api/telegram/webhook`
+- [ ] Webhook URL still `https://www.mebelboshqaruv.uz/api/telegram/webhook`
 - [ ] Link / unlink / relink Telegram
 - [ ] Automations remain **off** until enabled in Platform Admin
 - [ ] Broadcast: one failed recipient does not stop the batch

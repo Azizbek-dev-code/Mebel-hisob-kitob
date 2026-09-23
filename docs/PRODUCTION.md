@@ -3,7 +3,7 @@
 Target stack: **Vercel** (SPA + API as a serverless function) + **Neon** (Postgres) +
 **Vercel Blob** (images) or **Cloudinary**.
 
-Public production origin: **https://balancy.space**
+Public production origin: **https://www.mebelboshqaruv.uz**
 
 Do not deploy until every item below is configured. This file is the runbook; it
 does not perform a deploy.
@@ -57,13 +57,13 @@ skips `.env` loading when `VERCEL` is set, so everything must come from here.
 | `SEED_*` | Only needed for one-shot `npm run db:seed` — change passwords before seeding prod |
 | `TELEGRAM_BOT_TOKEN` | Optional. Telegram Bot API token for `@balancyspace_bot`. Leave unset to disable Telegram; the API still starts. **Never** expose this to the client, API responses, or logs. |
 | `TELEGRAM_WEBHOOK_SECRET` | Optional. Telegram webhook `secret_token` (not the bot token). Required before `setWebhook` / inbound updates work. |
-| `PUBLIC_APP_URL` | Public app origin (e.g. `https://balancy.space`). Used for `/app` links and the default webhook URL. |
+| `PUBLIC_APP_URL` | Public app origin (e.g. `https://www.mebelboshqaruv.uz`). Used for `/app` links and the default webhook URL. |
 | `TELEGRAM_WEBHOOK_URL` | Optional override. Defaults to `${PUBLIC_APP_URL}/api/telegram/webhook`. |
 | `CRON_SECRET` | Protects cron routes (`POST /api/telegram/cron/*` and `POST /api/presence/cron/maintenance`). Send as `Authorization: Bearer <secret>` or `x-cron-secret`. |
 
 ### Telegram webhook setup
 
-1. Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, and `PUBLIC_APP_URL=https://balancy.space` in the Vercel project env.
+1. Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, and `PUBLIC_APP_URL=https://www.mebelboshqaruv.uz` in the Vercel project env.
 2. Deploy so `/api/telegram/webhook` is live.
 3. Register the webhook once:
    - Platform Admin: `POST /api/telegram/setup-webhook` (authenticated), or

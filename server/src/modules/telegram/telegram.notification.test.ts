@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('./telegram.config.js', () => ({
-  getPublicAppUrl: () => 'https://balancy.space',
+  getPublicAppUrl: () => 'https://www.mebelboshqaruv.uz',
 }));
 
 import { formatTelegramNotification } from './telegram.notification.js';

@@ -23,12 +23,12 @@ describe('sendTelegramContent', () => {
     await sendTelegramContent('55', {
       text: 'Hello',
       buttonText: 'Open',
-      buttonUrl: 'https://balancy.space',
+      buttonUrl: 'https://www.mebelboshqaruv.uz',
     });
     expect(sendTelegramMessage).toHaveBeenCalledWith(
       '55',
       'Hello',
-      { inline_keyboard: [[{ text: 'Open', url: 'https://balancy.space' }]] },
+      { inline_keyboard: [[{ text: 'Open', url: 'https://www.mebelboshqaruv.uz' }]] },
       undefined,
     );
   });
@@ -38,13 +38,13 @@ describe('sendTelegramContent', () => {
       text: 'Welcome',
       imageUrl: 'https://cdn.example.com/a.jpg',
       buttonText: 'Go',
-      buttonUrl: 'https://balancy.space',
+      buttonUrl: 'https://www.mebelboshqaruv.uz',
     });
     expect(sendTelegramPhoto).toHaveBeenCalledWith(
       '55',
       'https://cdn.example.com/a.jpg',
       'Welcome',
-      { inline_keyboard: [[{ text: 'Go', url: 'https://balancy.space' }]] },
+      { inline_keyboard: [[{ text: 'Go', url: 'https://www.mebelboshqaruv.uz' }]] },
       undefined,
     );
     expect(sendTelegramMessage).not.toHaveBeenCalled();

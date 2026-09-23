@@ -182,17 +182,21 @@ export function PlatformTelegramBotPage() {
               {data?.webhook ? (
                 <>
                   <p>
-                    Holat: {data.webhook.active ? '🟢 Active' : '⚪ Inactive'}
+                    Holat:{' '}
+                    {data.webhook.active
+                      ? '🟢 Active'
+                      : '⚪ O‘chiq'}
                   </p>
                   <p>
-                    Current: {data.webhook.url || '—'}
+                    Current (Telegram getWebhookInfo): {data.webhook.url || '—'}
                   </p>
                   <p>
-                    Expected: {data.webhook.configuredUrl}
+                    Expected (PUBLIC_APP_URL): {data.webhook.configuredUrl}
                   </p>
-                  {data.webhook.url && data.webhook.url !== data.webhook.configuredUrl ? (
+                  {!data.webhook.active ? (
                     <p className="text-danger-700">
-                      Webhook URL expected bilan mos emas — “Reconfigure Webhook” bosing.
+                      Webhook o‘chiq yoki Expected bilan mos emas. “Reconfigure Webhook” bosing
+                      (TELEGRAM_WEBHOOK_SECRET va PUBLIC_APP_URL to‘g‘ri bo‘lishi kerak).
                     </p>
                   ) : null}
                   {typeof data.webhook.pendingUpdateCount === 'number' ? (
@@ -318,7 +322,7 @@ export function PlatformTelegramStartPage() {
                     {
                       text: buttonText || '🚀 Dasturga kirish',
                       action: 'URL',
-                      url: buttonUrl || 'https://balancy.space',
+                      url: buttonUrl || 'https://www.mebelboshqaruv.uz',
                     },
                     {
                       text: detailButton.trim() || '📚 Batafsil',

@@ -13,7 +13,7 @@ import {
   updateTelegramPrefs,
 } from './telegram.connection.service.js';
 import { runTelegramDailySummaries } from './telegram.daily-summary.service.js';
-import { setTelegramWebhook } from './telegram.service.js';
+import { setTelegramWebhook, resetTelegramWebhookEnsureCache } from './telegram.service.js';
 import type { TelegramUpdate } from './telegram.types.js';
 import { ingestTelegramWebhookUpdate } from './telegram.webhook.js';
 
@@ -46,10 +46,14 @@ export const patchTelegramPrefs = asyncHandler(async (req: Request, res: Respons
 
 export const postTelegramSetupWebhook = asyncHandler(async (_req: Request, res: Response) => {
   await hydrateTelegramRuntimeFromDb();
+  // Clear cold-start cache so Reconfigure always invokes Telegram setWebhook with current PUBLIC_APP_URL.
+  resetTelegramWebhookEnsureCache();
   const result = await setTelegramWebhook();
   if (!result.ok) {
     throw ApiError.badRequest(
-      result.reason === 'not_configured' ? 'Telegram sozlanmagan' : 'Webhook o‘rnatilmadi',
+      result.reason === 'not_configured'
+        ? 'Telegram sozlanmagan (token yoki TELEGRAM_WEBHOOK_SECRET yo‘q)'
+        : 'Webhook o‘rnatilmadi',
     );
   }
   const { getAdminBotStatus } = await import('./telegram.admin.service.js');

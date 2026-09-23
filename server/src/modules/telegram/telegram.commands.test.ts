@@ -71,7 +71,7 @@ vi.mock('./telegram.menu.js', () => ({
   sendMenuScreen: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('./telegram.config.js', () => ({
-  getPublicAppUrl: () => 'https://balancy.space',
+  getPublicAppUrl: () => 'https://www.mebelboshqaruv.uz',
 }));
 vi.mock('./telegram.account-pref.service.js', () => ({
   listAccountPreferences: vi.fn().mockResolvedValue([

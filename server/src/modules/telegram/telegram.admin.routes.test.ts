@@ -74,7 +74,7 @@ describe('Telegram admin authorization', () => {
       tokenConfigured: true,
       tokenSource: 'env',
       hasDatabaseToken: false,
-      publicAppUrl: 'https://balancy.space',
+      publicAppUrl: 'https://www.mebelboshqaruv.uz',
       webhook: null,
       connectedUsers: 0,
       lastValidatedAt: null,
