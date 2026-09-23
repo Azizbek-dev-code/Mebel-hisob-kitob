@@ -34,6 +34,9 @@ export const platformTelegramService = {
   updateToken(body: UpdateTelegramBotTokenRequest) {
     return apiClient.put<TelegramAdminBotStatus>('/telegram/admin/token', { body });
   },
+  refreshBotInfo() {
+    return apiClient.post<TelegramAdminBotStatus>('/telegram/admin/bot/refresh');
+  },
   setupWebhook() {
     return apiClient.post<TelegramAdminBotStatus>('/telegram/setup-webhook');
   },

@@ -26,6 +26,7 @@ describe('PlatformTelegramPage', () => {
             tokenConfigured: true,
             tokenSource: 'env',
             hasDatabaseToken: false,
+            webhookSecretConfigured: true,
             publicAppUrl: 'https://www.mebelboshqaruv.uz',
             webhook: {
               url: 'https://example.ngrok.app/api/telegram/webhook',

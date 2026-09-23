@@ -27,7 +27,9 @@ export function buildTelegramStartLink(
   startPayload: string,
   username: string = EXPECTED_TELEGRAM_BOT_USERNAME,
 ): string {
-  const clean = username.trim().replace(/^@+/, '').toLowerCase() || EXPECTED_TELEGRAM_BOT_USERNAME;
+  // Preserve getMe/DB casing; Telegram t.me is case-insensitive but Admin/UI should match canonical.
+  const clean =
+    username.trim().replace(/^@+/, '') || EXPECTED_TELEGRAM_BOT_USERNAME;
   return `https://t.me/${clean}?start=${encodeURIComponent(startPayload)}`;
 }
 

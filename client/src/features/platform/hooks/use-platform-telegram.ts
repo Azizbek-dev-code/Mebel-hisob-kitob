@@ -52,6 +52,17 @@ export function useUpdateTelegramBotToken() {
   });
 }
 
+export function useRefreshTelegramBotInfo() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => platformTelegramService.refreshBotInfo(),
+    onSuccess: (data) => {
+      client.setQueryData(platformTelegramKeys.status, data);
+      void client.invalidateQueries({ queryKey: platformTelegramKeys.status });
+    },
+  });
+}
+
 export function useSetupTelegramWebhook() {
   const client = useQueryClient();
   return useMutation({

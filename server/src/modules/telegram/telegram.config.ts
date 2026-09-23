@@ -25,6 +25,7 @@ function blankToUndefined(value: string | undefined): string | undefined {
  * means "not configured" — callers must not crash.
  */
 let dbTokenOverride: string | undefined;
+/** Canonical username from getMe (preserves Telegram casing). */
 let dbBotUsernameOverride: string | undefined;
 
 /** Test helper — clears admin-saved token overlay. */
@@ -33,16 +34,21 @@ export function clearTelegramDbRuntimeOverride(): void {
   dbBotUsernameOverride = undefined;
 }
 
-/** Normalise Telegram usernames: strip @, lowercase. */
+/** Strip @ only — preserve Telegram getMe casing for display and deep-links. */
+export function canonicalBotUsername(value: string | null | undefined): string {
+  return (value ?? '').trim().replace(/^@+/, '');
+}
+
+/** Case-insensitive compare key for usernames. */
 export function normaliseBotUsername(value: string | null | undefined): string {
-  return (value ?? '').trim().replace(/^@+/, '').toLowerCase();
+  return canonicalBotUsername(value).toLowerCase();
 }
 
 /** Applies a decrypted DB token for subsequent Bot API calls. Never logs the token. */
 export function applyTelegramDbRuntime(input: { token?: string; botUsername?: string | null }): void {
   dbTokenOverride = blankToUndefined(input.token);
-  const normalised = normaliseBotUsername(input.botUsername);
-  dbBotUsernameOverride = normalised || undefined;
+  const canonical = canonicalBotUsername(input.botUsername);
+  dbBotUsernameOverride = canonical || undefined;
 }
 
 export function resolveTelegramRuntime(source: TelegramEnvSource): TelegramRuntimeConfig {
@@ -50,6 +56,7 @@ export function resolveTelegramRuntime(source: TelegramEnvSource): TelegramRunti
   const webhookSecret = blankToUndefined(source.TELEGRAM_WEBHOOK_SECRET);
   return {
     configured: Boolean(token),
+    // Env-only path has no getMe yet — last-resort fallback until DB hydrate / Refresh.
     expectedUsername: EXPECTED_TELEGRAM_BOT_USERNAME,
     token,
     webhookSecret,
@@ -58,7 +65,7 @@ export function resolveTelegramRuntime(source: TelegramEnvSource): TelegramRunti
 
 /**
  * Active runtime: admin DB token/username overlay env fallbacks.
- * Bot username source of truth after admin saves token: DB (from Telegram getMe).
+ * Bot username source of truth after admin saves token / Refresh: DB (from Telegram getMe).
  */
 export function readTelegramRuntime(): TelegramRuntimeConfig {
   const envRuntime = resolveTelegramRuntime({
@@ -66,12 +73,10 @@ export function readTelegramRuntime(): TelegramRuntimeConfig {
     TELEGRAM_WEBHOOK_SECRET: env.TELEGRAM_WEBHOOK_SECRET,
   });
   const token = dbTokenOverride ?? envRuntime.token;
+  const fromDb = canonicalBotUsername(dbBotUsernameOverride);
   return {
     configured: Boolean(token),
-    expectedUsername:
-      normaliseBotUsername(dbBotUsernameOverride) ||
-      normaliseBotUsername(envRuntime.expectedUsername) ||
-      EXPECTED_TELEGRAM_BOT_USERNAME,
+    expectedUsername: fromDb || EXPECTED_TELEGRAM_BOT_USERNAME,
     token,
     webhookSecret: envRuntime.webhookSecret,
   };
@@ -86,7 +91,7 @@ export function readTelegramPublicConfig(source?: TelegramEnvSource): TelegramPu
     const runtime = resolveTelegramRuntime(source);
     return {
       configured: runtime.configured,
-      expectedUsername: normaliseBotUsername(runtime.expectedUsername) || EXPECTED_TELEGRAM_BOT_USERNAME,
+      expectedUsername: runtime.expectedUsername,
     };
   }
   const runtime = readTelegramRuntime();
@@ -96,7 +101,7 @@ export function readTelegramPublicConfig(source?: TelegramEnvSource): TelegramPu
   };
 }
 
-/** Active bot username for t.me deep-links (no @). */
+/** Active bot username for t.me deep-links (no @). Prefer DB/getMe; fallback only if unset. */
 export function getActiveBotUsername(): string {
   return readTelegramPublicConfig().expectedUsername;
 }

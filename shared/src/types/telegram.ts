@@ -179,11 +179,14 @@ export interface TelegramWebhookAdminStatus {
 
 export interface TelegramAdminBotStatus {
   connected: boolean;
+  /** Canonical username from Telegram getMe (DB), including casing — never a hardcode. */
   botUsername: string | null;
   botFirstName: string | null;
   tokenConfigured: boolean;
   tokenSource: TelegramTokenSource;
   hasDatabaseToken: boolean;
+  /** True when TELEGRAM_WEBHOOK_SECRET is set (value never exposed). */
+  webhookSecretConfigured: boolean;
   /** Active public origin used for CTAs and default webhook host. */
   publicAppUrl: string;
   webhook: TelegramWebhookAdminStatus | null;

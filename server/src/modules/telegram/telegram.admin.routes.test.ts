@@ -74,6 +74,7 @@ describe('Telegram admin authorization', () => {
       tokenConfigured: true,
       tokenSource: 'env',
       hasDatabaseToken: false,
+      webhookSecretConfigured: true,
       publicAppUrl: 'https://www.mebelboshqaruv.uz',
       webhook: null,
       connectedUsers: 0,

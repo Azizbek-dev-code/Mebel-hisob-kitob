@@ -88,11 +88,11 @@ describe('getPublicAppUrl / getTelegramWebhookUrl', () => {
 });
 
 describe('active bot username', () => {
-  it('uses DB username override for deep-links after admin token save', () => {
+  it('uses DB username override for deep-links after admin token save (preserves casing)', () => {
     clearTelegramDbRuntimeOverride();
-    applyTelegramDbRuntime({ token: '123:ABC', botUsername: '@balancyspace_bot' });
-    expect(getActiveBotUsername()).toBe('balancyspace_bot');
-    expect(readTelegramPublicConfig().expectedUsername).toBe('balancyspace_bot');
+    applyTelegramDbRuntime({ token: '123:ABC', botUsername: '@BalancySpace_bot' });
+    expect(getActiveBotUsername()).toBe('BalancySpace_bot');
+    expect(readTelegramPublicConfig().expectedUsername).toBe('BalancySpace_bot');
     clearTelegramDbRuntimeOverride();
   });
 

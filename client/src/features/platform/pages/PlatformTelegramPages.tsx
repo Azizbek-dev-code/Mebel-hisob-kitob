@@ -25,6 +25,7 @@ import {
   usePlatformTelegramStatus,
   usePlatformTelegramUsers,
   useUpdateTelegramBotToken,
+  useRefreshTelegramBotInfo,
   useSetupTelegramWebhook,
   useUpdateTelegramMenuScreen,
   useUpdateTelegramStartMessage,
@@ -114,6 +115,7 @@ export function PlatformTelegramBotPage() {
   const { t } = useTranslation();
   const query = usePlatformTelegramStatus();
   const save = useUpdateTelegramBotToken();
+  const refreshBot = useRefreshTelegramBotInfo();
   const setupWebhook = useSetupTelegramWebhook();
   const [token, setToken] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -129,6 +131,17 @@ export function PlatformTelegramBotPage() {
       setOkMessage('Bot token saqlandi. Username Telegram getMe orqali yangilandi.');
     } catch (caught) {
       setError(composerError(caught, t('platformAdmin.telegram.tokenInvalid')));
+    }
+  }
+
+  async function onRefreshBot() {
+    setError(null);
+    setOkMessage(null);
+    try {
+      await refreshBot.mutateAsync();
+      setOkMessage('Bot info Telegram getMe orqali yangilandi.');
+    } catch (caught) {
+      setError(composerError(caught, 'Bot info yangilanmadi'));
     }
   }
 
@@ -164,7 +177,7 @@ export function PlatformTelegramBotPage() {
               <p className="text-ink">
                 Username: <span className="font-medium">{data?.botUsername ?? '—'}</span>
                 <span className="mt-1 block text-xs text-ink-muted">
-                  Token saqlanganda Telegram getMe dan avtomatik olinadi (readonly).
+                  Token saqlanganda yoki “Refresh Bot Info” da Telegram getMe dan olinadi (readonly).
                 </span>
               </p>
               <p className="text-ink">
@@ -173,6 +186,10 @@ export function PlatformTelegramBotPage() {
               <p className="text-ink-muted">
                 Bot token: {data?.tokenConfigured ? '••••••••••••' : '—'}
                 {data?.tokenSource ? ` (${data.tokenSource})` : null}
+              </p>
+              <p className="text-ink-muted">
+                TELEGRAM_WEBHOOK_SECRET:{' '}
+                {data?.webhookSecretConfigured ? 'configured: true' : 'configured: false'}
               </p>
             </div>
           </SectionCard>
@@ -238,11 +255,11 @@ export function PlatformTelegramBotPage() {
                 </button>
                 <button
                   type="button"
-                  disabled={query.isFetching}
-                  onClick={() => void query.refetch()}
+                  disabled={refreshBot.isPending || !data?.tokenConfigured}
+                  onClick={() => void onRefreshBot()}
                   className="rounded-input border border-line px-3 py-2 text-sm text-ink disabled:opacity-60"
                 >
-                  Refresh Bot Info
+                  {refreshBot.isPending ? 'Yangilanmoqda…' : 'Refresh Bot Info'}
                 </button>
                 <button
                   type="button"

@@ -220,4 +220,21 @@ describe('authenticated Telegram account routes', () => {
     expect(updateTelegramPrefs).toHaveBeenCalledWith('idn_1', { bizNotifySales: false });
     expect(response.body.data.bizNotifySales).toBe(false);
   });
+
+  it('POST /setup-webhook surfaces Telegram setWebhook description', async () => {
+    setTelegramWebhook.mockResolvedValue({
+      ok: false,
+      reason: 'api_error',
+      webhookUrl: 'https://www.mebelboshqaruv.uz/api/telegram/webhook',
+      webhookSecretConfigured: true,
+      httpStatus: 400,
+      errorCode: 400,
+      description: 'Bad Request: bad webhook: Failed to resolve host',
+    });
+
+    const response = await request(app).post('/api/telegram/setup-webhook').expect(400);
+    expect(response.body.success).toBe(false);
+    expect(response.body.error.message).toContain('Telegram setWebhook xatosi:');
+    expect(response.body.error.message).toContain('Failed to resolve host');
+  });
 });

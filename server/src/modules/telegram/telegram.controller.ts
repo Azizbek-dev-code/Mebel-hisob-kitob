@@ -50,10 +50,22 @@ export const postTelegramSetupWebhook = asyncHandler(async (_req: Request, res: 
   resetTelegramWebhookEnsureCache();
   const result = await setTelegramWebhook();
   if (!result.ok) {
+    if (result.reason === 'not_configured') {
+      throw ApiError.badRequest(
+        result.description === 'TELEGRAM_WEBHOOK_SECRET yo‘q'
+          ? 'Telegram sozlanmagan (TELEGRAM_WEBHOOK_SECRET yo‘q)'
+          : 'Telegram sozlanmagan (token yoki TELEGRAM_WEBHOOK_SECRET yo‘q)',
+      );
+    }
+    if (result.reason === 'invalid_webhook_secret') {
+      throw ApiError.badRequest(
+        result.description ??
+          'TELEGRAM_WEBHOOK_SECRET formati noto‘g‘ri (faqat A-Z, a-z, 0-9, _, -; 1–256 belgi)',
+      );
+    }
+    const desc = result.description?.trim();
     throw ApiError.badRequest(
-      result.reason === 'not_configured'
-        ? 'Telegram sozlanmagan (token yoki TELEGRAM_WEBHOOK_SECRET yo‘q)'
-        : 'Webhook o‘rnatilmadi',
+      desc ? `Telegram setWebhook xatosi: ${desc}` : 'Webhook o‘rnatilmadi',
     );
   }
   const { getAdminBotStatus } = await import('./telegram.admin.service.js');

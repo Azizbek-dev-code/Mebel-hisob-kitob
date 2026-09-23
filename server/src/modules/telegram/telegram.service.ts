@@ -1,6 +1,10 @@
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
-import { getTelegramWebhookUrl, readTelegramRuntime } from './telegram.config.js';
+import {
+  canonicalBotUsername,
+  getTelegramWebhookUrl,
+  readTelegramRuntime,
+} from './telegram.config.js';
 import { sanitizeTelegramLogText } from './telegram.sanitize.js';
 import {
   EXPECTED_TELEGRAM_BOT_USERNAME,
@@ -27,8 +31,11 @@ export interface TelegramClientDeps {
 const DEFAULT_TIMEOUT_MS = 4_000;
 const HEALTH_PROBE_TTL_MS = 60_000;
 
+/** Telegram secret_token: 1–256 chars, A-Z a-z 0-9 _ - only. */
+const TELEGRAM_SECRET_TOKEN_RE = /^[A-Za-z0-9_-]{1,256}$/;
+
 let cachedHealth: { at: number; status: TelegramHealthStatus } | null = null;
-let ensureWebhookPromise: Promise<{ ok: boolean; reason?: string }> | null = null;
+let ensureWebhookPromise: Promise<SetTelegramWebhookResult> | null = null;
 
 export function resetTelegramHealthCache(): void {
   cachedHealth = null;
@@ -52,15 +59,12 @@ function resolveDeps(deps?: TelegramClientDeps): Required<Omit<TelegramClientDep
   };
 }
 
-function normaliseUsername(username: string | undefined): string {
-  return (username ?? '').trim().replace(/^@/, '').toLowerCase();
-}
-
+/** Preserve Telegram getMe casing (strip @ only). */
 function toBotIdentity(result: TelegramGetMeResult): TelegramBotIdentity | null {
   if (!result.is_bot || typeof result.id !== 'number' || !result.first_name) {
     return null;
   }
-  const username = normaliseUsername(result.username);
+  const username = canonicalBotUsername(result.username);
   if (!username) return null;
   return { id: result.id, username, firstName: result.first_name };
 }
@@ -72,6 +76,37 @@ function isBlockedError(status: number, errorCode: number | undefined, descripti
 
 export type TelegramApiFailureReason = 'not_configured' | 'request_failed' | 'api_error' | 'blocked';
 
+export type TelegramApiCallResult<T> =
+  | { ok: true; result: T }
+  | {
+      ok: false;
+      reason: TelegramApiFailureReason;
+      httpStatus?: number;
+      errorCode?: number;
+      description?: string;
+    };
+
+export type SetTelegramWebhookResult =
+  | {
+      ok: true;
+      webhookUrl: string;
+      info?: {
+        url: string;
+        pendingUpdateCount: number;
+        lastErrorMessage: string | null;
+        lastErrorDate: number | null;
+      };
+    }
+  | {
+      ok: false;
+      reason: string;
+      webhookUrl: string;
+      webhookSecretConfigured: boolean;
+      httpStatus?: number;
+      errorCode?: number;
+      description?: string;
+    };
+
 /**
  * Single gateway for Telegram Bot API HTTP calls.
  * The request URL contains the bot token — never log it.
@@ -80,7 +115,7 @@ export async function callTelegramApi<T>(
   method: string,
   body: unknown | undefined,
   deps?: TelegramClientDeps,
-): Promise<{ ok: true; result: T } | { ok: false; reason: TelegramApiFailureReason }> {
+): Promise<TelegramApiCallResult<T>> {
   const { runtime, fetchFn, log, timeoutMs } = resolveDeps(deps);
   if (!runtime.token) {
     return { ok: false, reason: 'not_configured' };
@@ -99,24 +134,33 @@ export async function callTelegramApi<T>(
     if (!payload.ok || payload.result === undefined) {
       const description = payload.description ?? 'unknown';
       const blocked = isBlockedError(response.status, payload.error_code, description);
+      const safeDescription = sanitizeTelegramLogText(description, runtime.token);
       log.warn('Telegram Bot API returned an error', {
         method,
         status: response.status,
-        description: sanitizeTelegramLogText(description, runtime.token),
+        errorCode: payload.error_code,
+        description: safeDescription,
         ...(blocked ? { blocked: true } : {}),
       });
-      return { ok: false, reason: blocked ? 'blocked' : 'api_error' };
+      return {
+        ok: false,
+        reason: blocked ? 'blocked' : 'api_error',
+        httpStatus: response.status,
+        errorCode: payload.error_code,
+        description: safeDescription,
+      };
     }
     return { ok: true, result: payload.result };
   } catch (error) {
+    const message = sanitizeTelegramLogText(
+      error instanceof Error ? error.message : String(error),
+      runtime.token,
+    );
     log.warn('Telegram Bot API request failed', {
       method,
-      message: sanitizeTelegramLogText(
-        error instanceof Error ? error.message : String(error),
-        runtime.token,
-      ),
+      message,
     });
-    return { ok: false, reason: 'request_failed' };
+    return { ok: false, reason: 'request_failed', description: message };
   }
 }
 
@@ -137,7 +181,7 @@ export async function sendTelegramMessage(
     },
     deps,
   );
-  if (!api.ok) return api;
+  if (!api.ok) return { ok: false, reason: api.reason };
   return { ok: true };
 }
 
@@ -158,7 +202,7 @@ export async function sendTelegramPhoto(
     },
     deps,
   );
-  if (!api.ok) return api;
+  if (!api.ok) return { ok: false, reason: api.reason };
   return { ok: true };
 }
 
@@ -170,13 +214,15 @@ export async function getTelegramWebhookInfo(
       url: string;
       pendingUpdateCount: number;
       lastErrorMessage: string | null;
+      lastErrorDate: number | null;
     }
-  | { ok: false; reason: TelegramApiFailureReason }
+  | { ok: false; reason: TelegramApiFailureReason; description?: string }
 > {
   const api = await callTelegramApi<{
     url?: string;
     pending_update_count?: number;
     last_error_message?: string;
+    last_error_date?: number;
   }>('getWebhookInfo', undefined, deps);
   if (!api.ok) return api;
   return {
@@ -186,6 +232,7 @@ export async function getTelegramWebhookInfo(
     lastErrorMessage: api.result.last_error_message
       ? sanitizeTelegramLogText(api.result.last_error_message, resolveDeps(deps).runtime.token)
       : null,
+    lastErrorDate: api.result.last_error_date ?? null,
   };
 }
 
@@ -239,17 +286,39 @@ export async function answerTelegramCallbackQuery(
 
 /**
  * Registers the production webhook with Telegram. Requires both bot token and
- * webhook secret. Never logs the token or full webhook URL with credentials.
+ * webhook secret. Never logs the token or secret.
  */
 export async function setTelegramWebhook(
   deps?: TelegramClientDeps,
-): Promise<{ ok: boolean; reason?: string }> {
+): Promise<SetTelegramWebhookResult> {
   const { runtime, log } = resolveDeps(deps);
+  const webhookUrl = getTelegramWebhookUrl();
+  const webhookSecretConfigured = Boolean(runtime.webhookSecret);
+
   if (!runtime.token || !runtime.webhookSecret) {
-    return { ok: false, reason: 'not_configured' };
+    return {
+      ok: false,
+      reason: 'not_configured',
+      webhookUrl,
+      webhookSecretConfigured,
+      description: !runtime.token
+        ? 'Bot token yo‘q'
+        : 'TELEGRAM_WEBHOOK_SECRET yo‘q',
+    };
   }
 
-  const webhookUrl = getTelegramWebhookUrl();
+  if (!TELEGRAM_SECRET_TOKEN_RE.test(runtime.webhookSecret)) {
+    log.warn('Telegram setWebhook rejected: invalid TELEGRAM_WEBHOOK_SECRET format');
+    return {
+      ok: false,
+      reason: 'invalid_webhook_secret',
+      webhookUrl,
+      webhookSecretConfigured: true,
+      description:
+        'TELEGRAM_WEBHOOK_SECRET formati noto‘g‘ri (faqat A-Z, a-z, 0-9, _, -; uzunlik 1–256)',
+    };
+  }
+
   const api = await callTelegramApi<boolean>(
     'setWebhook',
     {
@@ -262,12 +331,42 @@ export async function setTelegramWebhook(
   );
 
   if (!api.ok) {
-    log.warn('Telegram setWebhook failed', { reason: api.reason });
-    return { ok: false, reason: api.reason };
+    log.warn('Telegram setWebhook failed', {
+      reason: api.reason,
+      httpStatus: api.httpStatus,
+      errorCode: api.errorCode,
+      description: api.description,
+      webhookUrl,
+    });
+    return {
+      ok: false,
+      reason: api.reason,
+      webhookUrl,
+      webhookSecretConfigured: true,
+      httpStatus: api.httpStatus,
+      errorCode: api.errorCode,
+      description: api.description,
+    };
   }
 
-  log.info('Telegram webhook registered');
-  return { ok: true };
+  log.info('Telegram webhook registered', { webhookUrl });
+
+  // Immediately confirm with getWebhookInfo (no token in logs).
+  const info = await getTelegramWebhookInfo(deps);
+  if (info.ok) {
+    return {
+      ok: true,
+      webhookUrl,
+      info: {
+        url: info.url,
+        pendingUpdateCount: info.pendingUpdateCount,
+        lastErrorMessage: info.lastErrorMessage,
+        lastErrorDate: info.lastErrorDate,
+      },
+    };
+  }
+
+  return { ok: true, webhookUrl };
 }
 
 /**
@@ -276,17 +375,22 @@ export async function setTelegramWebhook(
  */
 export function ensureTelegramWebhookOnce(
   deps?: TelegramClientDeps,
-): Promise<{ ok: boolean; reason?: string }> {
+): Promise<SetTelegramWebhookResult> {
   if (!ensureWebhookPromise) {
     ensureWebhookPromise = setTelegramWebhook(deps).catch((error) => {
       const { runtime, log } = resolveDeps(deps);
-      log.warn('Telegram ensureWebhook failed', {
-        message: sanitizeTelegramLogText(
-          error instanceof Error ? error.message : String(error),
-          runtime.token,
-        ),
-      });
-      return { ok: false, reason: 'request_failed' };
+      const message = sanitizeTelegramLogText(
+        error instanceof Error ? error.message : String(error),
+        runtime.token,
+      );
+      log.warn('Telegram ensureWebhook failed', { message });
+      return {
+        ok: false as const,
+        reason: 'request_failed',
+        webhookUrl: getTelegramWebhookUrl(),
+        webhookSecretConfigured: Boolean(runtime.webhookSecret),
+        description: message,
+      };
     });
   }
   return ensureWebhookPromise;
@@ -310,10 +414,7 @@ export async function verifyTelegramBotConnection(
     return { ok: false, reason: 'invalid_response' };
   }
 
-  if (bot.username !== normaliseUsername(runtime.expectedUsername || EXPECTED_TELEGRAM_BOT_USERNAME)) {
-    return { ok: false, reason: 'unexpected_username' };
-  }
-
+  // getMe is the source of truth — do not reject based on hardcoded EXPECTED casing/name.
   return { ok: true, bot };
 }
 

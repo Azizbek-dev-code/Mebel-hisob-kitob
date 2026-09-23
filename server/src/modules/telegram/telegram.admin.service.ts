@@ -78,6 +78,7 @@ export async function getAdminBotStatus(): Promise<TelegramAdminBotStatus> {
   const hasDatabaseToken = Boolean(config?.encryptedBotToken);
   const source = tokenSourceFromConfig(hasDatabaseToken, runtime.configured);
   const configuredUrl = getTelegramWebhookUrl();
+  const webhookSecretConfigured = Boolean(runtime.webhookSecret);
 
   let webhook: TelegramAdminBotStatus['webhook'] = {
     url: '',
@@ -111,12 +112,14 @@ export async function getAdminBotStatus(): Promise<TelegramAdminBotStatus> {
     } else {
       webhook = {
         ...webhook,
-        lastErrorMessage: 'Telegram getWebhookInfo muvaffaqiyatsiz',
+        lastErrorMessage: info.description
+          ? `Telegram getWebhookInfo: ${info.description}`
+          : 'Telegram getWebhookInfo muvaffaqiyatsiz',
       };
     }
   }
 
-  // Display username from DB (persisted getMe) — never invent from unrelated sources.
+  // Display username from DB (persisted getMe) — preserve Telegram casing; never hardcode.
   const username = config?.botUsername || null;
 
   return {
@@ -126,6 +129,7 @@ export async function getAdminBotStatus(): Promise<TelegramAdminBotStatus> {
     tokenConfigured: runtime.configured,
     tokenSource: source,
     hasDatabaseToken,
+    webhookSecretConfigured,
     publicAppUrl: getPublicAppUrl(),
     webhook,
     connectedUsers,
@@ -182,6 +186,76 @@ export async function updateAdminBotToken(actorUserId: string, token: string): P
     entityId: BOT_CONFIG_ID,
     summary: 'Telegram bot token updated',
     metadata: { botUsername: inspected.bot.username },
+  });
+
+  return getAdminBotStatus();
+}
+
+/**
+ * Re-fetch getMe with the active token and persist canonical username/firstName to DB.
+ * Used by Admin “Refresh Bot Info” — never hardcodes username.
+ */
+export async function refreshAdminBotInfo(actorUserId: string): Promise<TelegramAdminBotStatus> {
+  const config = await prisma.telegramBotConfig.findUnique({ where: { id: BOT_CONFIG_ID } });
+  applyBotConfigRow(config);
+  const runtime = readTelegramRuntime();
+  if (!runtime.token) {
+    throw ApiError.badRequest('Bot token sozlanmagan');
+  }
+
+  const inspected = await inspectTelegramBotToken(runtime.token);
+  if (!inspected.ok) {
+    throw ApiError.badRequest(
+      inspected.reason === 'not_configured'
+        ? 'Bot token sozlanmagan'
+        : 'Telegram getMe muvaffaqiyatsiz — tokenni tekshiring',
+    );
+  }
+
+  const now = new Date();
+  const existingEncrypted = config?.encryptedBotToken;
+  if (existingEncrypted) {
+    await prisma.telegramBotConfig.update({
+      where: { id: BOT_CONFIG_ID },
+      data: {
+        botUsername: inspected.bot.username,
+        botFirstName: inspected.bot.firstName,
+        lastValidatedAt: now,
+        isActive: true,
+      },
+    });
+  } else {
+    // Env token only — persist getMe identity so Admin/UI/deep-links use DB as SoT.
+    await prisma.telegramBotConfig.upsert({
+      where: { id: BOT_CONFIG_ID },
+      create: {
+        id: BOT_CONFIG_ID,
+        encryptedBotToken: encryptTelegramSecret(runtime.token),
+        botUsername: inspected.bot.username,
+        botFirstName: inspected.bot.firstName,
+        isActive: true,
+        lastValidatedAt: now,
+      },
+      update: {
+        botUsername: inspected.bot.username,
+        botFirstName: inspected.bot.firstName,
+        isActive: true,
+        lastValidatedAt: now,
+      },
+    });
+  }
+
+  applyTelegramDbRuntime({ token: runtime.token, botUsername: inspected.bot.username });
+  resetTelegramHealthCache();
+
+  await recordAudit({
+    storeId: null,
+    actorUserId,
+    eventType: AuditEventType.TELEGRAM_BOT_TOKEN_UPDATED,
+    entityType: AuditEntityType.TELEGRAM_BOT,
+    entityId: BOT_CONFIG_ID,
+    summary: 'Telegram bot info refreshed from getMe',
+    metadata: { botUsername: inspected.bot.username, refreshOnly: true },
   });
 
   return getAdminBotStatus();

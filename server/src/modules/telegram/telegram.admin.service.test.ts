@@ -8,7 +8,7 @@ const {
   recordAudit,
 } = vi.hoisted(() => ({
   prismaMock: {
-    telegramBotConfig: { findUnique: vi.fn(), upsert: vi.fn() },
+    telegramBotConfig: { findUnique: vi.fn(), upsert: vi.fn(), update: vi.fn() },
     telegramStartMessage: { findUnique: vi.fn(), upsert: vi.fn() },
     telegramConnection: { count: vi.fn() },
   },
@@ -44,7 +44,7 @@ vi.mock('./telegram.config.js', async (importOriginal) => {
   };
 });
 
-import { getAdminBotStatus, updateAdminBotToken, updateAdminStartMessage } from './telegram.admin.service.js';
+import { getAdminBotStatus, refreshAdminBotInfo, updateAdminBotToken, updateAdminStartMessage } from './telegram.admin.service.js';
 import { applyTelegramDbRuntime } from './telegram.config.js';
 import { encryptTelegramSecret } from './telegram.crypto.js';
 
@@ -103,7 +103,9 @@ describe('telegram admin token', () => {
     expect(status.webhook?.configuredUrl).toContain('/api/telegram/webhook');
     expect(status.webhook?.active).toBe(true);
     expect(status.connected).toBe(true);
+    expect(status.webhookSecretConfigured).toBe(true);
     expect(JSON.stringify(status)).not.toContain('env-token-not-for-logs');
+    expect(JSON.stringify(status)).not.toContain('hook-secret');
   });
 
   it('marks webhook inactive when Telegram URL does not match expected', async () => {
@@ -134,6 +136,41 @@ describe('telegram admin token', () => {
       botUsername: 'balancyspace_bot',
     });
     expect(status.hasDatabaseToken).toBe(true);
+    expect(JSON.stringify(status)).not.toContain(dbToken);
+  });
+
+  it('refreshAdminBotInfo updates username from getMe without requiring a new token', async () => {
+    const dbToken = '123456:DB-TELEGRAM-BOT-TOKEN-NOT-FOR-LOGS';
+    const encrypted = encryptTelegramSecret(dbToken);
+    prismaMock.telegramBotConfig.findUnique
+      .mockResolvedValueOnce({
+        encryptedBotToken: encrypted,
+        botUsername: 'balancyspace_bot',
+        botFirstName: 'Old',
+        lastValidatedAt: new Date('2026-09-21T00:00:00.000Z'),
+      })
+      .mockResolvedValue({
+        encryptedBotToken: encrypted,
+        botUsername: 'BalancySpace_bot',
+        botFirstName: 'Balancy',
+        lastValidatedAt: new Date('2026-09-23T00:00:00.000Z'),
+      });
+    prismaMock.telegramBotConfig.update.mockResolvedValue({});
+    inspectTelegramBotToken.mockResolvedValue({
+      ok: true,
+      bot: { id: 1, username: 'BalancySpace_bot', firstName: 'Balancy' },
+    });
+
+    const status = await refreshAdminBotInfo('user_platform');
+    expect(prismaMock.telegramBotConfig.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          botUsername: 'BalancySpace_bot',
+          botFirstName: 'Balancy',
+        }),
+      }),
+    );
+    expect(status.botUsername).toBe('@BalancySpace_bot');
     expect(JSON.stringify(status)).not.toContain(dbToken);
   });
 });

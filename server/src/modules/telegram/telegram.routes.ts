@@ -37,6 +37,7 @@ import {
   postTelegramAdminBroadcast,
   postTelegramAdminBroadcastCancel,
   postTelegramAdminMedia,
+  postTelegramAdminRefreshBot,
   postTelegramAutomationCron,
   postTelegramBroadcastCron,
   deleteTelegramAdminAutoMessage,
@@ -123,6 +124,12 @@ telegramRouter.put(
   requirePlatformAdmin,
   validate({ body: updateTelegramBotTokenSchema }),
   putTelegramAdminToken,
+);
+telegramRouter.post(
+  '/admin/bot/refresh',
+  requireAuth,
+  requirePlatformAdmin,
+  postTelegramAdminRefreshBot,
 );
 telegramRouter.get('/admin/start-message', requireAuth, requirePlatformAdmin, getTelegramAdminStart);
 telegramRouter.put(

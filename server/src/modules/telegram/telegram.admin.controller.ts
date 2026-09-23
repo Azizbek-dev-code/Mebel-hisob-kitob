@@ -22,6 +22,7 @@ import {
   getAdminStartMessage,
   getAdminTelegramStats,
   listAdminConnectedUsers,
+  refreshAdminBotInfo,
   updateAdminBotToken,
   updateAdminStartMessage,
   uploadAdminTelegramMedia,
@@ -55,6 +56,11 @@ export const putTelegramAdminToken = asyncHandler(async (req: Request, res: Resp
   const actor = requirePlatformActor(req);
   const token = String((req.body as { token?: string }).token ?? '');
   sendSuccess(res, await updateAdminBotToken(actor.id, token));
+});
+
+export const postTelegramAdminRefreshBot = asyncHandler(async (req: Request, res: Response) => {
+  const actor = requirePlatformActor(req);
+  sendSuccess(res, await refreshAdminBotInfo(actor.id));
 });
 
 export const getTelegramAdminStart = asyncHandler(async (_req: Request, res: Response) => {

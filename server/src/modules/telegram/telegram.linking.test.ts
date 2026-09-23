@@ -43,6 +43,12 @@ describe('issueTelegramLinkingToken', () => {
     expect(issued.expiresAt.getTime()).toBeGreaterThan(Date.now());
   });
 
+  it('preserves canonical bot username casing in deep-links', () => {
+    expect(buildTelegramStartLink('abc', 'BalancySpace_bot')).toBe(
+      'https://t.me/BalancySpace_bot?start=abc',
+    );
+  });
+
   it('issues a unique random payload each time', () => {
     const first = issueTelegramLinkingToken('id_a');
     const second = issueTelegramLinkingToken('id_a');

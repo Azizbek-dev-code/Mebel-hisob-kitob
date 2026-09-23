@@ -79,12 +79,12 @@ describe('verifyTelegramBotConnection', () => {
     expect(requestUrl).toContain('/getMe');
   });
 
-  it('rejects a connected bot with the wrong username', async () => {
+  it('accepts getMe identity without rejecting on EXPECTED fallback mismatch', async () => {
     const fetchFn = vi.fn().mockResolvedValue({
       status: 200,
       json: async () => ({
         ok: true,
-        result: { id: 1, is_bot: true, first_name: 'Other', username: 'someone_else_bot' },
+        result: { id: 1, is_bot: true, first_name: 'Other', username: 'BalancySpace_bot' },
       }),
     });
 
@@ -94,7 +94,33 @@ describe('verifyTelegramBotConnection', () => {
       log: mockLogger(),
     });
 
-    expect(result).toEqual({ ok: false, reason: 'unexpected_username' });
+    expect(result).toEqual({
+      ok: true,
+      bot: { id: 1, username: 'BalancySpace_bot', firstName: 'Other' },
+    });
+  });
+
+  it('preserves Telegram getMe username casing', async () => {
+    const fetchFn = vi.fn().mockResolvedValue({
+      status: 200,
+      json: async () => ({
+        ok: true,
+        result: {
+          id: 42,
+          is_bot: true,
+          first_name: 'Balancy',
+          username: 'BalancySpace_bot',
+        },
+      }),
+    });
+
+    const result = await verifyTelegramBotConnection({
+      runtime: configuredRuntime,
+      fetchFn: fetchFn as unknown as typeof fetch,
+      log: mockLogger(),
+    });
+
+    expect(result.ok && result.bot.username).toBe('BalancySpace_bot');
   });
 
   it('does not break the caller when Telegram API fails', async () => {
@@ -244,5 +270,95 @@ describe('sanitizeTelegramLogText', () => {
   it('redacts a bot token embedded in a URL', () => {
     const text = `https://api.telegram.org/bot${TEST_TOKEN}/getMe`;
     expect(sanitizeTelegramLogText(text, TEST_TOKEN)).not.toContain(TEST_TOKEN);
+  });
+});
+
+describe('setTelegramWebhook', () => {
+  it('returns Telegram description when setWebhook fails', async () => {
+    const { setTelegramWebhook, resetTelegramWebhookEnsureCache } = await import('./telegram.service.js');
+    resetTelegramWebhookEnsureCache();
+    const log = mockLogger();
+    const fetchFn = vi.fn().mockResolvedValue({
+      status: 400,
+      json: async () => ({
+        ok: false,
+        error_code: 400,
+        description: 'Bad Request: bad webhook: Failed to resolve host',
+      }),
+    });
+
+    const result = await setTelegramWebhook({
+      runtime: {
+        ...configuredRuntime,
+        webhookSecret: 'valid_webhook_secret_123',
+      },
+      fetchFn: fetchFn as unknown as typeof fetch,
+      log,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('api_error');
+    expect(result.httpStatus).toBe(400);
+    expect(result.errorCode).toBe(400);
+    expect(result.description).toContain('bad webhook');
+    expect(result.webhookUrl).toContain('/api/telegram/webhook');
+    expect(JSON.stringify(result)).not.toContain(TEST_TOKEN);
+    expect(JSON.stringify(log.warn.mock.calls)).not.toContain(TEST_TOKEN);
+  });
+
+  it('rejects invalid TELEGRAM_WEBHOOK_SECRET characters without calling Telegram', async () => {
+    const { setTelegramWebhook } = await import('./telegram.service.js');
+    const fetchFn = vi.fn();
+    const result = await setTelegramWebhook({
+      runtime: {
+        ...configuredRuntime,
+        webhookSecret: 'bad secret with spaces!',
+      },
+      fetchFn: fetchFn as unknown as typeof fetch,
+      log: mockLogger(),
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('invalid_webhook_secret');
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('calls getWebhookInfo after successful setWebhook', async () => {
+    const { setTelegramWebhook, resetTelegramWebhookEnsureCache } = await import('./telegram.service.js');
+    resetTelegramWebhookEnsureCache();
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: 200,
+        json: async () => ({ ok: true, result: true }),
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        json: async () => ({
+          ok: true,
+          result: {
+            url: 'https://www.mebelboshqaruv.uz/api/telegram/webhook',
+            pending_update_count: 0,
+          },
+        }),
+      });
+
+    const result = await setTelegramWebhook({
+      runtime: {
+        ...configuredRuntime,
+        webhookSecret: 'valid_webhook_secret_123',
+      },
+      fetchFn: fetchFn as unknown as typeof fetch,
+      log: mockLogger(),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.info?.url).toBe('https://www.mebelboshqaruv.uz/api/telegram/webhook');
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+    expect(String(fetchFn.mock.calls[0]?.[0])).toContain('/setWebhook');
+    expect(String(fetchFn.mock.calls[1]?.[0])).toContain('/getWebhookInfo');
   });
 });

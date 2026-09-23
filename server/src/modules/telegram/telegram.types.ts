@@ -5,7 +5,11 @@
  * identity until account linking stores them on `TelegramConnection` (not on `User`).
  */
 
-/** Fallback only when DB has no getMe username yet. Prefer admin-saved token → getMe. */
+/**
+ * Last-resort fallback when DB/runtime has no getMe username yet.
+ * Production display and deep-links must use token → getMe → DB, not this constant.
+ * Do not hardcode a different bot name here to “fix” casing — refresh from getMe.
+ */
 export const EXPECTED_TELEGRAM_BOT_USERNAME = 'balancyspace_bot';
 
 export const TELEGRAM_API_ORIGIN = 'https://api.telegram.org';
