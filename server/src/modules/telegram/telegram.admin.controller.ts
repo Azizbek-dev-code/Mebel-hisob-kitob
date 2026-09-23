@@ -33,6 +33,7 @@ import {
   deleteAutoMessage,
   duplicateAutoMessage,
   listAutoMessageCatalog,
+  listAutoMessageTemplates,
   listAutoMessages,
   previewAutoMessage,
   runTelegramAutoMessageTick,
@@ -157,6 +158,11 @@ export const getTelegramAdminAutoMessages = asyncHandler(async (_req: Request, r
 export const getTelegramAdminAutoMessageCatalog = asyncHandler(async (req: Request, res: Response) => {
   const accountType = String(req.query.accountType ?? 'PERSONAL');
   sendSuccess(res, listAutoMessageCatalog(accountType));
+});
+
+export const getTelegramAdminAutoMessageTemplates = asyncHandler(async (req: Request, res: Response) => {
+  const accountType = req.query.accountType ? String(req.query.accountType) : undefined;
+  sendSuccess(res, listAutoMessageTemplates(accountType));
 });
 
 export const postTelegramAdminAutoMessage = asyncHandler(async (req: Request, res: Response) => {

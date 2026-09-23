@@ -357,8 +357,29 @@ export interface TelegramAutoMessageDto {
   ctaLabel: string | null;
   ctaPath: string | null;
   legacyKind: string | null;
+  /** Next scheduled fire (UTC ISO), null when disabled or one-time already past. */
+  nextRunAt: IsoDateString | null;
+  /** Human label in message timezone, e.g. "Bugun 21:00". */
+  nextRunLabel: string | null;
   createdAt: IsoDateString;
   updatedAt: IsoDateString;
+}
+
+/** Optional form template — never scheduled until admin Saves as a real Auto Message. */
+export interface TelegramAutoMessageTemplateDto {
+  id: string;
+  title: string;
+  accountType: TelegramAutoMessageAccountType;
+  recurrence: TelegramAutoMessageRecurrence;
+  hour: number;
+  minute: number;
+  weekday: number | null;
+  monthDay: number | null;
+  resultKeys: string[];
+  messageBody: string;
+  ctaEnabled: boolean;
+  ctaLabel: string | null;
+  ctaPath: string | null;
 }
 
 export interface UpsertTelegramAutoMessageRequest {
@@ -401,7 +422,7 @@ export interface TelegramAutoMessagePreviewResponse {
 
 export interface TelegramAutoMessageTestSendResponse {
   sent: boolean;
-  reason?: 'not_connected' | 'send_failed';
+  reason?: 'not_connected' | 'send_failed' | 'pref_off' | 'no_account';
   message?: string;
 }
 

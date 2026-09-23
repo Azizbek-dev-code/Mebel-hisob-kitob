@@ -8,6 +8,7 @@ import {
   type TelegramAutoMessageDto,
   type TelegramAutoMessagePreviewRequest,
   type TelegramAutoMessagePreviewResponse,
+  type TelegramAutoMessageTemplateDto,
   type TelegramAutoMessageTestSendResponse,
   type TelegramAutoMessageThresholdConfig,
   type UpsertTelegramAutoMessageRequest,
@@ -23,6 +24,10 @@ import { ApiError } from '../../utils/api-error.js';
 import { logger } from '../../utils/logger.js';
 import { isWorkspaceNotifyEnabled } from './telegram.account-pref.service.js';
 import { assertAutoMessageResultKeys, getAutoMessageResultCatalog } from './telegram.auto-message.catalog.js';
+import {
+  computeNextRunAt,
+  formatNextRunLabel,
+} from './telegram.auto-message.next-run.js';
 import {
   previewSampleResults,
   resolveAutoMessageResults,
@@ -79,7 +84,24 @@ function startDateKey(value: Date | null | undefined): string | null {
   return value.toISOString().slice(0, 10);
 }
 
-function toDto(row: TelegramAutoMessageRow): TelegramAutoMessageDto {
+function toDto(row: TelegramAutoMessageRow, now = new Date()): TelegramAutoMessageDto {
+  const timezone = row.timezone || DEFAULT_TELEGRAM_TIMEZONE;
+  const nextRunAt = row.enabled
+    ? computeNextRunAt(
+        {
+          enabled: row.enabled,
+          recurrence: row.recurrence,
+          hour: row.hour,
+          minute: row.minute,
+          timezone,
+          weekday: row.weekday,
+          monthDay: row.monthDay,
+          startDate: row.startDate,
+        },
+        now,
+      )
+    : null;
+
   return {
     id: row.id,
     title: row.title,
@@ -88,7 +110,7 @@ function toDto(row: TelegramAutoMessageRow): TelegramAutoMessageDto {
     recurrence: row.recurrence as TelegramAutoMessageRecurrence,
     hour: row.hour,
     minute: row.minute,
-    timezone: row.timezone || DEFAULT_TELEGRAM_TIMEZONE,
+    timezone,
     weekday: row.weekday,
     monthDay: row.monthDay,
     startDate: startDateKey(row.startDate),
@@ -99,6 +121,8 @@ function toDto(row: TelegramAutoMessageRow): TelegramAutoMessageDto {
     ctaLabel: row.ctaLabel,
     ctaPath: row.ctaPath,
     legacyKind: row.legacyKind,
+    nextRunAt,
+    nextRunLabel: formatNextRunLabel(nextRunAt, timezone, now),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -174,7 +198,6 @@ export function autoMessageIsDue(
     const year = parts[0] ?? 2026;
     const month = parts[1] ?? 1;
     const day = parts[2] ?? 1;
-    // Safe clamp: if monthDay=31 and month has 30 days, fire on last day of month.
     const wanted = Math.min(
       row.monthDay && row.monthDay >= 1 && row.monthDay <= 31 ? row.monthDay : 1,
       lastDayOfMonth(year, month),
@@ -279,20 +302,10 @@ function parseStartDate(value: string | null | undefined): Date | null {
   return new Date(`${value}T00:00:00.000Z`);
 }
 
-const LEGACY_SEED: Array<{
-  kind: string;
-  title: string;
-  accountType: TelegramAutoMessageAccountType;
-  recurrence: TelegramAutoMessageRecurrence;
-  hour: number;
-  minute: number;
-  weekday: number | null;
-  monthDay: number | null;
-  resultKeys: string[];
-  messageBody: string;
-}> = [
+/** Optional form templates — never scheduled by themselves. */
+export const AUTO_MESSAGE_TEMPLATES: TelegramAutoMessageTemplateDto[] = [
   {
-    kind: TelegramAutomationKind.PERSONAL_MORNING,
+    id: 'personal_morning',
     title: 'Xayrli tong',
     accountType: TelegramAutoMessageAccountType.PERSONAL,
     recurrence: TelegramAutoMessageRecurrence.EVERY_DAY,
@@ -302,9 +315,12 @@ const LEGACY_SEED: Array<{
     monthDay: null,
     resultKeys: ['balance', 'income', 'expense'],
     messageBody: 'Assalomu alaykum 👋\n\n{{balance}}\n{{income}}\n{{expense}}\n\nKuningiz barakali o‘tsin!',
+    ctaEnabled: false,
+    ctaLabel: null,
+    ctaPath: null,
   },
   {
-    kind: TelegramAutomationKind.PERSONAL_EVENING,
+    id: 'personal_evening',
     title: 'Kechki natija',
     accountType: TelegramAutoMessageAccountType.PERSONAL,
     recurrence: TelegramAutoMessageRecurrence.EVERY_DAY,
@@ -314,9 +330,12 @@ const LEGACY_SEED: Array<{
     monthDay: null,
     resultKeys: ['income', 'expense', 'remaining', 'habit_completion'],
     messageBody: 'Bugungi yakun:\n\n{{income}}\n{{expense}}\n{{remaining}}\n{{habit_completion}}',
+    ctaEnabled: false,
+    ctaLabel: null,
+    ctaPath: null,
   },
   {
-    kind: TelegramAutomationKind.PERSONAL_WEEKLY,
+    id: 'personal_weekly',
     title: 'Haftalik hisobot',
     accountType: TelegramAutoMessageAccountType.PERSONAL,
     recurrence: TelegramAutoMessageRecurrence.EVERY_WEEK,
@@ -326,9 +345,12 @@ const LEGACY_SEED: Array<{
     monthDay: null,
     resultKeys: ['income', 'expense', 'remaining', 'goal_progress'],
     messageBody: 'Haftalik natija:\n\n{{income}}\n{{expense}}\n{{remaining}}\n{{goal_progress}}',
+    ctaEnabled: false,
+    ctaLabel: null,
+    ctaPath: null,
   },
   {
-    kind: TelegramAutomationKind.PERSONAL_MONTHLY,
+    id: 'personal_monthly',
     title: 'Oylik hisobot',
     accountType: TelegramAutoMessageAccountType.PERSONAL,
     recurrence: TelegramAutoMessageRecurrence.EVERY_MONTH,
@@ -338,9 +360,12 @@ const LEGACY_SEED: Array<{
     monthDay: 1,
     resultKeys: ['balance', 'income', 'expense', 'budget_usage'],
     messageBody: 'Oylik natija:\n\n{{balance}}\n{{income}}\n{{expense}}\n{{budget_usage}}',
+    ctaEnabled: false,
+    ctaLabel: null,
+    ctaPath: null,
   },
   {
-    kind: TelegramAutomationKind.BUSINESS_MORNING,
+    id: 'business_morning',
     title: 'Biznes — tonggi natija',
     accountType: TelegramAutoMessageAccountType.BUSINESS,
     recurrence: TelegramAutoMessageRecurrence.EVERY_DAY,
@@ -350,9 +375,12 @@ const LEGACY_SEED: Array<{
     monthDay: null,
     resultKeys: ['sales', 'revenue', 'customers'],
     messageBody: 'Bugungi biznes holati:\n\n{{sales}}\n{{revenue}}\n{{customers}}',
+    ctaEnabled: false,
+    ctaLabel: null,
+    ctaPath: null,
   },
   {
-    kind: TelegramAutomationKind.BUSINESS_EVENING,
+    id: 'business_evening',
     title: 'Biznes — kechki natija',
     accountType: TelegramAutoMessageAccountType.BUSINESS,
     recurrence: TelegramAutoMessageRecurrence.EVERY_DAY,
@@ -362,9 +390,12 @@ const LEGACY_SEED: Array<{
     monthDay: null,
     resultKeys: ['sales', 'revenue', 'expenses', 'profit'],
     messageBody: 'Bugungi yakun:\n\n{{sales}}\n{{revenue}}\n{{expenses}}\n{{profit}}',
+    ctaEnabled: false,
+    ctaLabel: null,
+    ctaPath: null,
   },
   {
-    kind: TelegramAutomationKind.BUSINESS_WEEKLY,
+    id: 'business_weekly',
     title: 'Biznes — haftalik hisobot',
     accountType: TelegramAutoMessageAccountType.BUSINESS,
     recurrence: TelegramAutoMessageRecurrence.EVERY_WEEK,
@@ -374,9 +405,12 @@ const LEGACY_SEED: Array<{
     monthDay: null,
     resultKeys: ['sales', 'revenue', 'expenses', 'profit', 'debt'],
     messageBody: 'Haftalik biznes:\n\n{{sales}}\n{{revenue}}\n{{expenses}}\n{{profit}}\n{{debt}}',
+    ctaEnabled: false,
+    ctaLabel: null,
+    ctaPath: null,
   },
   {
-    kind: TelegramAutomationKind.BUSINESS_MONTHLY,
+    id: 'business_monthly',
     title: 'Biznes — oylik hisobot',
     accountType: TelegramAutoMessageAccountType.BUSINESS,
     recurrence: TelegramAutoMessageRecurrence.EVERY_MONTH,
@@ -386,52 +420,81 @@ const LEGACY_SEED: Array<{
     monthDay: 1,
     resultKeys: ['sales', 'revenue', 'expenses', 'profit', 'inventory'],
     messageBody: 'Oylik biznes:\n\n{{sales}}\n{{revenue}}\n{{expenses}}\n{{profit}}\n{{inventory}}',
+    ctaEnabled: false,
+    ctaLabel: null,
+    ctaPath: null,
   },
 ];
 
+const LEGACY_KIND_BY_TEMPLATE: Record<string, string> = {
+  personal_morning: TelegramAutomationKind.PERSONAL_MORNING,
+  personal_evening: TelegramAutomationKind.PERSONAL_EVENING,
+  personal_weekly: TelegramAutomationKind.PERSONAL_WEEKLY,
+  personal_monthly: TelegramAutomationKind.PERSONAL_MONTHLY,
+  business_morning: TelegramAutomationKind.BUSINESS_MORNING,
+  business_evening: TelegramAutomationKind.BUSINESS_EVENING,
+  business_weekly: TelegramAutomationKind.BUSINESS_WEEKLY,
+  business_monthly: TelegramAutomationKind.BUSINESS_MONTHLY,
+};
+
 /**
- * Seed universal Auto Messages from legacy fixed kinds (once).
- * Copies enabled/time/timezone/template from TelegramAutomation when present,
- * then disables the legacy rows to prevent duplicate sends.
+ * One-time copy from still-enabled legacy TelegramAutomation rows.
+ * Does NOT recreate templates admins deleted (legacy is already disabled after migrate).
+ * Templates themselves are never auto-scheduled — use AUTO_MESSAGE_TEMPLATES for form fill.
  */
 export async function ensureAutoMessagesMigrated(): Promise<void> {
-  for (const seed of LEGACY_SEED) {
+  for (const template of AUTO_MESSAGE_TEMPLATES) {
+    const legacyKind = LEGACY_KIND_BY_TEMPLATE[template.id];
+    if (!legacyKind) continue;
+
     const existing = await prisma.telegramAutoMessage.findUnique({
-      where: { legacyKind: seed.kind },
+      where: { legacyKind },
     });
     if (existing) continue;
 
     const legacy = await prisma.telegramAutomation.findUnique({
-      where: { kind: seed.kind as never },
+      where: { kind: legacyKind as never },
     });
+    // Only migrate still-enabled legacy rows. Deleted Auto Messages are not recreated.
+    if (!legacy?.enabled) continue;
 
     await prisma.telegramAutoMessage.create({
       data: {
-        title: seed.title,
-        accountType: seed.accountType,
-        enabled: legacy?.enabled ?? false,
-        recurrence: seed.recurrence,
-        hour: legacy?.hour ?? seed.hour,
-        minute: legacy?.minute ?? seed.minute,
-        timezone: legacy?.timezone || DEFAULT_TELEGRAM_TIMEZONE,
-        weekday: legacy?.weekday ?? seed.weekday,
-        monthDay: legacy?.monthDay ?? seed.monthDay,
-        messageBody: legacy?.messageTemplate?.trim() || seed.messageBody,
-        resultKeys: seed.resultKeys,
-        ctaEnabled: Boolean(legacy?.ctaLabel && legacy?.ctaPath),
-        ctaLabel: legacy?.ctaLabel ?? null,
-        ctaPath: legacy?.ctaPath ?? null,
-        legacyKind: seed.kind,
+        title: template.title,
+        accountType: template.accountType,
+        enabled: true,
+        recurrence: template.recurrence,
+        hour: legacy.hour ?? template.hour,
+        minute: legacy.minute ?? template.minute,
+        timezone: legacy.timezone || DEFAULT_TELEGRAM_TIMEZONE,
+        weekday: legacy.weekday ?? template.weekday,
+        monthDay: legacy.monthDay ?? template.monthDay,
+        messageBody: legacy.messageTemplate?.trim() || template.messageBody,
+        resultKeys: template.resultKeys,
+        ctaEnabled: Boolean(legacy.ctaLabel && legacy.ctaPath),
+        ctaLabel: legacy.ctaLabel ?? null,
+        ctaPath: legacy.ctaPath ?? null,
+        legacyKind,
       },
     });
 
-    if (legacy?.enabled) {
-      await prisma.telegramAutomation.update({
-        where: { id: legacy.id },
-        data: { enabled: false },
-      });
-    }
+    await prisma.telegramAutomation.update({
+      where: { id: legacy.id },
+      data: { enabled: false },
+    });
   }
+}
+
+export function listAutoMessageTemplates(
+  accountType?: string,
+): TelegramAutoMessageTemplateDto[] {
+  if (
+    accountType === TelegramAutoMessageAccountType.PERSONAL ||
+    accountType === TelegramAutoMessageAccountType.BUSINESS
+  ) {
+    return AUTO_MESSAGE_TEMPLATES.filter((item) => item.accountType === accountType);
+  }
+  return AUTO_MESSAGE_TEMPLATES;
 }
 
 export async function listAutoMessages(): Promise<TelegramAutoMessageDto[]> {
@@ -439,7 +502,8 @@ export async function listAutoMessages(): Promise<TelegramAutoMessageDto[]> {
   const rows = await prisma.telegramAutoMessage.findMany({
     orderBy: [{ accountType: 'asc' }, { createdAt: 'asc' }],
   });
-  return rows.map(toDto);
+  const now = new Date();
+  return rows.map((row) => toDto(row, now));
 }
 
 export async function getAutoMessage(id: string): Promise<TelegramAutoMessageDto> {
@@ -544,6 +608,7 @@ export async function duplicateAutoMessage(id: string): Promise<TelegramAutoMess
 export async function deleteAutoMessage(id: string): Promise<void> {
   const existing = await prisma.telegramAutoMessage.findUnique({ where: { id } });
   if (!existing) throw ApiError.notFound('Auto Message topilmadi');
+  // Cascade deletes executions; deleted messages are never re-seeded.
   await prisma.telegramAutoMessage.delete({ where: { id } });
 }
 
@@ -559,38 +624,52 @@ export function listAutoMessageCatalog(accountType: string) {
   return getAutoMessageResultCatalog(accountType);
 }
 
+function normalizePreviewBody(body: TelegramAutoMessagePreviewRequest): TelegramAutoMessagePreviewRequest {
+  return {
+    title: body.title,
+    accountType: body.accountType,
+    messageBody: body.messageBody ?? '',
+    resultKeys: Array.isArray(body.resultKeys) ? body.resultKeys : [],
+    thresholdConfig: body.thresholdConfig ?? null,
+    ctaEnabled: body.ctaEnabled,
+    ctaLabel: body.ctaLabel ?? null,
+    ctaPath: body.ctaPath ?? null,
+  };
+}
+
 export function previewAutoMessage(
   body: TelegramAutoMessagePreviewRequest,
 ): TelegramAutoMessagePreviewResponse {
+  const normalized = normalizePreviewBody(body);
   if (
-    body.accountType !== TelegramAutoMessageAccountType.PERSONAL &&
-    body.accountType !== TelegramAutoMessageAccountType.BUSINESS
+    normalized.accountType !== TelegramAutoMessageAccountType.PERSONAL &&
+    normalized.accountType !== TelegramAutoMessageAccountType.BUSINESS
   ) {
     throw ApiError.validation('Account type noto‘g‘ri', [
       { field: 'accountType', message: 'PERSONAL yoki BUSINESS' },
     ]);
   }
-  const keys = Array.isArray(body.resultKeys) ? body.resultKeys : [];
-  const check = assertAutoMessageResultKeys(body.accountType, keys);
+  const keys = normalized.resultKeys;
+  const check = assertAutoMessageResultKeys(normalized.accountType, keys);
   if (!check.ok) {
     throw ApiError.validation('Natija kalitlari account type bilan mos emas', [
       { field: 'resultKeys', message: `Noto‘g‘ri: ${check.invalid.join(', ')}` },
     ]);
   }
-  const results = previewSampleResults(body.accountType, keys);
+  const results = previewSampleResults(normalized.accountType, keys);
   const composed = composeAutoMessageText({
-    title: body.title ?? 'Preview',
-    messageBody: body.messageBody ?? '',
+    title: normalized.title ?? 'Preview',
+    messageBody: normalized.messageBody,
     results,
-    thresholdConfig: body.thresholdConfig,
+    thresholdConfig: normalized.thresholdConfig,
     previewBanner: true,
   });
   return {
     preview: true,
     text: composed.text,
     unresolvedPlaceholders: composed.unresolvedPlaceholders,
-    ctaLabel: body.ctaEnabled ? body.ctaLabel ?? null : null,
-    ctaPath: body.ctaEnabled ? body.ctaPath ?? null : null,
+    ctaLabel: normalized.ctaEnabled ? normalized.ctaLabel ?? null : null,
+    ctaPath: normalized.ctaEnabled ? normalized.ctaPath ?? null : null,
   };
 }
 
@@ -605,10 +684,62 @@ function buildCtaKeyboard(
   return { inline_keyboard: [[{ text: label.trim().slice(0, 64), url }]] };
 }
 
+async function resolveTestSendResults(
+  identityId: string,
+  accountType: TelegramAutoMessageAccountType,
+  resultKeys: string[],
+) {
+  const dayKey = zonedDayKey(new Date(), DEFAULT_TELEGRAM_TIMEZONE);
+  const period: AutoMessagePeriod = 'day';
+
+  if (accountType === TelegramAutoMessageAccountType.PERSONAL) {
+    const memberships = await personalWorkspacesForIdentity(identityId);
+    const workspaceId = memberships[0]?.workspaceId;
+    if (!workspaceId) {
+      return {
+        ok: false as const,
+        message: 'Personal hisob topilmadi. Avval shaxsiy hisob yarating.',
+      };
+    }
+    const results = await resolveAutoMessageResults({
+      accountType,
+      resultKeys,
+      dayKey,
+      period,
+      workspaceId,
+      identityId,
+    });
+    return { ok: true as const, results, accountId: workspaceId };
+  }
+
+  const stores = await businessStoresForIdentity(identityId);
+  const storeId = stores[0]?.id;
+  if (!storeId) {
+    return {
+      ok: false as const,
+      message: 'Business hisob topilmadi. Avval biznes hisobiga ulang.',
+    };
+  }
+  const results = await resolveAutoMessageResults({
+    accountType,
+    resultKeys,
+    dayKey,
+    period,
+    storeId,
+  });
+  return { ok: true as const, results, accountId: storeId };
+}
+
+/**
+ * Admin Test Send: uses the same composeAutoMessageText as Preview/Scheduler,
+ * but resolves LIVE metrics for the admin's Personal/Business account.
+ * Does not create scheduler executions.
+ */
 export async function testSendAutoMessage(
   identityId: string,
   body: TelegramAutoMessagePreviewRequest,
 ): Promise<TelegramAutoMessageTestSendResponse> {
+  const normalized = normalizePreviewBody(body);
   const connection = await findActiveByIdentity(identityId);
   if (!connection) {
     return {
@@ -618,35 +749,92 @@ export async function testSendAutoMessage(
     };
   }
 
-  const preview = previewAutoMessage(body);
-  if (preview.unresolvedPlaceholders.length) {
+  if (
+    normalized.accountType !== TelegramAutoMessageAccountType.PERSONAL &&
+    normalized.accountType !== TelegramAutoMessageAccountType.BUSINESS
+  ) {
+    throw ApiError.validation('Account type noto‘g‘ri', [
+      { field: 'accountType', message: 'PERSONAL yoki BUSINESS' },
+    ]);
+  }
+
+  const keys = normalized.resultKeys;
+  const check = assertAutoMessageResultKeys(normalized.accountType, keys);
+  if (!check.ok) {
+    throw ApiError.validation('Natija kalitlari account type bilan mos emas', [
+      { field: 'resultKeys', message: `Noto‘g‘ri: ${check.invalid.join(', ')}` },
+    ]);
+  }
+
+  const channel =
+    normalized.accountType === TelegramAutoMessageAccountType.BUSINESS ? 'business' : 'personal';
+  if (channel === 'personal' && !connection.notifyPersonal) {
+    return {
+      sent: false,
+      reason: 'pref_off',
+      message: 'Personal Telegram bildirishnomalari o‘chirilgan.',
+    };
+  }
+  if (channel === 'business' && !connection.notifyBusiness) {
+    return {
+      sent: false,
+      reason: 'pref_off',
+      message: 'Business Telegram bildirishnomalari o‘chirilgan.',
+    };
+  }
+
+  const resolved = await resolveTestSendResults(identityId, normalized.accountType, keys);
+  if (!resolved.ok) {
+    return { sent: false, reason: 'no_account', message: resolved.message };
+  }
+
+  const composed = composeAutoMessageText({
+    title: normalized.title ?? 'Test',
+    messageBody: normalized.messageBody,
+    results: resolved.results,
+    thresholdConfig: normalized.thresholdConfig,
+    previewBanner: false,
+  });
+
+  if (composed.unresolvedPlaceholders.length) {
     throw ApiError.validation(
-      `Noma’lum placeholder: ${preview.unresolvedPlaceholders.map((k) => `{{${k}}}`).join(', ')}`,
+      `Noma’lum placeholder: ${composed.unresolvedPlaceholders.map((k) => `{{${k}}}`).join(', ')}`,
       [{ field: 'messageBody', message: 'Placeholderlarni tekshiring' }],
     );
   }
 
   const keyboard = buildCtaKeyboard(
-    Boolean(body.ctaEnabled),
-    body.ctaLabel ?? null,
-    body.ctaPath ?? null,
+    Boolean(normalized.ctaEnabled),
+    normalized.ctaLabel ?? null,
+    normalized.ctaPath ?? null,
   );
 
-  try {
-    await tryDeliverTelegram({
-      identityId,
-      channel: body.accountType === TelegramAutoMessageAccountType.BUSINESS ? 'business' : 'personal',
-      text: preview.text,
-      replyMarkup: keyboard,
-    });
-    return { sent: true };
-  } catch (error) {
+  const delivery = await tryDeliverTelegram({
+    identityId,
+    channel,
+    text: composed.text,
+    replyMarkup: keyboard,
+    workspaceId: channel === 'personal' ? resolved.accountId : undefined,
+    storeId: channel === 'business' ? resolved.accountId : undefined,
+    // Admin explicitly requested a test — still require connection + channel master
+    // (checked above), but do not require daily-summary preference fields.
+    bypassPrefs: true,
+  });
+
+  if (!delivery.delivered) {
     logger.warn('Auto Message test send failed', {
       identityId,
-      message: sanitizeTelegramLogText(error instanceof Error ? error.message : String(error)),
+      reason: delivery.reason,
+      message: sanitizeTelegramLogText(delivery.message ?? ''),
     });
-    return { sent: false, reason: 'send_failed', message: 'Yuborish muvaffaqiyatsiz.' };
+    return {
+      sent: false,
+      reason: delivery.reason === 'not_connected' ? 'not_connected' : 'send_failed',
+      message: delivery.message ?? 'Yuborish muvaffaqiyatsiz.',
+    };
   }
+
+  return { sent: true, message: 'Test xabar Telegramga yuborildi.' };
 }
 
 /**
@@ -685,6 +873,28 @@ export async function claimAutoMessageExecution(opts: {
   }
 }
 
+async function markExecutionStatus(opts: {
+  autoMessageId: string;
+  identityId: string;
+  accountId: string;
+  periodKey: string;
+  status: TelegramAutoMessageExecutionStatus;
+  error?: string | null;
+}): Promise<void> {
+  await prisma.telegramAutoMessageExecution.updateMany({
+    where: {
+      autoMessageId: opts.autoMessageId,
+      identityId: opts.identityId,
+      accountId: opts.accountId,
+      periodKey: opts.periodKey,
+    },
+    data: {
+      status: opts.status,
+      error: opts.error ?? null,
+    },
+  });
+}
+
 async function sendPersonalAutoMessage(
   message: TelegramAutoMessageRow,
   connection: { id: string; identityId: string; notifyPersonal: boolean },
@@ -707,7 +917,15 @@ async function sendPersonalAutoMessage(
       periodKey,
       status: TelegramAutoMessageExecutionStatus.SENT,
     });
-    if (!claimed) continue;
+    if (!claimed) {
+      logger.info('Auto Message skip duplicate claim', {
+        autoMessageId: message.id,
+        identityId: connection.identityId,
+        accountId: membership.workspaceId,
+        periodKey,
+      });
+      continue;
+    }
 
     try {
       const results = await resolveAutoMessageResults({
@@ -725,7 +943,14 @@ async function sendPersonalAutoMessage(
         thresholdConfig: parseThreshold(message.thresholdConfig),
       });
       const keyboard = buildCtaKeyboard(message.ctaEnabled, message.ctaLabel, message.ctaPath);
-      await tryDeliverTelegram({
+      logger.info('Auto Message sending', {
+        autoMessageId: message.id,
+        channel: 'personal',
+        identityId: connection.identityId,
+        accountId: membership.workspaceId,
+        periodKey,
+      });
+      const delivery = await tryDeliverTelegram({
         identityId: connection.identityId,
         channel: 'personal',
         prefField: 'notifyDailySummaryPersonal',
@@ -733,19 +958,43 @@ async function sendPersonalAutoMessage(
         workspaceId: membership.workspaceId,
         replyMarkup: keyboard,
       });
-      sent += 1;
-    } catch (error) {
-      await prisma.telegramAutoMessageExecution.updateMany({
-        where: {
+      if (delivery.delivered) {
+        sent += 1;
+        logger.info('Auto Message sent', {
           autoMessageId: message.id,
           identityId: connection.identityId,
           accountId: membership.workspaceId,
           periodKey,
-        },
-        data: {
-          status: TelegramAutoMessageExecutionStatus.FAILED,
-          error: error instanceof Error ? error.message.slice(0, 180) : 'failed',
-        },
+        });
+      } else {
+        const status =
+          delivery.reason === 'pref_off' ||
+          delivery.reason === 'channel_off' ||
+          delivery.reason === 'workspace_off'
+            ? TelegramAutoMessageExecutionStatus.SKIPPED
+            : TelegramAutoMessageExecutionStatus.FAILED;
+        await markExecutionStatus({
+          autoMessageId: message.id,
+          identityId: connection.identityId,
+          accountId: membership.workspaceId,
+          periodKey,
+          status,
+          error: delivery.message?.slice(0, 180) ?? delivery.reason ?? 'failed',
+        });
+        logger.warn('Auto Message delivery skipped/failed', {
+          autoMessageId: message.id,
+          identityId: connection.identityId,
+          reason: delivery.reason,
+        });
+      }
+    } catch (error) {
+      await markExecutionStatus({
+        autoMessageId: message.id,
+        identityId: connection.identityId,
+        accountId: membership.workspaceId,
+        periodKey,
+        status: TelegramAutoMessageExecutionStatus.FAILED,
+        error: error instanceof Error ? error.message.slice(0, 180) : 'failed',
       });
       logger.warn('Personal Auto Message send failed', {
         autoMessageId: message.id,
@@ -783,7 +1032,15 @@ async function sendBusinessAutoMessage(
       periodKey,
       status: TelegramAutoMessageExecutionStatus.SENT,
     });
-    if (!claimed) continue;
+    if (!claimed) {
+      logger.info('Auto Message skip duplicate claim', {
+        autoMessageId: message.id,
+        identityId: connection.identityId,
+        accountId: store.id,
+        periodKey,
+      });
+      continue;
+    }
 
     try {
       const results = await resolveAutoMessageResults({
@@ -800,7 +1057,14 @@ async function sendBusinessAutoMessage(
         thresholdConfig: parseThreshold(message.thresholdConfig),
       });
       const keyboard = buildCtaKeyboard(message.ctaEnabled, message.ctaLabel, message.ctaPath);
-      await tryDeliverTelegram({
+      logger.info('Auto Message sending', {
+        autoMessageId: message.id,
+        channel: 'business',
+        identityId: connection.identityId,
+        accountId: store.id,
+        periodKey,
+      });
+      const delivery = await tryDeliverTelegram({
         identityId: connection.identityId,
         channel: 'business',
         prefField: 'notifyDailySummaryBusiness',
@@ -809,19 +1073,44 @@ async function sendBusinessAutoMessage(
         workspaceId: workspace?.id,
         replyMarkup: keyboard,
       });
-      sent += 1;
-    } catch (error) {
-      await prisma.telegramAutoMessageExecution.updateMany({
-        where: {
+      if (delivery.delivered) {
+        sent += 1;
+        logger.info('Auto Message sent', {
           autoMessageId: message.id,
           identityId: connection.identityId,
           accountId: store.id,
           periodKey,
-        },
-        data: {
-          status: TelegramAutoMessageExecutionStatus.FAILED,
-          error: error instanceof Error ? error.message.slice(0, 180) : 'failed',
-        },
+        });
+      } else {
+        const status =
+          delivery.reason === 'pref_off' ||
+          delivery.reason === 'channel_off' ||
+          delivery.reason === 'workspace_off'
+            ? TelegramAutoMessageExecutionStatus.SKIPPED
+            : TelegramAutoMessageExecutionStatus.FAILED;
+        await markExecutionStatus({
+          autoMessageId: message.id,
+          identityId: connection.identityId,
+          accountId: store.id,
+          periodKey,
+          status,
+          error: delivery.message?.slice(0, 180) ?? delivery.reason ?? 'failed',
+        });
+        logger.warn('Auto Message delivery skipped/failed', {
+          autoMessageId: message.id,
+          identityId: connection.identityId,
+          storeId: store.id,
+          reason: delivery.reason,
+        });
+      }
+    } catch (error) {
+      await markExecutionStatus({
+        autoMessageId: message.id,
+        identityId: connection.identityId,
+        accountId: store.id,
+        periodKey,
+        status: TelegramAutoMessageExecutionStatus.FAILED,
+        error: error instanceof Error ? error.message.slice(0, 180) : 'failed',
       });
       logger.warn('Business Auto Message send failed', {
         autoMessageId: message.id,
@@ -836,36 +1125,52 @@ async function sendBusinessAutoMessage(
 
 /**
  * Process due universal Auto Messages.
- * Missing Telegram connection → claim NO_CONNECTION and continue (no crash).
  */
 export async function runTelegramAutoMessageTick(
   now = new Date(),
-): Promise<{ sent: number; ran: number }> {
+): Promise<{ sent: number; ran: number; due: number }> {
   if (process.env.VITEST && process.env.AUTO_MESSAGE_TICK_IN_TEST !== '1') {
-    return { sent: 0, ran: 0 };
+    return { sent: 0, ran: 0, due: 0 };
   }
 
   let sent = 0;
   let ran = 0;
+  let due = 0;
 
   try {
+    logger.info('Auto Message cron started', { at: now.toISOString() });
     await ensureAutoMessagesMigrated();
     const messages = await prisma.telegramAutoMessage.findMany({ where: { enabled: true } });
     const connections = await prisma.telegramConnection.findMany({ where: { isActive: true } });
+    logger.info('Auto Message cron loaded', {
+      enabledCount: messages.length,
+      connectionCount: connections.length,
+    });
 
     for (const message of messages) {
-      const due = autoMessageIsDue(message, now);
-      if (!due.due) continue;
+      const dueInfo = autoMessageIsDue(message, now);
+      if (!dueInfo.due) continue;
+      due += 1;
       ran += 1;
+      logger.info('Auto Message due', {
+        autoMessageId: message.id,
+        title: message.title,
+        accountType: message.accountType,
+        dayKey: dueInfo.dayKey,
+        periodKey: dueInfo.periodKey,
+      });
 
-      if (connections.length === 0) continue;
+      if (connections.length === 0) {
+        logger.info('Auto Message no active connections', { autoMessageId: message.id });
+        continue;
+      }
 
       for (const connection of connections) {
         try {
           if (message.accountType === 'PERSONAL') {
-            sent += await sendPersonalAutoMessage(message, connection, due.dayKey, due.periodKey);
+            sent += await sendPersonalAutoMessage(message, connection, dueInfo.dayKey, dueInfo.periodKey);
           } else {
-            sent += await sendBusinessAutoMessage(message, connection, due.dayKey, due.periodKey);
+            sent += await sendBusinessAutoMessage(message, connection, dueInfo.dayKey, dueInfo.periodKey);
           }
         } catch (error) {
           logger.warn('Auto Message connection loop failed', {
@@ -876,13 +1181,15 @@ export async function runTelegramAutoMessageTick(
         }
       }
     }
+
+    logger.info('Auto Message cron finished', { due, ran, sent });
   } catch (error) {
     logger.warn('Auto Message tick failed', {
       message: sanitizeTelegramLogText(error instanceof Error ? error.message : String(error)),
     });
   }
 
-  return { sent, ran };
+  return { sent, ran, due };
 }
 
 /** Exported for tests — shift a day key by N days. */

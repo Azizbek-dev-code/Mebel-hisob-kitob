@@ -217,26 +217,29 @@ export const upsertTelegramAutoMessageSchema = z
   })
   .strict();
 
-export const previewTelegramAutoMessageSchema = z
-  .object({
-    title: z.string().trim().max(120).optional(),
-    accountType: z.enum(['PERSONAL', 'BUSINESS']),
-    messageBody: z.string().max(TELEGRAM_MESSAGE_MAX_LENGTH).default(''),
-    resultKeys: z.array(z.string().trim().min(1).max(64)).max(40),
-    thresholdConfig: thresholdConfigSchema,
-    ctaEnabled: z.boolean().optional(),
-    ctaLabel: z.string().trim().max(TELEGRAM_BUTTON_TEXT_MAX_LENGTH).nullable().optional(),
-    ctaPath: z
-      .string()
-      .trim()
-      .max(240)
-      .nullable()
-      .optional()
-      .refine((value) => !value || (value.startsWith('/') && !value.startsWith('//')), {
-        message: 'CTA path ichki yo‘l bo‘lishi kerak',
-      }),
-  })
-  .strict();
+/**
+ * Preview / Test Send accept schedule fields from the form but ignore them.
+ * Not `.strict()` — unknown keys (enabled, recurrence, hour, …) are stripped
+ * so the admin form can POST the full draft without 422.
+ */
+export const previewTelegramAutoMessageSchema = z.object({
+  title: z.string().trim().max(120).optional(),
+  accountType: z.enum(['PERSONAL', 'BUSINESS']),
+  messageBody: z.string().max(TELEGRAM_MESSAGE_MAX_LENGTH).default(''),
+  resultKeys: z.array(z.string().trim().min(1).max(64)).max(40),
+  thresholdConfig: thresholdConfigSchema,
+  ctaEnabled: z.boolean().optional(),
+  ctaLabel: z.string().trim().max(TELEGRAM_BUTTON_TEXT_MAX_LENGTH).nullable().optional(),
+  ctaPath: z
+    .string()
+    .trim()
+    .max(240)
+    .nullable()
+    .optional()
+    .refine((value) => !value || (value.startsWith('/') && !value.startsWith('//')), {
+      message: 'CTA path ichki yo‘l bo‘lishi kerak',
+    }),
+});
 
 export const telegramAdminListQuerySchema = z.object({
   page: z.coerce.number().int().positive().optional(),

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   TelegramAutoMessageAccountType,
   TelegramAutoMessageRecurrence,
@@ -43,8 +43,15 @@ import {
   getAutoMessageResultCatalog,
 } from './telegram.auto-message.catalog.js';
 import { composeAutoMessageText, renderAutoMessageTemplate } from './telegram.auto-message.template.js';
-import { autoMessageIsDue } from './telegram.auto-message.service.js';
+import {
+  AUTO_MESSAGE_TEMPLATES,
+  autoMessageIsDue,
+  listAutoMessageTemplates,
+  previewAutoMessage,
+} from './telegram.auto-message.service.js';
+import { computeNextRunAt, formatNextRunLabel } from './telegram.auto-message.next-run.js';
 import { previewSampleResults } from './telegram.auto-message.resolver.js';
+import { previewTelegramAutoMessageSchema } from './telegram.admin.validators.js';
 
 describe('auto message catalog', () => {
   it('returns only Personal results for PERSONAL', () => {
@@ -76,6 +83,54 @@ describe('auto message catalog', () => {
   it('rejects unknown keys', () => {
     const result = assertAutoMessageResultKeys('PERSONAL', ['not_a_real_metric']);
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('auto message templates', () => {
+  it('exposes optional templates without scheduling them', () => {
+    expect(AUTO_MESSAGE_TEMPLATES.length).toBeGreaterThan(0);
+    expect(listAutoMessageTemplates('PERSONAL').every((t) => t.accountType === 'PERSONAL')).toBe(
+      true,
+    );
+  });
+});
+
+describe('auto message preview schema', () => {
+  it('accepts full form payload by stripping schedule fields', () => {
+    const parsed = previewTelegramAutoMessageSchema.parse({
+      title: 'Test',
+      accountType: 'PERSONAL',
+      messageBody: 'Hi {{balance}}',
+      resultKeys: ['balance'],
+      enabled: true,
+      recurrence: 'EVERY_DAY',
+      hour: 8,
+      minute: 0,
+      timezone: 'Asia/Tashkent',
+      weekday: 1,
+      monthDay: 1,
+      startDate: null,
+      thresholdConfig: null,
+      ctaEnabled: false,
+      ctaLabel: null,
+      ctaPath: null,
+    });
+    expect(parsed.accountType).toBe('PERSONAL');
+    expect(parsed.resultKeys).toEqual(['balance']);
+    expect((parsed as { enabled?: boolean }).enabled).toBeUndefined();
+  });
+
+  it('preview uses sample data and shared composer', () => {
+    const preview = previewAutoMessage({
+      title: 'Tong',
+      accountType: TelegramAutoMessageAccountType.PERSONAL,
+      messageBody: '{{income}}',
+      resultKeys: ['income'],
+    });
+    expect(preview.preview).toBe(true);
+    expect(preview.text).toContain('PREVIEW');
+    expect(preview.text).toContain('Income');
+    expect(preview.unresolvedPlaceholders).toEqual([]);
   });
 });
 
@@ -220,5 +275,42 @@ describe('auto message recurrence', () => {
         new Date('2026-03-21T03:01:00.000Z'),
       ).due,
     ).toBe(false);
+  });
+});
+
+describe('next run calculation', () => {
+  it('computes next Asia/Tashkent daily fire after now', () => {
+    // 2026-03-21 10:00 Tashkent = 05:00 UTC
+    const now = new Date('2026-03-21T05:00:00.000Z');
+    const next = computeNextRunAt(
+      {
+        enabled: true,
+        recurrence: TelegramAutoMessageRecurrence.EVERY_DAY,
+        hour: 21,
+        minute: 0,
+        timezone: 'Asia/Tashkent',
+        weekday: null,
+        monthDay: null,
+        startDate: null,
+      },
+      now,
+    );
+    expect(next).toBe('2026-03-21T16:00:00.000Z');
+    expect(formatNextRunLabel(next, 'Asia/Tashkent', now)).toBe('Bugun 21:00');
+  });
+
+  it('returns null when disabled', () => {
+    expect(
+      computeNextRunAt({
+        enabled: false,
+        recurrence: TelegramAutoMessageRecurrence.EVERY_DAY,
+        hour: 8,
+        minute: 0,
+        timezone: 'Asia/Tashkent',
+        weekday: null,
+        monthDay: null,
+        startDate: null,
+      }),
+    ).toBeNull();
   });
 });

@@ -18,6 +18,21 @@ import type { TelegramPrefBooleanField } from './telegram.types.js';
 
 export type TelegramDeliveryChannel = 'business' | 'personal';
 
+export type TelegramDeliveryReason =
+  | 'not_connected'
+  | 'channel_off'
+  | 'pref_off'
+  | 'workspace_off'
+  | 'blocked'
+  | 'send_failed'
+  | 'error';
+
+export type TelegramDeliveryResult = {
+  delivered: boolean;
+  reason?: TelegramDeliveryReason;
+  message?: string;
+};
+
 export type TryDeliverTelegramOpts = {
   identityId: string;
   channel: TelegramDeliveryChannel;
@@ -27,6 +42,11 @@ export type TryDeliverTelegramOpts = {
   workspaceId?: string | null;
   storeId?: string | null;
   replyMarkup?: TelegramInlineKeyboardMarkup;
+  /**
+   * When true, skip channel master + prefField + workspace gates (admin Test Send).
+   * Connection must still be active.
+   */
+  bypassPrefs?: boolean;
 };
 
 function channelMasterOn(row: TelegramConnection, channel: TelegramDeliveryChannel): boolean {
@@ -38,31 +58,53 @@ function prefEnabled(row: TelegramConnection, prefField?: TelegramPrefBooleanFie
   return Boolean(row[prefField]);
 }
 
+const REASON_MESSAGE: Record<TelegramDeliveryReason, string> = {
+  not_connected: 'Telegram akkauntingiz ulanmagan.',
+  channel_off: 'Telegram bildirishnomalari o‘chirilgan.',
+  pref_off: 'Bu turdagi Telegram bildirishnoma o‘chirilgan.',
+  workspace_off: 'Bu hisob uchun Telegram bildirishnoma o‘chirilgan.',
+  blocked: 'Foydalanuvchi botni bloklagan.',
+  send_failed: 'Telegramga yuborish muvaffaqiyatsiz.',
+  error: 'Telegramga yuborishda xatolik.',
+};
+
 /**
- * Best-effort Telegram delivery. Never throws to the caller.
+ * Best-effort Telegram delivery. Never throws to the caller — returns a result instead.
  */
-export async function tryDeliverTelegram(opts: TryDeliverTelegramOpts): Promise<void> {
+export async function tryDeliverTelegram(opts: TryDeliverTelegramOpts): Promise<TelegramDeliveryResult> {
   try {
     const row = await findActiveByIdentity(opts.identityId);
-    if (!row) return;
-    if (!channelMasterOn(row, opts.channel)) return;
-    if (!prefEnabled(row, opts.prefField)) return;
+    if (!row) {
+      return { delivered: false, reason: 'not_connected', message: REASON_MESSAGE.not_connected };
+    }
 
-    let workspaceId = opts.workspaceId ?? null;
-    if (!workspaceId && opts.storeId) {
-      workspaceId = await workspaceIdForStore(opts.storeId);
+    if (!opts.bypassPrefs) {
+      if (!channelMasterOn(row, opts.channel)) {
+        return { delivered: false, reason: 'channel_off', message: REASON_MESSAGE.channel_off };
+      }
+      if (!prefEnabled(row, opts.prefField)) {
+        return { delivered: false, reason: 'pref_off', message: REASON_MESSAGE.pref_off };
+      }
+
+      let workspaceId = opts.workspaceId ?? null;
+      if (!workspaceId && opts.storeId) {
+        workspaceId = await workspaceIdForStore(opts.storeId);
+      }
+      if (!workspaceId && opts.channel === 'personal') {
+        workspaceId = await personalWorkspaceIdForIdentity(opts.identityId);
+      }
+      if (!(await isWorkspaceNotifyEnabled(row.id, workspaceId))) {
+        return { delivered: false, reason: 'workspace_off', message: REASON_MESSAGE.workspace_off };
+      }
     }
-    if (!workspaceId && opts.channel === 'personal') {
-      workspaceId = await personalWorkspaceIdForIdentity(opts.identityId);
-    }
-    if (!(await isWorkspaceNotifyEnabled(row.id, workspaceId))) return;
 
     const result = opts.replyMarkup
       ? await sendTelegramMessage(row.telegramChatId, opts.text, opts.replyMarkup)
       : await sendTelegramMessage(row.telegramChatId, opts.text);
+
     if (!result.ok && result.reason === 'blocked') {
       await deactivateByTelegramUserId(row.telegramUserId);
-      return;
+      return { delivered: false, reason: 'blocked', message: REASON_MESSAGE.blocked };
     }
     if (!result.ok) {
       logger.warn('Telegram delivery failed', {
@@ -70,13 +112,17 @@ export async function tryDeliverTelegram(opts: TryDeliverTelegramOpts): Promise<
         channel: opts.channel,
         reason: result.reason,
       });
+      return { delivered: false, reason: 'send_failed', message: REASON_MESSAGE.send_failed };
     }
+
+    return { delivered: true };
   } catch (error) {
     logger.warn('Telegram delivery error', {
       identityId: opts.identityId,
       channel: opts.channel,
       message: sanitizeTelegramLogText(error instanceof Error ? error.message : String(error)),
     });
+    return { delivered: false, reason: 'error', message: REASON_MESSAGE.error };
   }
 }
 

@@ -24,6 +24,7 @@ type DbClient = {
   growthNotification: PrismaClient['growthNotification'];
   growthTodo: PrismaClient['growthTodo'];
   growthCalendarEvent: PrismaClient['growthCalendarEvent'];
+  growthHabit: PrismaClient['growthHabit'];
 };
 
 export type EmitGrowthNotificationInput = {
@@ -164,8 +165,25 @@ async function syncReminders(
   const profile = await ensureSocialProfile(identityId, db);
   if (!profile.notifyReminder) return;
 
+  const workspace = await db.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { personalProfile: { select: { timezone: true } } },
+  });
+  const timeZone = workspace?.personalProfile?.timezone || 'Asia/Tashkent';
+
   const horizon = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-  const dayKey = now.toISOString().slice(0, 10);
+  const dayKey = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+  const localHm = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(now);
 
   const todos = await db.growthTodo.findMany({
     where: {
@@ -224,6 +242,37 @@ async function syncReminders(
         entityType: 'GROWTH_EVENT',
         entityId: event.id,
         dedupeKey: `reminder:event:${event.id}:${dayKey}`,
+      },
+      db,
+    );
+  }
+
+  const habits = await db.growthHabit.findMany({
+    where: {
+      workspaceId,
+      isArchived: false,
+      reminderEnabled: true,
+      reminderTime: { not: null },
+    },
+    select: { id: true, title: true, reminderTime: true },
+    take: 20,
+  });
+
+  for (const habit of habits) {
+    if (!habit.reminderTime) continue;
+    // Fire when local clock has reached reminderTime today (same calendar day).
+    if (localHm < habit.reminderTime) continue;
+    await tryEmitGrowthNotification(
+      {
+        identityId,
+        workspaceId,
+        kind: GrowthNotificationKind.REMINDER,
+        title: habit.title,
+        body: 'Odat eslatmasi',
+        href: '/personal/growth/habits',
+        entityType: 'GROWTH_HABIT',
+        entityId: habit.id,
+        dedupeKey: `reminder:habit:${habit.id}:${dayKey}`,
       },
       db,
     );

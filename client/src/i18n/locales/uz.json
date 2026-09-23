@@ -1986,7 +1986,7 @@
       "menu": "Menyu",
       "broadcast": "Broadcast",
       "automations": "Avtomatik xabarlar",
-      "automationsHint": "Ertalab, kechqurun, haftalik va oylik xulosalar. Vaqt Asia/Tashkent bo‘yicha.",
+      "automationsHint": "Avtomatik xabarlar: yaratish, Preview, Test Send va belgilangan vaqtda yuborish. Vaqt zonasi odatda Asia/Tashkent.",
       "stats": "Statistikalar",
       "newBroadcast": "Yangi xabar yuborish",
       "users": "Ulangan foydalanuvchilar",

@@ -19,6 +19,7 @@ const { prismaMock } = vi.hoisted(() => ({
     },
     growthTodo: { findMany: vi.fn() },
     growthCalendarEvent: { findMany: vi.fn() },
+    growthHabit: { findMany: vi.fn() },
   },
 }));
 
@@ -59,10 +60,12 @@ beforeEach(() => {
     type: WorkspaceType.PERSONAL,
     status: 'ACTIVE',
     storeId: null,
+    personalProfile: { timezone: 'Asia/Tashkent' },
   });
   prismaMock.growthSocialProfile.findUnique.mockResolvedValue(PROFILE);
   prismaMock.growthTodo.findMany.mockResolvedValue([]);
   prismaMock.growthCalendarEvent.findMany.mockResolvedValue([]);
+  prismaMock.growthHabit.findMany.mockResolvedValue([]);
 });
 
 describe('emitGrowthNotification', () => {

@@ -8,6 +8,7 @@ import type {
   TelegramAutoMessagePreviewRequest,
   TelegramAutoMessagePreviewResponse,
   TelegramAutoMessageResultCatalogItem,
+  TelegramAutoMessageTemplateDto,
   TelegramAutoMessageTestSendResponse,
   TelegramBroadcastDetail,
   TelegramBroadcastListResponse,
@@ -58,6 +59,15 @@ export const platformTelegramService = {
     return apiClient.get<TelegramAutoMessageResultCatalogItem[]>(
       '/telegram/admin/auto-messages/catalog',
       { signal, searchParams: { accountType } },
+    );
+  },
+  autoMessageTemplates(accountType?: string, signal?: AbortSignal) {
+    return apiClient.get<TelegramAutoMessageTemplateDto[]>(
+      '/telegram/admin/auto-messages/templates',
+      {
+        signal,
+        searchParams: accountType ? { accountType } : undefined,
+      },
     );
   },
   createAutoMessage(body: UpsertTelegramAutoMessageRequest) {

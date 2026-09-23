@@ -23,6 +23,7 @@ import {
   getTelegramAdminBroadcasts,
   getTelegramAdminAutomations,
   getTelegramAdminAutoMessageCatalog,
+  getTelegramAdminAutoMessageTemplates,
   getTelegramAdminAutoMessages,
   getTelegramAdminMenu,
   getTelegramAdminStart,
@@ -176,6 +177,12 @@ telegramRouter.get(
   requireAuth,
   requirePlatformAdmin,
   getTelegramAdminAutoMessageCatalog,
+);
+telegramRouter.get(
+  '/admin/auto-messages/templates',
+  requireAuth,
+  requirePlatformAdmin,
+  getTelegramAdminAutoMessageTemplates,
 );
 telegramRouter.post(
   '/admin/auto-messages',

@@ -1986,7 +1986,7 @@
       "menu": "Меню",
       "broadcast": "Рассылка",
       "automations": "Автосообщения",
-      "automationsHint": "Утро, вечер, неделя и месяц. Время — Asia/Tashkent.",
+      "automationsHint": "Автосообщения: создание, Preview, Test Send и отправка по расписанию. Часовой пояс обычно Asia/Tashkent.",
       "stats": "Статистика",
       "newBroadcast": "Отправить новое сообщение",
       "users": "Подключённые пользователи",

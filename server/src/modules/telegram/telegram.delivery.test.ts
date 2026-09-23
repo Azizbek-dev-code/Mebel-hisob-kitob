@@ -96,7 +96,30 @@ describe('tryDeliverTelegram', () => {
     findActiveByIdentity.mockRejectedValue(new Error('db down'));
     await expect(
       tryDeliverTelegram({ identityId: 'idn_1', channel: 'business', text: 'x' }),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual(
+      expect.objectContaining({ delivered: false, reason: 'error' }),
+    );
+  });
+
+  it('returns delivered true on success', async () => {
+    findActiveByIdentity.mockResolvedValue(activeRow);
+    const result = await tryDeliverTelegram({
+      identityId: 'idn_1',
+      channel: 'business',
+      text: 'ok',
+    });
+    expect(result).toEqual({ delivered: true });
+  });
+
+  it('returns channel_off when master switch is off', async () => {
+    findActiveByIdentity.mockResolvedValue({ ...activeRow, notifyBusiness: false });
+    const result = await tryDeliverTelegram({
+      identityId: 'idn_1',
+      channel: 'business',
+      text: 'hi',
+    });
+    expect(result.delivered).toBe(false);
+    expect(result.reason).toBe('channel_off');
   });
 });
 

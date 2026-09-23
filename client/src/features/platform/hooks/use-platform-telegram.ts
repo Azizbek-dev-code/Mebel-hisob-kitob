@@ -20,6 +20,8 @@ export const platformTelegramKeys = {
   autoMessages: ['platform-telegram-auto-messages'] as const,
   autoMessageCatalog: (accountType: string) =>
     ['platform-telegram-auto-message-catalog', accountType] as const,
+  autoMessageTemplates: (accountType: string) =>
+    ['platform-telegram-auto-message-templates', accountType] as const,
   users: (page: number) => ['platform-telegram-users', page] as const,
   broadcasts: (page: number) => ['platform-telegram-broadcasts', page] as const,
 };
@@ -119,6 +121,14 @@ export function usePlatformTelegramAutoMessageCatalog(accountType: string, enabl
   return useQuery({
     queryKey: platformTelegramKeys.autoMessageCatalog(accountType),
     queryFn: ({ signal }) => platformTelegramService.autoMessageCatalog(accountType, signal),
+    enabled: enabled && Boolean(accountType),
+  });
+}
+
+export function usePlatformTelegramAutoMessageTemplates(accountType: string, enabled = true) {
+  return useQuery({
+    queryKey: platformTelegramKeys.autoMessageTemplates(accountType),
+    queryFn: ({ signal }) => platformTelegramService.autoMessageTemplates(accountType, signal),
     enabled: enabled && Boolean(accountType),
   });
 }
