@@ -6,11 +6,11 @@
  */
 
 /**
- * Last-resort fallback when DB/runtime has no getMe username yet.
- * Production display and deep-links must use token → getMe → DB, not this constant.
- * Do not hardcode a different bot name here to “fix” casing — refresh from getMe.
+ * @deprecated Not used for Admin UI, connect deep-links, or webhooks.
+ * Connect uses resolveTelegramBotUsername() → DB/getMe only.
+ * Kept as a test fixture alias so older unit tests compile.
  */
-export const EXPECTED_TELEGRAM_BOT_USERNAME = 'balancyspace_bot';
+export const EXPECTED_TELEGRAM_BOT_USERNAME = 'BalancySpace_bot';
 
 export const TELEGRAM_API_ORIGIN = 'https://api.telegram.org';
 

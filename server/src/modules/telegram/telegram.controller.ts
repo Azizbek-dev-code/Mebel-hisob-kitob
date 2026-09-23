@@ -29,8 +29,7 @@ export const getTelegramStatus = asyncHandler(async (req: Request, res: Response
 });
 
 export const postTelegramLinkStart = asyncHandler(async (req: Request, res: Response) => {
-  // Hydrate admin-saved bot username before building t.me deep-link (serverless-safe).
-  await hydrateTelegramRuntimeFromDb();
+  // startLinkForRequest → resolveTelegramBotUsername (DB/getMe) builds the deep-link.
   sendSuccess(res, await startLinkForRequest(req));
 });
 

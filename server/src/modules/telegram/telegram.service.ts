@@ -7,7 +7,6 @@ import {
 } from './telegram.config.js';
 import { sanitizeTelegramLogText } from './telegram.sanitize.js';
 import {
-  EXPECTED_TELEGRAM_BOT_USERNAME,
   TELEGRAM_API_ORIGIN,
   type TelegramApiEnvelope,
   type TelegramBotConnectionResult,
@@ -247,7 +246,7 @@ export async function inspectTelegramBotToken(
   const { fetchFn, log, timeoutMs, nowMs, isProduction } = resolveDeps(deps);
   const runtime: TelegramRuntimeConfig = {
     configured: true,
-    expectedUsername: EXPECTED_TELEGRAM_BOT_USERNAME,
+    expectedUsername: '',
     token,
     webhookSecret: deps?.runtime?.webhookSecret,
   };

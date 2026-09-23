@@ -1,8 +1,10 @@
 export {
   getPublicAppUrl,
   getTelegramWebhookUrl,
+  getTelegramBotUsername,
   getActiveBotUsername,
   normaliseBotUsername,
+  canonicalBotUsername,
   readTelegramPublicConfig,
   readTelegramRuntime,
   resolveTelegramRuntime,
@@ -43,6 +45,7 @@ export {
   activateOrReplaceConnection,
 } from './telegram.connection.service.js';
 export { startLinkForRequest, resolveIdentityIdForTelegram } from './telegram.account.service.js';
+export { hydrateTelegramRuntimeFromDb, resolveTelegramBotUsername } from './telegram.admin.service.js';
 export { handleTelegramUpdate } from './telegram.commands.js';
 export { runTelegramDailySummaries } from './telegram.daily-summary.service.js';
 export { EXPECTED_TELEGRAM_BOT_USERNAME, DEFAULT_PUBLIC_APP_URL } from './telegram.types.js';

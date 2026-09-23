@@ -184,7 +184,7 @@ describe('authenticated Telegram account routes', () => {
     getConnectionStatus.mockResolvedValue(disconnected);
     unlinkConnection.mockResolvedValue(disconnected);
     startLinkForRequest.mockResolvedValue({
-      deepLink: 'https://t.me/balancyspace_bot?start=abc',
+      deepLink: 'https://t.me/BalancySpace_bot?start=abc',
       expiresAt: '2026-09-20T12:00:00.000Z',
     });
     updateTelegramPrefs.mockResolvedValue({ ...disconnected, connected: true, bizNotifySales: false });
@@ -200,7 +200,7 @@ describe('authenticated Telegram account routes', () => {
   it('POST /link/start returns deepLink + expiresAt only', async () => {
     const response = await request(app).post('/api/telegram/link/start').expect(200);
     expect(response.body.data).toEqual({
-      deepLink: 'https://t.me/balancyspace_bot?start=abc',
+      deepLink: 'https://t.me/BalancySpace_bot?start=abc',
       expiresAt: '2026-09-20T12:00:00.000Z',
     });
     expect(response.body.data.tokenHash).toBeUndefined();

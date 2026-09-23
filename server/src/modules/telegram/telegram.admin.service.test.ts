@@ -173,6 +173,18 @@ describe('telegram admin token', () => {
     expect(status.botUsername).toBe('@BalancySpace_bot');
     expect(JSON.stringify(status)).not.toContain(dbToken);
   });
+
+  it('resolveTelegramBotUsername returns DB username without calling getMe', async () => {
+    const { resolveTelegramBotUsername } = await import('./telegram.admin.service.js');
+    prismaMock.telegramBotConfig.findUnique.mockResolvedValue({
+      encryptedBotToken: null,
+      botUsername: 'BalancySpace_bot',
+    });
+
+    const username = await resolveTelegramBotUsername();
+    expect(username).toBe('BalancySpace_bot');
+    expect(inspectTelegramBotToken).not.toHaveBeenCalled();
+  });
 });
 
 describe('telegram start message admin', () => {

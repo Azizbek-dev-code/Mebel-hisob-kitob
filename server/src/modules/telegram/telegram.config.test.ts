@@ -4,13 +4,13 @@ import { env } from '../../config/env.js';
 import {
   applyTelegramDbRuntime,
   clearTelegramDbRuntimeOverride,
-  getActiveBotUsername,
+  getTelegramBotUsername,
   getPublicAppUrl,
   getTelegramWebhookUrl,
   readTelegramPublicConfig,
   resolveTelegramRuntime,
 } from './telegram.config.js';
-import { DEFAULT_PUBLIC_APP_URL, EXPECTED_TELEGRAM_BOT_USERNAME } from './telegram.types.js';
+import { DEFAULT_PUBLIC_APP_URL } from './telegram.types.js';
 
 describe('resolveTelegramRuntime', () => {
   it('reads optional TELEGRAM_BOT_TOKEN from env without requiring it', () => {
@@ -18,14 +18,14 @@ describe('resolveTelegramRuntime', () => {
     expect(env.TELEGRAM_WEBHOOK_SECRET).toBeUndefined();
   });
 
-  it('reads a present bot token as configured without exposing extra keys', () => {
+  it('reads a present bot token as configured without inventing a bot username', () => {
     const runtime = resolveTelegramRuntime({
       TELEGRAM_BOT_TOKEN: '123456:TESTTOKEN',
       TELEGRAM_WEBHOOK_SECRET: 'hook-secret',
     });
 
     expect(runtime.configured).toBe(true);
-    expect(runtime.expectedUsername).toBe(EXPECTED_TELEGRAM_BOT_USERNAME);
+    expect(runtime.expectedUsername).toBe('');
     expect(runtime.token).toBe('123456:TESTTOKEN');
     expect(runtime.webhookSecret).toBe('hook-secret');
   });
@@ -35,7 +35,7 @@ describe('resolveTelegramRuntime', () => {
 
     expect(runtime.configured).toBe(false);
     expect(runtime.token).toBeUndefined();
-    expect(runtime.expectedUsername).toBe(EXPECTED_TELEGRAM_BOT_USERNAME);
+    expect(runtime.expectedUsername).toBe('');
   });
 
   it('treats a blank token as unconfigured', () => {
@@ -91,14 +91,22 @@ describe('active bot username', () => {
   it('uses DB username override for deep-links after admin token save (preserves casing)', () => {
     clearTelegramDbRuntimeOverride();
     applyTelegramDbRuntime({ token: '123:ABC', botUsername: '@BalancySpace_bot' });
-    expect(getActiveBotUsername()).toBe('BalancySpace_bot');
+    expect(getTelegramBotUsername()).toBe('BalancySpace_bot');
     expect(readTelegramPublicConfig().expectedUsername).toBe('BalancySpace_bot');
     clearTelegramDbRuntimeOverride();
   });
 
-  it('never returns old blancyspace_bot as the code default', () => {
+  it('does not invent a username when runtime is empty', () => {
     clearTelegramDbRuntimeOverride();
-    expect(EXPECTED_TELEGRAM_BOT_USERNAME).toBe('balancyspace_bot');
-    expect(getActiveBotUsername()).toBe('balancyspace_bot');
+    expect(getTelegramBotUsername()).toBe('');
+  });
+
+  it('can apply username without wiping an existing token overlay', () => {
+    clearTelegramDbRuntimeOverride();
+    applyTelegramDbRuntime({ token: '123:ABC' });
+    applyTelegramDbRuntime({ botUsername: 'BalancySpace_bot' });
+    expect(getTelegramBotUsername()).toBe('BalancySpace_bot');
+    expect(readTelegramPublicConfig().configured).toBe(true);
+    clearTelegramDbRuntimeOverride();
   });
 });

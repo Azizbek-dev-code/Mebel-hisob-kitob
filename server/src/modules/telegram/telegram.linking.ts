@@ -1,18 +1,15 @@
 import { createHash, randomBytes } from 'node:crypto';
 
 import { prisma } from '../../lib/prisma.js';
-import { getActiveBotUsername } from './telegram.config.js';
-import {
-  EXPECTED_TELEGRAM_BOT_USERNAME,
-  TELEGRAM_LINKING_TOKEN_TTL_MS,
-  type TelegramLinkingIssue,
-} from './telegram.types.js';
+import { canonicalBotUsername } from './telegram.config.js';
+import { TELEGRAM_LINKING_TOKEN_TTL_MS, type TelegramLinkingIssue } from './telegram.types.js';
 
 /**
  * One-time, random, expiring linking tokens keyed by Identity.
  *
  * Deep-links look like `https://t.me/<active_bot_username>?start=<token>`.
- * Username comes from admin-saved getMe / runtime config — never hardcode a stale bot.
+ * Username MUST be passed from resolveTelegramBotUsername() (DB/getMe) —
+ * never a hardcoded bot name.
  * Never put `userId` / `identityId` in that start payload — only the SHA-256
  * hash is stored server-side.
  */
@@ -23,13 +20,15 @@ export function hashTelegramLinkingToken(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex');
 }
 
-export function buildTelegramStartLink(
-  startPayload: string,
-  username: string = EXPECTED_TELEGRAM_BOT_USERNAME,
-): string {
-  // Preserve getMe/DB casing; Telegram t.me is case-insensitive but Admin/UI should match canonical.
-  const clean =
-    username.trim().replace(/^@+/, '') || EXPECTED_TELEGRAM_BOT_USERNAME;
+/**
+ * Build `https://t.me/<username>?start=<payload>`.
+ * `username` is required — call resolveTelegramBotUsername() first.
+ */
+export function buildTelegramStartLink(startPayload: string, username: string): string {
+  const clean = canonicalBotUsername(username);
+  if (!clean) {
+    throw new Error('Telegram bot username is required to build a deep-link');
+  }
   return `https://t.me/${clean}?start=${encodeURIComponent(startPayload)}`;
 }
 
@@ -39,6 +38,7 @@ export function buildTelegramStartLink(
  */
 export function issueTelegramLinkingToken(
   identityId: string,
+  botUsername: string,
   now = () => new Date(),
 ): TelegramLinkingIssue {
   const startPayload = randomBytes(TOKEN_BYTES).toString('base64url');
@@ -47,7 +47,7 @@ export function issueTelegramLinkingToken(
     identityId,
     tokenHash: hashTelegramLinkingToken(startPayload),
     startPayload,
-    deepLink: buildTelegramStartLink(startPayload, getActiveBotUsername()),
+    deepLink: buildTelegramStartLink(startPayload, botUsername),
     expiresAt: new Date(issuedAt.getTime() + TELEGRAM_LINKING_TOKEN_TTL_MS),
   };
 }
@@ -59,9 +59,15 @@ export type PersistedLinkTokenResult = {
   startPayload: string;
 };
 
-/** Create a DB-backed one-time link token (hash only). Invalidates prior unused tokens. */
-export async function createPersistedLinkToken(identityId: string): Promise<PersistedLinkTokenResult> {
-  const issued = issueTelegramLinkingToken(identityId);
+/**
+ * Create a DB-backed one-time link token (hash only). Invalidates prior unused tokens.
+ * `botUsername` must come from resolveTelegramBotUsername() (same source as Admin UI).
+ */
+export async function createPersistedLinkToken(
+  identityId: string,
+  botUsername: string,
+): Promise<PersistedLinkTokenResult> {
+  const issued = issueTelegramLinkingToken(identityId, botUsername);
 
   await prisma.telegramLinkToken.deleteMany({
     where: {

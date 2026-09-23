@@ -2,7 +2,6 @@ import { env } from '../../config/env.js';
 
 import {
   DEFAULT_PUBLIC_APP_URL,
-  EXPECTED_TELEGRAM_BOT_USERNAME,
   LEGACY_PUBLIC_APP_HOSTS,
   type TelegramPublicConfig,
   type TelegramRuntimeConfig,
@@ -25,7 +24,7 @@ function blankToUndefined(value: string | undefined): string | undefined {
  * means "not configured" — callers must not crash.
  */
 let dbTokenOverride: string | undefined;
-/** Canonical username from getMe (preserves Telegram casing). */
+/** Canonical username from getMe/DB (preserves Telegram casing). Never a hardcode. */
 let dbBotUsernameOverride: string | undefined;
 
 /** Test helper — clears admin-saved token overlay. */
@@ -44,11 +43,22 @@ export function normaliseBotUsername(value: string | null | undefined): string {
   return canonicalBotUsername(value).toLowerCase();
 }
 
-/** Applies a decrypted DB token for subsequent Bot API calls. Never logs the token. */
-export function applyTelegramDbRuntime(input: { token?: string; botUsername?: string | null }): void {
-  dbTokenOverride = blankToUndefined(input.token);
-  const canonical = canonicalBotUsername(input.botUsername);
-  dbBotUsernameOverride = canonical || undefined;
+/**
+ * Applies decrypted DB token and/or getMe username for subsequent calls.
+ * Only updates fields that are provided — never wipes the other overlay.
+ * Never logs the token.
+ */
+export function applyTelegramDbRuntime(input: {
+  token?: string;
+  botUsername?: string | null;
+}): void {
+  if ('token' in input) {
+    dbTokenOverride = blankToUndefined(input.token);
+  }
+  if ('botUsername' in input) {
+    const canonical = canonicalBotUsername(input.botUsername);
+    dbBotUsernameOverride = canonical || undefined;
+  }
 }
 
 export function resolveTelegramRuntime(source: TelegramEnvSource): TelegramRuntimeConfig {
@@ -56,8 +66,8 @@ export function resolveTelegramRuntime(source: TelegramEnvSource): TelegramRunti
   const webhookSecret = blankToUndefined(source.TELEGRAM_WEBHOOK_SECRET);
   return {
     configured: Boolean(token),
-    // Env-only path has no getMe yet — last-resort fallback until DB hydrate / Refresh.
-    expectedUsername: EXPECTED_TELEGRAM_BOT_USERNAME,
+    // Env-only path has no getMe yet — empty until DB hydrate / Refresh / resolveTelegramBotUsername.
+    expectedUsername: '',
     token,
     webhookSecret,
   };
@@ -65,7 +75,8 @@ export function resolveTelegramRuntime(source: TelegramEnvSource): TelegramRunti
 
 /**
  * Active runtime: admin DB token/username overlay env fallbacks.
- * Bot username source of truth after admin saves token / Refresh: DB (from Telegram getMe).
+ * Bot username source of truth: DB (from Telegram getMe) via applyTelegramDbRuntime.
+ * Never invents a hardcoded bot username.
  */
 export function readTelegramRuntime(): TelegramRuntimeConfig {
   const envRuntime = resolveTelegramRuntime({
@@ -73,10 +84,9 @@ export function readTelegramRuntime(): TelegramRuntimeConfig {
     TELEGRAM_WEBHOOK_SECRET: env.TELEGRAM_WEBHOOK_SECRET,
   });
   const token = dbTokenOverride ?? envRuntime.token;
-  const fromDb = canonicalBotUsername(dbBotUsernameOverride);
   return {
     configured: Boolean(token),
-    expectedUsername: fromDb || EXPECTED_TELEGRAM_BOT_USERNAME,
+    expectedUsername: canonicalBotUsername(dbBotUsernameOverride),
     token,
     webhookSecret: envRuntime.webhookSecret,
   };
@@ -101,9 +111,18 @@ export function readTelegramPublicConfig(source?: TelegramEnvSource): TelegramPu
   };
 }
 
-/** Active bot username for t.me deep-links (no @). Prefer DB/getMe; fallback only if unset. */
-export function getActiveBotUsername(): string {
+/**
+ * Sync active bot username (no @) from runtime overlay.
+ * Prefer `resolveTelegramBotUsername()` for connect/deep-links — that reads DB/getMe.
+ * Returns '' when not yet hydrated (never a hardcoded legacy bot).
+ */
+export function getTelegramBotUsername(): string {
   return readTelegramPublicConfig().expectedUsername;
+}
+
+/** @deprecated Use getTelegramBotUsername — same runtime source. */
+export function getActiveBotUsername(): string {
+  return getTelegramBotUsername();
 }
 
 function rewriteLegacyPublicOrigin(value: string): string {

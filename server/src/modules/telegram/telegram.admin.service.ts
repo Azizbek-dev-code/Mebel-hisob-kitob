@@ -18,7 +18,7 @@ import { PRODUCT_IMAGE_MAX_BYTES, PRODUCT_IMAGE_MIME_TYPES } from '../../lib/sto
 import { recordAudit } from '../../services/audit.service.js';
 import { ApiError } from '../../utils/api-error.js';
 import { logger } from '../../utils/logger.js';
-import { applyTelegramDbRuntime, getPublicAppUrl, getTelegramWebhookUrl, readTelegramRuntime } from './telegram.config.js';
+import { applyTelegramDbRuntime, canonicalBotUsername, getPublicAppUrl, getTelegramWebhookUrl, readTelegramRuntime } from './telegram.config.js';
 import { decryptTelegramSecret, encryptTelegramSecret } from './telegram.crypto.js';
 import { mediaKindFromUrl } from './telegram.content.js';
 import {
@@ -38,10 +38,19 @@ function applyBotConfigRow(row: {
   encryptedBotToken: string | null;
   botUsername: string | null;
 } | null): void {
-  if (!row?.encryptedBotToken) return;
+  if (!row) return;
+
+  // Username must apply even when only env token is used (encryptedBotToken null).
+  // Connect deep-links read this overlay — never skip username because token decrypt failed.
+  const username = row.botUsername;
+  if (username) {
+    applyTelegramDbRuntime({ botUsername: username });
+  }
+
+  if (!row.encryptedBotToken) return;
   try {
     const token = decryptTelegramSecret(row.encryptedBotToken);
-    applyTelegramDbRuntime({ token, botUsername: row.botUsername });
+    applyTelegramDbRuntime({ token, botUsername: username });
   } catch (error) {
     logger.warn('Telegram DB token hydrate failed; falling back to env', {
       message: error instanceof Error ? error.message : 'decrypt_failed',
@@ -58,6 +67,76 @@ export async function hydrateTelegramRuntimeFromDb(): Promise<void> {
       message: error instanceof Error ? error.message : 'hydrate_failed',
     });
   }
+}
+
+/**
+ * Single source of truth for t.me deep-links and Admin display username (no @).
+ * Order: DB botUsername (admin getMe) → live getMe + persist → error.
+ * Never returns a hardcoded legacy bot name.
+ */
+export async function resolveTelegramBotUsername(): Promise<string> {
+  try {
+    const row = await prisma.telegramBotConfig.findUnique({
+      where: { id: BOT_CONFIG_ID },
+      select: { botUsername: true, encryptedBotToken: true },
+    });
+    applyBotConfigRow(row);
+
+    const fromDb = canonicalBotUsername(row?.botUsername);
+    if (fromDb) {
+      applyTelegramDbRuntime({ botUsername: fromDb });
+      return fromDb;
+    }
+  } catch (error) {
+    logger.warn('Telegram bot username DB read failed', {
+      message: error instanceof Error ? error.message : 'read_failed',
+    });
+  }
+
+  const runtime = readTelegramRuntime();
+  if (!runtime.token) {
+    throw ApiError.badRequest('Telegram bot sozlanmagan — Admin panelda token saqlang');
+  }
+
+  const inspected = await inspectTelegramBotToken(runtime.token);
+  if (!inspected.ok) {
+    throw ApiError.badRequest('Telegram getMe muvaffaqiyatsiz — tokenni tekshiring');
+  }
+
+  const now = new Date();
+  const existing = await prisma.telegramBotConfig.findUnique({ where: { id: BOT_CONFIG_ID } });
+  if (existing?.encryptedBotToken) {
+    await prisma.telegramBotConfig.update({
+      where: { id: BOT_CONFIG_ID },
+      data: {
+        botUsername: inspected.bot.username,
+        botFirstName: inspected.bot.firstName,
+        lastValidatedAt: now,
+        isActive: true,
+      },
+    });
+  } else {
+    await prisma.telegramBotConfig.upsert({
+      where: { id: BOT_CONFIG_ID },
+      create: {
+        id: BOT_CONFIG_ID,
+        encryptedBotToken: encryptTelegramSecret(runtime.token),
+        botUsername: inspected.bot.username,
+        botFirstName: inspected.bot.firstName,
+        isActive: true,
+        lastValidatedAt: now,
+      },
+      update: {
+        botUsername: inspected.bot.username,
+        botFirstName: inspected.bot.firstName,
+        isActive: true,
+        lastValidatedAt: now,
+      },
+    });
+  }
+
+  applyTelegramDbRuntime({ token: runtime.token, botUsername: inspected.bot.username });
+  return inspected.bot.username;
 }
 
 function tokenSourceFromConfig(hasDatabaseToken: boolean, envConfigured: boolean): TelegramTokenSource {
