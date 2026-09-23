@@ -99,7 +99,9 @@ telegramRouter.post(
 
 telegramRouter.post('/cron/daily-summary', postTelegramDailySummaryCron);
 telegramRouter.post('/cron/broadcast-tick', postTelegramBroadcastCron);
+// POST kept for manual/ops callers; GET required because Vercel Cron invokes GET.
 telegramRouter.post('/cron/automation-tick', postTelegramAutomationCron);
+telegramRouter.get('/cron/automation-tick', postTelegramAutomationCron);
 
 telegramRouter.get('/status', requireAuth, getTelegramStatus);
 telegramRouter.post('/link/start', requireAuth, postTelegramLinkStart);
