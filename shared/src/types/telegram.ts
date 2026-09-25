@@ -171,9 +171,17 @@ export interface TelegramStartButtonDto {
 export interface TelegramWebhookAdminStatus {
   url: string;
   configuredUrl: string;
+  /**
+   * True when Telegram reports a webhook URL that matches our expected endpoint.
+   * Historical `last_error_*` fields do not flip this off — Telegram keeps the last
+   * delivery error even after the webhook recovers.
+   */
   active: boolean;
   pendingUpdateCount: number;
+  /** Last error Telegram recorded (may be historical even while webhook is healthy). */
   lastErrorMessage: string | null;
+  /** Unix seconds from Telegram `last_error_date`, or null. */
+  lastErrorDate: number | null;
   lastCheckedAt: IsoDateString;
 }
 

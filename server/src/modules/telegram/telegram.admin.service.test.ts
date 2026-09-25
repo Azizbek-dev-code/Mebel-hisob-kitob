@@ -58,6 +58,7 @@ describe('telegram admin token', () => {
       url: 'https://example.ngrok.app/api/telegram/webhook',
       pendingUpdateCount: 0,
       lastErrorMessage: null,
+      lastErrorDate: null,
     });
   });
 
@@ -108,17 +109,59 @@ describe('telegram admin token', () => {
     expect(JSON.stringify(status)).not.toContain('hook-secret');
   });
 
+  it('stays active when Telegram still reports a historical last_error_message', async () => {
+    getTelegramWebhookInfo.mockResolvedValue({
+      ok: true,
+      url: 'https://example.ngrok.app/api/telegram/webhook',
+      pendingUpdateCount: 0,
+      lastErrorMessage: 'Wrong response from the webhook: 308 Permanent Redirect',
+      lastErrorDate: 1_700_000_000,
+    });
+    const status = await getAdminBotStatus();
+    expect(status.webhook?.active).toBe(true);
+    expect(status.webhook?.lastErrorMessage).toContain('308 Permanent Redirect');
+    expect(status.webhook?.lastErrorDate).toBe(1_700_000_000);
+    expect(status.webhook?.url).toBe(status.webhook?.configuredUrl);
+  });
+
   it('marks webhook inactive when Telegram URL does not match expected', async () => {
     getTelegramWebhookInfo.mockResolvedValue({
       ok: true,
       url: 'https://www.mebelboshqaruv.uz/api/telegram/webhook',
       pendingUpdateCount: 0,
       lastErrorMessage: null,
+      lastErrorDate: null,
     });
     const status = await getAdminBotStatus();
     expect(status.webhook?.active).toBe(false);
     expect(status.webhook?.url).toContain('mebelboshqaruv.uz');
     expect(status.webhook?.configuredUrl).toBe('https://example.ngrok.app/api/telegram/webhook');
+  });
+
+  it('marks webhook inactive when Telegram reports no webhook URL', async () => {
+    getTelegramWebhookInfo.mockResolvedValue({
+      ok: true,
+      url: '',
+      pendingUpdateCount: 0,
+      lastErrorMessage: null,
+      lastErrorDate: null,
+    });
+    const status = await getAdminBotStatus();
+    expect(status.webhook?.active).toBe(false);
+    expect(status.webhook?.url).toBe('');
+  });
+
+  it('surfaces getWebhookInfo API failure as inactive with an error message', async () => {
+    getTelegramWebhookInfo.mockResolvedValue({
+      ok: false,
+      reason: 'api_error',
+      description: 'Bad Gateway',
+    });
+    const status = await getAdminBotStatus();
+    expect(status.webhook?.active).toBe(false);
+    expect(status.webhook?.lastErrorMessage).toContain('Bad Gateway');
+    expect(status.webhook?.lastErrorDate).toBeNull();
+    expect(status.connected).toBe(false);
   });
 
   it('hydrates a database token before reporting status', async () => {

@@ -165,6 +165,7 @@ export async function getAdminBotStatus(): Promise<TelegramAdminBotStatus> {
     active: false,
     pendingUpdateCount: 0,
     lastErrorMessage: null,
+    lastErrorDate: null,
     lastCheckedAt: new Date().toISOString(),
   };
 
@@ -183,9 +184,11 @@ export async function getAdminBotStatus(): Promise<TelegramAdminBotStatus> {
         url: currentUrl,
         configuredUrl,
         // Active only when Telegram reports a webhook URL that matches our expected endpoint.
+        // Do not treat historical last_error_message as a current outage.
         active: urlsMatch,
         pendingUpdateCount: info.pendingUpdateCount,
         lastErrorMessage: info.lastErrorMessage,
+        lastErrorDate: info.lastErrorDate,
         lastCheckedAt: webhook.lastCheckedAt,
       };
     } else {
@@ -194,6 +197,7 @@ export async function getAdminBotStatus(): Promise<TelegramAdminBotStatus> {
         lastErrorMessage: info.description
           ? `Telegram getWebhookInfo: ${info.description}`
           : 'Telegram getWebhookInfo muvaffaqiyatsiz',
+        lastErrorDate: null,
       };
     }
   }

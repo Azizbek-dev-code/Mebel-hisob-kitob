@@ -220,7 +220,20 @@ export function PlatformTelegramBotPage() {
                     <p>Pending updates: {data.webhook.pendingUpdateCount}</p>
                   ) : null}
                   {data.webhook.lastErrorMessage ? (
-                    <p className="text-danger-700">{data.webhook.lastErrorMessage}</p>
+                    data.webhook.active ? (
+                      <div className="space-y-1 text-ink-muted">
+                        <p className="font-medium text-ink">Previous error</p>
+                        <p>{data.webhook.lastErrorMessage}</p>
+                        {data.webhook.lastErrorDate ? (
+                          <p>Date: {formatDate(new Date(data.webhook.lastErrorDate * 1000).toISOString())}</p>
+                        ) : null}
+                        <p className="text-xs">
+                          Telegram saqlagan oxirgi xato — webhook hozir Active bo‘lsa, bu joriy nosozlik emas.
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-danger-700">{data.webhook.lastErrorMessage}</p>
+                    )
                   ) : null}
                   <p>
                     {t('platformAdmin.telegram.lastChecked')}: {formatDate(data.webhook.lastCheckedAt)}
