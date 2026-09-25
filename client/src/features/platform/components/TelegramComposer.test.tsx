@@ -34,7 +34,7 @@ describe('validateTelegramComposerFields', () => {
         buttonText: 'Kirish',
         buttonUrl: 'bad',
       }),
-    ).toMatch(/https:\/\/www\.mebelboshqaruv\.uz/);
+    ).toMatch(/https:\/\/balancy\.space/);
   });
 });
 

@@ -160,17 +160,17 @@ export function validateTelegramComposerFields(value: TelegramComposerValue): st
   const buttonUrl = value.buttonUrl.trim();
   if (Boolean(buttonText) !== Boolean(buttonUrl)) {
     return buttonText
-      ? 'Tugma URL kiriting (masalan: https://www.mebelboshqaruv.uz)'
+      ? 'Tugma URL kiriting (masalan: https://balancy.space)'
       : 'Tugma matni ham kiriting';
   }
   if (buttonUrl) {
     try {
       const parsed = new URL(buttonUrl);
       if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-        return 'Tugma URL http(s) bo‘lishi kerak (masalan: https://www.mebelboshqaruv.uz)';
+        return 'Tugma URL http(s) bo‘lishi kerak (masalan: https://balancy.space)';
       }
     } catch {
-      return 'Tugma URL noto‘g‘ri. Format: https://www.mebelboshqaruv.uz';
+      return 'Tugma URL noto‘g‘ri. Format: https://balancy.space';
     }
   }
   return null;

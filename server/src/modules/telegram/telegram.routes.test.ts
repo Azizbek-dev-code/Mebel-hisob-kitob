@@ -1,4 +1,4 @@
-﻿import request from 'supertest';
+import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApp } from '../../app.js';
@@ -225,7 +225,7 @@ describe('authenticated Telegram account routes', () => {
     setTelegramWebhook.mockResolvedValue({
       ok: false,
       reason: 'api_error',
-      webhookUrl: 'https://www.mebelboshqaruv.uz/api/telegram/webhook',
+      webhookUrl: 'https://balancy.space/api/telegram/webhook',
       webhookSecretConfigured: true,
       httpStatus: 400,
       errorCode: 400,

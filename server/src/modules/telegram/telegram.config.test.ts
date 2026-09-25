@@ -50,29 +50,33 @@ describe('getPublicAppUrl / getTelegramWebhookUrl', () => {
   it('defaults to the current production origin when PUBLIC_APP_URL is unset', () => {
     expect(getPublicAppUrl({})).toBe(DEFAULT_PUBLIC_APP_URL);
     expect(getTelegramWebhookUrl({})).toBe(`${DEFAULT_PUBLIC_APP_URL}/api/telegram/webhook`);
-    expect(DEFAULT_PUBLIC_APP_URL).toBe('https://www.mebelboshqaruv.uz');
+    expect(DEFAULT_PUBLIC_APP_URL).toBe('https://balancy.space');
   });
 
-  it('keeps mebelboshqaruv.uz production hosts as-is', () => {
+  it('keeps balancy.space production hosts as-is', () => {
+    expect(getPublicAppUrl({ PUBLIC_APP_URL: 'https://balancy.space' })).toBe(
+      'https://balancy.space',
+    );
+    expect(getPublicAppUrl({ PUBLIC_APP_URL: 'https://www.balancy.space/' })).toBe(
+      'https://www.balancy.space',
+    );
+    expect(
+      getTelegramWebhookUrl({
+        PUBLIC_APP_URL: 'https://balancy.space',
+      }),
+    ).toBe('https://balancy.space/api/telegram/webhook');
+  });
+
+  it('rewrites retired mebelboshqaruv.uz origin to current production host', () => {
     expect(getPublicAppUrl({ PUBLIC_APP_URL: 'https://www.mebelboshqaruv.uz' })).toBe(
-      'https://www.mebelboshqaruv.uz',
+      DEFAULT_PUBLIC_APP_URL,
     );
     expect(getPublicAppUrl({ PUBLIC_APP_URL: 'https://mebelboshqaruv.uz/' })).toBe(
-      'https://mebelboshqaruv.uz',
+      DEFAULT_PUBLIC_APP_URL,
     );
     expect(
       getTelegramWebhookUrl({
-        PUBLIC_APP_URL: 'https://www.mebelboshqaruv.uz',
-      }),
-    ).toBe('https://www.mebelboshqaruv.uz/api/telegram/webhook');
-  });
-
-  it('rewrites retired balancy.space origin to current production host', () => {
-    expect(getPublicAppUrl({ PUBLIC_APP_URL: 'https://balancy.space' })).toBe(DEFAULT_PUBLIC_APP_URL);
-    expect(getPublicAppUrl({ PUBLIC_APP_URL: 'https://www.balancy.space/' })).toBe(DEFAULT_PUBLIC_APP_URL);
-    expect(
-      getTelegramWebhookUrl({
-        TELEGRAM_WEBHOOK_URL: 'https://balancy.space/api/telegram/webhook',
+        TELEGRAM_WEBHOOK_URL: 'https://www.mebelboshqaruv.uz/api/telegram/webhook',
       }),
     ).toBe(`${DEFAULT_PUBLIC_APP_URL}/api/telegram/webhook`);
   });

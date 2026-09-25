@@ -1,4 +1,4 @@
-﻿import { UserRole, WorkerResponsibility } from '@furniture-erp/shared';
+import { UserRole, WorkerResponsibility } from '@furniture-erp/shared';
 import bcrypt from 'bcryptjs';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -75,7 +75,7 @@ describe('Telegram admin authorization', () => {
       tokenSource: 'env',
       hasDatabaseToken: false,
       webhookSecretConfigured: true,
-      publicAppUrl: 'https://www.mebelboshqaruv.uz',
+      publicAppUrl: 'https://balancy.space',
       webhook: null,
       connectedUsers: 0,
       lastValidatedAt: null,

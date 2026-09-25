@@ -339,7 +339,7 @@ describe('setTelegramWebhook', () => {
         json: async () => ({
           ok: true,
           result: {
-            url: 'https://www.mebelboshqaruv.uz/api/telegram/webhook',
+            url: 'https://balancy.space/api/telegram/webhook',
             pending_update_count: 0,
           },
         }),
@@ -356,7 +356,7 @@ describe('setTelegramWebhook', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.info?.url).toBe('https://www.mebelboshqaruv.uz/api/telegram/webhook');
+    expect(result.info?.url).toBe('https://balancy.space/api/telegram/webhook');
     expect(fetchFn).toHaveBeenCalledTimes(2);
     expect(String(fetchFn.mock.calls[0]?.[0])).toContain('/setWebhook');
     expect(String(fetchFn.mock.calls[1]?.[0])).toContain('/getWebhookInfo');

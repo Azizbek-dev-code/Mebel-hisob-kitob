@@ -1,4 +1,4 @@
-﻿import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TEST_PLATFORM_ADMIN } from '@/test/auth-fixtures';
@@ -27,7 +27,7 @@ describe('PlatformTelegramPage', () => {
             tokenSource: 'env',
             hasDatabaseToken: false,
             webhookSecretConfigured: true,
-            publicAppUrl: 'https://www.mebelboshqaruv.uz',
+            publicAppUrl: 'https://balancy.space',
             webhook: {
               url: 'https://example.ngrok.app/api/telegram/webhook',
               configuredUrl: 'https://example.ngrok.app/api/telegram/webhook',

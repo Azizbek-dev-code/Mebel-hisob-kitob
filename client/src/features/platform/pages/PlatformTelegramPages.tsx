@@ -339,7 +339,7 @@ export function PlatformTelegramStartPage() {
                     {
                       text: buttonText || '🚀 Dasturga kirish',
                       action: 'URL',
-                      url: buttonUrl || 'https://www.mebelboshqaruv.uz',
+                      url: buttonUrl || 'https://balancy.space',
                     },
                     {
                       text: detailButton.trim() || '📚 Batafsil',

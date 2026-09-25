@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   createTelegramBroadcastSchema,
@@ -15,12 +15,12 @@ describe('updateTelegramStartMessageSchema', () => {
       buttonUrl: null,
       buttons: [
         {
-          text: '🚀 Dasturga kirish',
+          text: '?? Dasturga kirish',
           action: 'URL',
-          url: 'https://www.mebelboshqaruv.uz',
+          url: 'https://balancy.space',
         },
         {
-          text: '📚 Batafsil',
+          text: '?? Batafsil',
           action: 'MENU',
           targetSlug: 'details',
         },

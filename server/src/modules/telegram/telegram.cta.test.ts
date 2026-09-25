@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('./telegram.config.js', () => ({
-  getPublicAppUrl: () => 'https://www.mebelboshqaruv.uz',
+  getPublicAppUrl: () => 'https://balancy.space',
 }));
 
 import { TELEGRAM_APP_PATHS, TELEGRAM_CTA_LABEL } from '@furniture-erp/shared';
@@ -17,7 +17,7 @@ describe('telegram CTA mapping', () => {
       accountType: 'BUSINESS',
       entityId: 'sale_123',
     });
-    expect(cta.url).toBe('https://www.mebelboshqaruv.uz/sales/sale_123');
+    expect(cta.url).toBe('https://balancy.space/sales/sale_123');
     expect(cta.label).toBe(TELEGRAM_CTA_LABEL.DETAIL);
     expect(cta.url).not.toMatch(/token|jwt|password/i);
     expect(cta.url.startsWith('https://')).toBe(true);
@@ -30,7 +30,7 @@ describe('telegram CTA mapping', () => {
       message: 'x',
       accountType: 'PERSONAL',
     });
-    expect(cta.url).toBe(`https://www.mebelboshqaruv.uz${TELEGRAM_APP_PATHS.personalIncome}`);
+    expect(cta.url).toBe(`https://balancy.space${TELEGRAM_APP_PATHS.personalIncome}`);
   });
 
   it('maps summaries to dashboards/reports', () => {
@@ -45,6 +45,6 @@ describe('telegram CTA mapping', () => {
   });
 
   it('rejects protocol-relative paths', () => {
-    expect(absoluteAppUrl('//evil.test')).toBe('https://www.mebelboshqaruv.uz/');
+    expect(absoluteAppUrl('//evil.test')).toBe('https://balancy.space/');
   });
 });

@@ -1,4 +1,4 @@
-﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   prismaMock,
@@ -39,7 +39,7 @@ vi.mock('./telegram.config.js', async (importOriginal) => {
       webhookSecret: 'hook-secret',
     })),
     getTelegramWebhookUrl: () => 'https://example.ngrok.app/api/telegram/webhook',
-    getPublicAppUrl: () => 'https://www.mebelboshqaruv.uz',
+    getPublicAppUrl: () => 'https://balancy.space',
     applyTelegramDbRuntime: vi.fn(),
   };
 });
@@ -111,13 +111,13 @@ describe('telegram admin token', () => {
   it('marks webhook inactive when Telegram URL does not match expected', async () => {
     getTelegramWebhookInfo.mockResolvedValue({
       ok: true,
-      url: 'https://balancy.space/api/telegram/webhook',
+      url: 'https://www.mebelboshqaruv.uz/api/telegram/webhook',
       pendingUpdateCount: 0,
       lastErrorMessage: null,
     });
     const status = await getAdminBotStatus();
     expect(status.webhook?.active).toBe(false);
-    expect(status.webhook?.url).toContain('balancy.space');
+    expect(status.webhook?.url).toContain('mebelboshqaruv.uz');
     expect(status.webhook?.configuredUrl).toBe('https://example.ngrok.app/api/telegram/webhook');
   });
 
@@ -199,7 +199,7 @@ describe('telegram start message admin', () => {
       mediaKind: 'IMAGE',
       imageUrl: 'https://cdn.example.com/a.jpg',
       buttonText: 'Open',
-      buttonUrl: 'https://www.mebelboshqaruv.uz',
+      buttonUrl: 'https://balancy.space',
       buttons: [],
       updatedAt: new Date('2026-09-21T00:00:00.000Z'),
     });
@@ -208,7 +208,7 @@ describe('telegram start message admin', () => {
       mediaKind: 'IMAGE',
       imageUrl: 'https://cdn.example.com/a.jpg',
       buttonText: 'Open',
-      buttonUrl: 'https://www.mebelboshqaruv.uz',
+      buttonUrl: 'https://balancy.space',
     });
     expect(dto.imageUrl).toBe('https://cdn.example.com/a.jpg');
     expect(recordAudit).toHaveBeenCalledWith(
