@@ -33,7 +33,12 @@ import {
 import { ApiError } from '../utils/api-error.js';
 import { logger } from '../utils/logger.js';
 import { recordAudit } from './audit.service.js';
-import { createAuthSession, assertSessionUsable, type SessionIssueMeta } from './auth-sessions.service.js';
+import {
+  createAuthSession,
+  assertSessionUsable,
+  touchAuthSessionExpiry,
+  type SessionIssueMeta,
+} from './auth-sessions.service.js';
 
 export interface StoreAuthenticatedSession {
   kind: typeof AuthSessionKind.STORE;
@@ -114,12 +119,7 @@ async function issueTokenWithSession(
     ? signPersonalToken(user, rememberMe, sid ?? undefined)
     : signStoreToken(user, rememberMe, sid ?? undefined);
   if (sid) {
-    await prisma.authSession
-      .update({
-        where: { id: sid },
-        data: { expiresAt: accessToken.expiresAt, lastActiveAt: new Date() },
-      })
-      .catch(() => undefined);
+    await touchAuthSessionExpiry(sid, accessToken.expiresAt);
   }
   return accessToken;
 }
@@ -345,7 +345,7 @@ export async function authenticate(token: string): Promise<ResolvedSession> {
   if (claims.ctx === AuthSessionKind.PERSONAL) {
     const user = await loadPersonalAuthUser(claims.sub, claims.workspaceId);
     if (claims.sid) {
-      await assertSessionUsable({ sid: claims.sid, user });
+      await assertSessionUsable({ sid: claims.sid, user, jwtExpiresAt: claims.expiresAt });
     }
     return { kind: AuthSessionKind.PERSONAL, user, claims };
   }
@@ -357,7 +357,7 @@ export async function authenticate(token: string): Promise<ResolvedSession> {
 
   const user = toAuthUser(record);
   if (claims.sid) {
-    await assertSessionUsable({ sid: claims.sid, user });
+    await assertSessionUsable({ sid: claims.sid, user, jwtExpiresAt: claims.expiresAt });
   }
   return { kind: AuthSessionKind.STORE, user, claims };
 }
@@ -369,6 +369,9 @@ export async function authenticate(token: string): Promise<ResolvedSession> {
  * cashier out mid-shift. Re-issuing once a token is past halfway keeps someone
  * who is actively working signed in while an abandoned session still dies within
  * one token lifetime. Remember-me sessions use the long TTL on each renewal.
+ *
+ * DB `auth_sessions.expiresAt` must slide with the cookie — otherwise a renewed
+ * JWT is rejected by assertSessionUsable at the original login expiry.
  */
 export function isDueForRenewal(claims: VerifiedAccessToken, now = Date.now()): boolean {
   const lifetimeMs = claims.expiresAt.getTime() - claims.issuedAt.getTime();
@@ -376,13 +379,16 @@ export function isDueForRenewal(claims: VerifiedAccessToken, now = Date.now()): 
   return now - claims.issuedAt.getTime() >= lifetimeMs / 2;
 }
 
-export function renewSession(
+export async function renewSession(
   user: AuthPrincipal,
   rememberMe = false,
   sid?: string,
-): IssuedAccessToken {
-  if (isPersonalAuth(user)) {
-    return signPersonalToken(user, rememberMe, sid);
+): Promise<IssuedAccessToken> {
+  const accessToken = isPersonalAuth(user)
+    ? signPersonalToken(user, rememberMe, sid)
+    : signStoreToken(user, rememberMe, sid);
+  if (sid) {
+    await touchAuthSessionExpiry(sid, accessToken.expiresAt);
   }
-  return signStoreToken(user, rememberMe, sid);
+  return accessToken;
 }

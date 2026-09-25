@@ -55,9 +55,24 @@ export async function createAuthSession(input: {
   return row.id;
 }
 
+/**
+ * Keep DB session expiry in lockstep with the JWT cookie.
+ * Sliding renewal must call this whenever a new access token is issued.
+ */
+export async function touchAuthSessionExpiry(sid: string, expiresAt: Date): Promise<void> {
+  await prisma.authSession
+    .update({
+      where: { id: sid },
+      data: { expiresAt, lastActiveAt: new Date() },
+    })
+    .catch(() => undefined);
+}
+
 export async function assertSessionUsable(input: {
   sid: string;
   user: AuthPrincipal;
+  /** When set, heal DB expiry that lagged behind a renewed (still-valid) JWT. */
+  jwtExpiresAt?: Date;
 }): Promise<void> {
   const row = await prisma.authSession.findUnique({
     where: { id: input.sid },
@@ -74,7 +89,13 @@ export async function assertSessionUsable(input: {
     throw ApiError.unauthorized('Sessiyangiz muddati tugadi. Iltimos, qayta kiring.');
   }
   if (row.expiresAt.getTime() <= Date.now()) {
-    throw ApiError.unauthorized('Sessiyangiz muddati tugadi. Iltimos, qayta kiring.');
+    // Pre-fix renewals updated the cookie JWT but not auth_sessions.expiresAt.
+    // If the JWT is still valid, realign DB expiry instead of forcing a logout.
+    if (input.jwtExpiresAt && input.jwtExpiresAt.getTime() > Date.now()) {
+      await touchAuthSessionExpiry(row.id, input.jwtExpiresAt);
+    } else {
+      throw ApiError.unauthorized('Sessiyangiz muddati tugadi. Iltimos, qayta kiring.');
+    }
   }
   if (isPersonalAuth(input.user)) {
     if (row.identityId !== input.user.identityId) {

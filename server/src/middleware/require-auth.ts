@@ -103,7 +103,7 @@ export const requireAuth: RequestHandler = asyncHandler(async (req, res, next) =
   }
 
   if (isDueForRenewal(session.claims)) {
-    const renewed = renewSession(session.user, session.claims.rememberMe, session.claims.sid);
+    const renewed = await renewSession(session.user, session.claims.rememberMe, session.claims.sid);
     setAuthCookie(res, renewed.token, renewed.expiresAt);
   }
 
