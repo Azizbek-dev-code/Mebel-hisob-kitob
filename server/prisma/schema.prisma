@@ -2149,6 +2149,7 @@ model WorkerActivity {
 
   @@index([storeId, workerId, createdAt])
   @@index([storeId, createdAt])
+  @@index([storeId, relatedSaleId])
   @@map("worker_activities")
 }
 
@@ -2499,6 +2500,8 @@ model Sale {
   @@index([storeId, paymentStatus])
   @@index([storeId, customerId])
   @@index([storeId, sellerId])
+  @@index([storeId, installerId])
+  @@index([storeId, deliveryPersonId])
   @@index([storeId, assemblyStatus])
   @@index([storeId, deliveryStatus])
   @@index([storeId, deliveryDueDate])
@@ -3291,6 +3294,7 @@ model ReferralCommission {
 
   @@unique([sourceType, sourceId])
   @@index([referrerIdentityId, status])
+  @@index([withdrawalId, status])
   @@map("referral_commissions")
 }
 
@@ -3637,6 +3641,7 @@ model TelegramPendingLink {
   @@index([telegramUserId, expiresAt])
   @@index([tokenHash])
   @@index([expiresAt])
+  @@index([identityId])
   @@map("telegram_pending_links")
 }
 

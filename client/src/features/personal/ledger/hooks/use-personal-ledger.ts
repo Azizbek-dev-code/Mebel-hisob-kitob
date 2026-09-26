@@ -26,7 +26,13 @@ export const personalLedgerKeys = {
 };
 
 function invalidateLedger(queryClient: ReturnType<typeof useQueryClient>) {
-  void queryClient.invalidateQueries({ queryKey: ['personal'] });
+  void queryClient.invalidateQueries({ queryKey: personalLedgerKeys.summary });
+  void queryClient.invalidateQueries({ queryKey: ['personal', 'history'] });
+  void queryClient.invalidateQueries({ queryKey: personalLedgerKeys.wallets });
+  void queryClient.invalidateQueries({ queryKey: ['personal', 'categories'] });
+  void queryClient.invalidateQueries({ queryKey: ['personal', 'entries'] });
+  void queryClient.invalidateQueries({ queryKey: ['personal', 'transfers'] });
+  void queryClient.invalidateQueries({ queryKey: ['personal', 'notifications'] });
 }
 
 export function usePersonalSummary() {
@@ -43,10 +49,11 @@ export function usePersonalHistory(query: PersonalHistoryListQuery) {
   });
 }
 
-export function usePersonalWallets() {
+export function usePersonalWallets(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: personalLedgerKeys.wallets,
     queryFn: ({ signal }) => personalLedgerService.wallets(signal),
+    enabled: options?.enabled ?? true,
   });
 }
 
@@ -67,10 +74,14 @@ export function useUpdatePersonalWallet() {
   });
 }
 
-export function usePersonalCategories(kind?: PersonalCategoryKind) {
+export function usePersonalCategories(
+  kind?: PersonalCategoryKind,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: personalLedgerKeys.categories(kind),
     queryFn: ({ signal }) => personalLedgerService.categories(kind, signal),
+    enabled: options?.enabled ?? true,
   });
 }
 

@@ -105,9 +105,16 @@ const envSchema = z.object({
   PRESENCE_HEARTBEAT_SECONDS: z.coerce.number().int().positive().max(300).default(45),
   ANALYTICS_IDLE_TIMEOUT: z.coerce.number().int().positive().max(3600).default(300),
   ANALYTICS_EVENT_RETENTION_DAYS: z.coerce.number().int().positive().max(730).default(90),
+
+  /**
+   * Have I Been Pwned k-anonymity password check on register/change/reset.
+   * Login never uses this. Default: on everywhere except test (tests mock or skip).
+   */
+  HIBP_PASSWORD_CHECK_ENABLED: booleanFromString.optional(),
 });
 
-export type Env = z.infer<typeof envSchema> & {
+export type Env = Omit<z.infer<typeof envSchema>, 'HIBP_PASSWORD_CHECK_ENABLED'> & {
+  HIBP_PASSWORD_CHECK_ENABLED: boolean;
   isDevelopment: boolean;
   isProduction: boolean;
   isTest: boolean;
@@ -158,6 +165,8 @@ function parseEnv(): Env {
 
   return {
     ...parsed,
+    HIBP_PASSWORD_CHECK_ENABLED:
+      parsed.HIBP_PASSWORD_CHECK_ENABLED ?? parsed.NODE_ENV !== 'test',
     isDevelopment: parsed.NODE_ENV === 'development',
     isProduction: parsed.NODE_ENV === 'production',
     isTest: parsed.NODE_ENV === 'test',

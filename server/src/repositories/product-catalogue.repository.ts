@@ -18,7 +18,7 @@ import {
   type UpdateProductRequest,
 } from '@furniture-erp/shared';
 import { DEFAULT_PRODUCT_CATEGORIES } from '@furniture-erp/shared';
-import type { Prisma, Product, ProductCategory, ProductStatus } from '@prisma/client';
+import { Prisma, type Product, type ProductCategory, type ProductStatus } from '@prisma/client';
 
 import { fromDbMoney, toDbMoney } from '../lib/money-mapper.js';
 import { prisma } from '../lib/prisma.js';
@@ -128,30 +128,31 @@ function buildCatalogueWhere(
 }
 
 export async function summarizeCatalogue(storeId: string): Promise<ProductCatalogueSummary> {
-  const products = await prisma.product.findMany({
-    where: { storeId },
-    select: { status: true, trackStock: true, stockQty: true, minStockQty: true },
-  });
-
-  let activeCount = 0;
-  let archivedCount = 0;
-  let lowStockCount = 0;
-  let outOfStockCount = 0;
-
-  for (const product of products) {
-    if (product.status === 'ACTIVE') activeCount += 1;
-    else archivedCount += 1;
-    if (product.status !== 'ACTIVE') continue;
-    const status = deriveStockStatus(product);
-    if (status === 'LOW_STOCK') lowStockCount += 1;
-    if (status === 'OUT_OF_STOCK') outOfStockCount += 1;
-  }
+  const [totalProducts, activeCount, archivedCount, outOfStockCount, lowStockRows] =
+    await Promise.all([
+      prisma.product.count({ where: { storeId } }),
+      prisma.product.count({ where: { storeId, status: 'ACTIVE' } }),
+      prisma.product.count({ where: { storeId, status: 'ARCHIVED' } }),
+      prisma.product.count({
+        where: { storeId, status: 'ACTIVE', trackStock: true, stockQty: { lte: 0 } },
+      }),
+      prisma.$queryRaw<[{ count: bigint }]>`
+        SELECT COUNT(*)::bigint AS count
+        FROM products
+        WHERE "storeId" = ${storeId}
+          AND status::text = 'ACTIVE'
+          AND "trackStock" = true
+          AND "stockQty" > 0
+          AND "minStockQty" > 0
+          AND "stockQty" <= "minStockQty"
+      `,
+    ]);
 
   return {
-    totalProducts: products.length,
+    totalProducts,
     activeCount,
     archivedCount,
-    lowStockCount,
+    lowStockCount: Number(lowStockRows[0]?.count ?? 0n),
     outOfStockCount,
   };
 }
@@ -164,7 +165,7 @@ export async function listCatalogueProducts(
   const where = buildCatalogueWhere(storeId, query);
   const stockFilter = query.stockFilter;
 
-  // When comparing stockQty to minStockQty, fetch a wider page then filter.
+  // When comparing stockQty to minStockQty, push the filter into SQL then paginate.
   const needsStatusRefine = stockFilter === 'LOW_STOCK' || stockFilter === 'IN_STOCK';
 
   if (!needsStatusRefine) {
@@ -186,23 +187,66 @@ export async function listCatalogueProducts(
     };
   }
 
-  const all = await prisma.product.findMany({
-    where,
-    include: productInclude,
-    orderBy: [{ name: 'asc' }],
-  });
-  const refined = all.filter((product) => {
-    const status = deriveStockStatus(product);
-    return stockFilter === 'LOW_STOCK'
-      ? status === 'LOW_STOCK'
-      : status === 'IN_STOCK';
-  });
-  const slice = refined.slice((page - 1) * pageSize, page * pageSize);
-  const summary = await summarizeCatalogue(storeId);
+  const statusSql =
+    stockFilter === 'LOW_STOCK'
+      ? Prisma.sql`"stockQty" > 0 AND "minStockQty" > 0 AND "stockQty" <= "minStockQty"`
+      : Prisma.sql`(
+          "minStockQty" <= 0
+          OR "stockQty" > "minStockQty"
+        ) AND "stockQty" > 0`;
+
+  const baseWhere = buildCatalogueWhere(storeId, { ...query, stockFilter: 'ALL' });
+  // Re-apply trackStock + in-stock base that LOW/IN filters need.
+  const trackedWhere: Prisma.ProductWhereInput = {
+    ...baseWhere,
+    trackStock: true,
+    stockQty: { gt: 0 },
+  };
+
+  const status = query.status ?? 'ACTIVE';
+  const [summary, idRows] = await Promise.all([
+    summarizeCatalogue(storeId),
+    prisma.$queryRaw<{ id: string }[]>`
+      SELECT id
+      FROM products
+      WHERE "storeId" = ${storeId}
+        AND "trackStock" = true
+        AND "stockQty" > 0
+        AND (${statusSql})
+        ${status === 'ALL' ? Prisma.empty : Prisma.sql`AND status::text = ${status}`}
+        ${query.categoryId ? Prisma.sql`AND "categoryId" = ${query.categoryId}` : Prisma.empty}
+        ${
+          query.search?.trim()
+            ? Prisma.sql`AND (
+                name ILIKE ${`%${query.search.trim()}%`}
+                OR COALESCE(sku, '') ILIKE ${`%${query.search.trim()}%`}
+              )`
+            : Prisma.empty
+        }
+      ORDER BY name ASC
+    `,
+  ]);
+
+  // Extra filters from buildCatalogueWhere (e.g. status already in SQL); keep count honest.
+  const refinedIds = idRows.map((row) => row.id);
+  const total = refinedIds.length;
+  const pageIds = refinedIds.slice((page - 1) * pageSize, page * pageSize);
+  const rows =
+    pageIds.length === 0
+      ? []
+      : await prisma.product.findMany({
+          where: { ...trackedWhere, id: { in: pageIds } },
+          include: productInclude,
+          orderBy: [{ name: 'asc' }],
+        });
+  // Preserve SQL order.
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const ordered = pageIds.map((id) => byId.get(id)).filter(Boolean) as ProductWithCategory[];
+
   return {
     summary,
-    items: slice.map(toProductListItem),
-    meta: buildPaginationMeta(page, pageSize, refined.length),
+    items: ordered.map(toProductListItem),
+    meta: buildPaginationMeta(page, pageSize, total),
   };
 }
 

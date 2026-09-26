@@ -81,6 +81,33 @@ async function monthSpentSom(
   return fromDbMoneySum(grouped._sum.amount);
 }
 
+/** One monthly expense scan for all budgets (TOTAL + per-category). */
+async function monthExpenseSpendMap(
+  workspaceId: string,
+  db: DbClient,
+  now = new Date(),
+): Promise<{ totalSom: number; byCategoryId: Map<string, number> }> {
+  const { start, end } = monthBounds(now);
+  const grouped = await db.personalEntry.groupBy({
+    by: ['categoryId'],
+    where: {
+      workspaceId,
+      status: ExpenseStatus.ACTIVE,
+      type: PersonalEntryType.EXPENSE,
+      occurredAt: { gte: start, lte: end },
+    },
+    _sum: { amount: true },
+  });
+  const byCategoryId = new Map<string, number>();
+  let totalSom = 0;
+  for (const row of grouped) {
+    const amount = fromDbMoneySum(row._sum.amount);
+    totalSom += amount;
+    if (row.categoryId) byCategoryId.set(row.categoryId, amount);
+  }
+  return { totalSom, byCategoryId };
+}
+
 function toBudgetDto(
   row: {
     id: string;
@@ -208,13 +235,13 @@ export async function listPersonalBudgets(
     include: budgetInclude,
     orderBy: [{ isActive: 'desc' }, { createdAt: 'asc' }],
   });
+  const spend = await monthExpenseSpendMap(workspaceId, db);
   const items: PersonalBudgetDto[] = [];
   for (const row of rows) {
-    const spentSom = await monthSpentSom(
-      workspaceId,
-      row.kind === PersonalBudgetKind.CATEGORY ? row.categoryId : null,
-      db,
-    );
+    const spentSom =
+      row.kind === PersonalBudgetKind.CATEGORY && row.categoryId
+        ? (spend.byCategoryId.get(row.categoryId) ?? 0)
+        : spend.totalSom;
     items.push(toBudgetDto(row, spentSom, period));
   }
   return items;

@@ -38,6 +38,7 @@ import {
   assertCanReviewStoreCreationRequests,
   canReviewStoreCreationRequests,
 } from './platform-authorization.js';
+import { assertPasswordNotCompromised } from './security/compromised-password.service.js';
 import { tryEnsureUserOnBusinessWorkspace } from '../modules/accounts/account-layer.service.js';
 import {
   attributeRegistration,
@@ -133,6 +134,7 @@ export async function createStoreRequest(
     throw ApiError.conflict("Shu nomdagi do'kon uchun kutilayotgan ariza allaqachon mavjud");
   }
 
+  await assertPasswordNotCompromised(input.password);
   const passwordHash = await hashPassword(input.password);
 
   const record = await storeCreationRepository.createPendingRequest({

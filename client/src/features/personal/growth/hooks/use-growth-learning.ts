@@ -5,6 +5,7 @@ import type {
 } from '@furniture-erp/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { personalGrowthXpKeys } from '@/features/personal/growth/hooks/use-growth-xp';
 import { personalGrowthLearningService } from '@/services/personal-growth-learning.service';
 
 export const personalGrowthLearningKeys = {
@@ -16,7 +17,7 @@ export const personalGrowthLearningKeys = {
 
 function invalidateLearning(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: personalGrowthLearningKeys.all });
-  void queryClient.invalidateQueries({ queryKey: ['personal'] });
+  void queryClient.invalidateQueries({ queryKey: personalGrowthXpKeys.all });
 }
 
 export function useGrowthLearningGoals(includeArchived = false) {

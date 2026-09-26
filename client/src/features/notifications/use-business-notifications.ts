@@ -19,8 +19,15 @@ export function useBusinessNotifications() {
 }
 
 export function useBusinessUnreadCount() {
-  const query = useBusinessNotifications();
-  const count = query.data?.unreadCount ?? 0;
+  const { data: user } = useCurrentUser();
+  const enabled = Boolean(user && !isPersonalAuth(user) && user.role !== UserRole.PLATFORM_ADMIN);
+  const query = useQuery({
+    queryKey: businessNotificationKeys.all,
+    queryFn: ({ signal }) => businessNotificationsService.list(signal),
+    enabled,
+    select: (data) => data.unreadCount,
+  });
+  const count = query.data ?? 0;
   return { count, badge: formatCountBadge(count), isPending: query.isPending };
 }
 

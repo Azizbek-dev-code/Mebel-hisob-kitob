@@ -21,6 +21,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import { hashPassword } from '../../lib/password.js';
 import { prisma as defaultPrisma } from '../../lib/prisma.js';
 import { recordAudit } from '../../services/audit.service.js';
+import { assertPasswordNotCompromised } from '../../services/security/compromised-password.service.js';
 import { ApiError } from '../../utils/api-error.js';
 import {
   ensureIdentityForUser,
@@ -111,6 +112,7 @@ export async function registerPersonalAccount(
   const name = resolveWorkspaceName(fullName, input.name);
 
   await assertEmailAvailable(email, db);
+  await assertPasswordNotCompromised(input.password);
   const passwordHash = await hashPassword(input.password);
 
   const created = await db.$transaction(async (tx) => {

@@ -4,6 +4,7 @@ import type {
 } from '@furniture-erp/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { personalGrowthXpKeys } from '@/features/personal/growth/hooks/use-growth-xp';
 import { personalGrowthTodoService } from '@/services/personal-growth-todo.service';
 
 export const personalGrowthTodoKeys = {
@@ -14,7 +15,7 @@ export const personalGrowthTodoKeys = {
 
 function invalidateTodos(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: personalGrowthTodoKeys.all });
-  void queryClient.invalidateQueries({ queryKey: ['personal'] });
+  void queryClient.invalidateQueries({ queryKey: personalGrowthXpKeys.all });
 }
 
 export function useGrowthTodos(status?: string) {

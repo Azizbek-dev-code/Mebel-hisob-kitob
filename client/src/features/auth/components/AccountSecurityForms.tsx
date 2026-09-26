@@ -1,5 +1,6 @@
 import { isEmailVerified, splitFullName } from '@furniture-erp/shared';
 import { useQueryClient } from '@tanstack/react-query';
+import { Eye, EyeOff } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -436,11 +437,20 @@ export function AccountProfileForm() {
   );
 }
 
-export function ChangePasswordForm() {
+export function ChangePasswordForm({
+  variant = 'default',
+}: {
+  /** Platform admin uses a dedicated endpoint + forces re-login. */
+  variant?: 'default' | 'platformAdmin';
+}) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newPasswordConfirmation, setNewPasswordConfirmation] = useState('');
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, setPending] = useState(false);
@@ -455,11 +465,28 @@ export function ChangePasswordForm() {
     }
     setPending(true);
     try {
-      await accountService.changePassword({ currentPassword, newPassword, newPasswordConfirmation });
+      const result =
+        variant === 'platformAdmin'
+          ? await accountService.changePlatformAdminPassword({
+              currentPassword,
+              newPassword,
+              newPasswordConfirmation,
+            })
+          : await accountService.changePassword({
+              currentPassword,
+              newPassword,
+              newPasswordConfirmation,
+            });
       setCurrentPassword('');
       setNewPassword('');
       setNewPasswordConfirmation('');
       setSaved(true);
+      if (result.requiresReauth) {
+        queryClient.setQueryData(authQueryKeys.currentUser, null);
+        window.setTimeout(() => {
+          window.location.assign('/login');
+        }, 1200);
+      }
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : t('common.retry'));
     } finally {
@@ -468,44 +495,39 @@ export function ChangePasswordForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-3">
+    <form onSubmit={onSubmit} className="space-y-3" autoComplete="off">
       {error ? <p className="text-sm text-danger-700">{error}</p> : null}
-      {saved ? <p className="text-sm text-emerald-700">{t('auth.passwordChanged')}</p> : null}
-      <label className="block space-y-1">
-        <span className="text-sm font-medium text-ink">{t('auth.currentPassword')}</span>
-        <input
-          type="password"
-          autoComplete="current-password"
-          value={currentPassword}
-          onChange={(e) => setCurrentPassword(e.target.value)}
-          className={fieldClass}
-          required
-        />
-      </label>
-      <label className="block space-y-1">
-        <span className="text-sm font-medium text-ink">{t('auth.newPassword')}</span>
-        <input
-          type="password"
-          autoComplete="new-password"
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-          className={fieldClass}
-          required
-          minLength={8}
-        />
-      </label>
-      <label className="block space-y-1">
-        <span className="text-sm font-medium text-ink">{t('auth.confirmPassword')}</span>
-        <input
-          type="password"
-          autoComplete="new-password"
-          value={newPasswordConfirmation}
-          onChange={(e) => setNewPasswordConfirmation(e.target.value)}
-          className={fieldClass}
-          required
-          minLength={8}
-        />
-      </label>
+      {saved ? (
+        <p className="text-sm text-emerald-700">
+          {t('auth.passwordChangedReauth')}
+        </p>
+      ) : null}
+      <PasswordField
+        label={t('auth.currentPassword')}
+        value={currentPassword}
+        onChange={setCurrentPassword}
+        visible={showCurrent}
+        onToggleVisible={() => setShowCurrent((v) => !v)}
+        autoComplete="current-password"
+      />
+      <PasswordField
+        label={t('auth.newPassword')}
+        value={newPassword}
+        onChange={setNewPassword}
+        visible={showNew}
+        onToggleVisible={() => setShowNew((v) => !v)}
+        autoComplete="new-password"
+        minLength={8}
+      />
+      <PasswordField
+        label={t('auth.confirmPassword')}
+        value={newPasswordConfirmation}
+        onChange={setNewPasswordConfirmation}
+        visible={showConfirm}
+        onToggleVisible={() => setShowConfirm((v) => !v)}
+        autoComplete="new-password"
+        minLength={8}
+      />
       <button
         type="submit"
         disabled={pending}
@@ -514,5 +536,49 @@ export function ChangePasswordForm() {
         {t('auth.changePassword')}
       </button>
     </form>
+  );
+}
+
+function PasswordField({
+  label,
+  value,
+  onChange,
+  visible,
+  onToggleVisible,
+  autoComplete,
+  minLength,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  visible: boolean;
+  onToggleVisible: () => void;
+  autoComplete: string;
+  minLength?: number;
+}) {
+  const { t } = useTranslation();
+  return (
+    <label className="block space-y-1">
+      <span className="text-sm font-medium text-ink">{label}</span>
+      <div className="relative">
+        <input
+          type={visible ? 'text' : 'password'}
+          autoComplete={autoComplete}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={`${fieldClass} pr-10`}
+          required
+          minLength={minLength}
+        />
+        <button
+          type="button"
+          className="absolute inset-y-0 right-0 flex items-center px-3 text-ink-muted hover:text-ink"
+          onClick={onToggleVisible}
+          aria-label={visible ? t('auth.hidePassword') : t('auth.showPassword')}
+        >
+          {visible ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}
+        </button>
+      </div>
+    </label>
   );
 }

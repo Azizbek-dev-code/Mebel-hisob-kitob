@@ -23,8 +23,10 @@ import { findSignInCandidate } from '../repositories/user.repository.js';
 import { ApiError } from '../utils/api-error.js';
 
 import { consumeEmailCode, issueEmailCode } from './auth-email-code.service.js';
+import * as authSessions from './auth-sessions.service.js';
+import { assertPasswordNotCompromised } from './security/compromised-password.service.js';
 
-function assertNewPassword(password: string, confirmation: string): void {
+async function assertNewPassword(password: string, confirmation: string): Promise<void> {
   if (password.length < PERSONAL_PASSWORD_MIN || password.length > PERSONAL_PASSWORD_MAX) {
     throw ApiError.validation(`Parol kamida ${PERSONAL_PASSWORD_MIN} belgidan iborat bo'lishi kerak`, [
       { field: 'newPassword', message: `Kamida ${PERSONAL_PASSWORD_MIN} belgi` },
@@ -35,6 +37,7 @@ function assertNewPassword(password: string, confirmation: string): void {
       { field: 'newPasswordConfirmation', message: 'Parollar mos kelmadi' },
     ]);
   }
+  await assertPasswordNotCompromised(password);
 }
 
 async function resolveIdentity(user: AuthPrincipal): Promise<{
@@ -94,7 +97,16 @@ export async function changePasswordWithCurrent(
   user: AuthPrincipal,
   input: ChangePasswordRequest,
 ): Promise<void> {
-  assertNewPassword(input.newPassword, input.newPasswordConfirmation);
+  if (input.newPassword !== input.newPasswordConfirmation) {
+    throw ApiError.validation('Parollar mos kelmadi', [
+      { field: 'newPasswordConfirmation', message: 'Parollar mos kelmadi' },
+    ]);
+  }
+  if (input.currentPassword === input.newPassword) {
+    throw ApiError.validation('Yangi parol joriy parol bilan bir xil bo‘lmasligi kerak', [
+      { field: 'newPassword', message: 'Yangi parol joriydan farq qilishi kerak' },
+    ]);
+  }
 
   if (isPersonalAuth(user)) {
     const identity = await prisma.identity.findUnique({
@@ -107,10 +119,12 @@ export async function changePasswordWithCurrent(
     if (!(await verifyPassword(input.currentPassword, identity.passwordHash))) {
       throw ApiError.unauthorized('Incorrect username or password.');
     }
+    await assertNewPassword(input.newPassword, input.newPasswordConfirmation);
     await prisma.identity.update({
       where: { id: identity.id },
       data: { passwordHash: await hashPassword(input.newPassword) },
     });
+    await authSessions.revokeAllSessions(user);
     return;
   }
 
@@ -122,10 +136,12 @@ export async function changePasswordWithCurrent(
   if (!(await verifyPassword(input.currentPassword, record.passwordHash))) {
     throw ApiError.unauthorized('Incorrect username or password.');
   }
+  await assertNewPassword(input.newPassword, input.newPasswordConfirmation);
   await prisma.user.update({
     where: { id: record.id },
     data: { passwordHash: await hashPassword(input.newPassword) },
   });
+  await authSessions.revokeAllSessions(user);
 }
 
 /**
@@ -150,7 +166,7 @@ export async function requestPasswordReset(emailRaw: string): Promise<void> {
 }
 
 export async function resetPasswordWithCode(input: ResetPasswordRequest): Promise<void> {
-  assertNewPassword(input.newPassword, input.newPasswordConfirmation);
+  await assertNewPassword(input.newPassword, input.newPasswordConfirmation);
   const email = normalizeEmail(input.email);
   if (!email) {
     throw ApiError.validation('Emailni kiriting', [{ field: 'email', message: 'Emailni kiriting' }]);
@@ -169,6 +185,7 @@ export async function resetPasswordWithCode(input: ResetPasswordRequest): Promis
       where: { id: storeUser.id },
       data: { passwordHash: digest },
     });
+    await authSessions.revokeAllSessionsForUserId(storeUser.id);
     return;
   }
 
@@ -178,6 +195,7 @@ export async function resetPasswordWithCode(input: ResetPasswordRequest): Promis
       where: { id: personal.id },
       data: { passwordHash: digest },
     });
+    await authSessions.revokeAllSessionsForIdentityId(personal.id);
   }
 }
 

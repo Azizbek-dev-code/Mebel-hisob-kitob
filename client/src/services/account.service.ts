@@ -16,7 +16,15 @@ export const accountService = {
     apiClient.patch<CurrentUserResponse>('/me/account', { body }),
 
   changePassword: (body: ChangePasswordRequest) =>
-    apiClient.post<void>('/auth/change-password', { body }),
+    apiClient.post<{ ok: true; requiresReauth: true; message: string }>('/auth/change-password', {
+      body,
+    }),
+
+  changePlatformAdminPassword: (body: ChangePasswordRequest) =>
+    apiClient.post<{ ok: true; requiresReauth: true; message: string }>(
+      '/platform/auth/change-password',
+      { body },
+    ),
 
   forgotPassword: (body: ForgotPasswordRequest) =>
     apiClient.post<{ ok: true }>('/auth/forgot-password', { body }),

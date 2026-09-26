@@ -60,7 +60,10 @@ export function PresenceTracker() {
   const { pathname } = useLocation();
   const lastInteract = useRef(Date.now());
   const lastRoute = useRef<string | null>(null);
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
 
+  // Heartbeat interval + interaction listeners — keyed only on user, not pathname.
   useEffect(() => {
     if (isTestEnv() || !user) return undefined;
 
@@ -71,34 +74,34 @@ export function PresenceTracker() {
     window.addEventListener('keydown', onInteract);
 
     const send = (forceEvent = false) => {
+      const route = pathnameRef.current;
       const visible = document.visibilityState === 'visible';
       const active = visible && Date.now() - lastInteract.current < IDLE_MS;
-      const ctx = accountContext(pathname);
+      const ctx = accountContext(route);
       void presenceService
         .heartbeat({
           clientSessionId: clientSessionId(),
           visible,
           active,
-          route: pathname.slice(0, 160),
+          route: route.slice(0, 160),
           accountType: ctx.accountType,
         })
         .catch(() => undefined);
 
       if (forceEvent && visible) {
-        const eventType = eventTypeForRoute(pathname);
+        const eventType = eventTypeForRoute(route);
         if (eventType) {
           void presenceService
             .events({
               clientSessionId: clientSessionId(),
-              events: [{ eventType, route: pathname, feature: featureFromRoute(pathname) ?? undefined }],
+              events: [{ eventType, route, feature: featureFromRoute(route) ?? undefined }],
             })
             .catch(() => undefined);
         }
       }
     };
 
-    send(lastRoute.current !== pathname);
-    lastRoute.current = pathname;
+    send(false);
 
     const timer = window.setInterval(() => send(false), HEARTBEAT_MS);
     const onVis = () => {
@@ -112,6 +115,39 @@ export function PresenceTracker() {
       document.removeEventListener('visibilitychange', onVis);
       window.clearInterval(timer);
     };
+  }, [user]);
+
+  // Route-change analytics only — does not reset the heartbeat interval.
+  useEffect(() => {
+    if (isTestEnv() || !user) return;
+    if (lastRoute.current === pathname) return;
+
+    const visible = document.visibilityState === 'visible';
+    const active = visible && Date.now() - lastInteract.current < IDLE_MS;
+    const ctx = accountContext(pathname);
+    void presenceService
+      .heartbeat({
+        clientSessionId: clientSessionId(),
+        visible,
+        active,
+        route: pathname.slice(0, 160),
+        accountType: ctx.accountType,
+      })
+      .catch(() => undefined);
+
+    if (visible) {
+      const eventType = eventTypeForRoute(pathname);
+      if (eventType) {
+        void presenceService
+          .events({
+            clientSessionId: clientSessionId(),
+            events: [{ eventType, route: pathname, feature: featureFromRoute(pathname) ?? undefined }],
+          })
+          .catch(() => undefined);
+      }
+    }
+
+    lastRoute.current = pathname;
   }, [user, pathname]);
 
   return null;

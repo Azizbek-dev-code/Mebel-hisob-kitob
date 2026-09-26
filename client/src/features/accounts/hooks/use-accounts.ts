@@ -7,12 +7,13 @@ import { accountsService } from '@/services/accounts.service';
 
 export const accountsQueryKey = ['accounts'] as const;
 
-export function useAccountWorkspaces() {
+export function useAccountWorkspaces(options?: { enabled?: boolean }) {
   const { data: user } = useCurrentUser();
+  const enabled = options?.enabled ?? Boolean(user);
   return useQuery({
     queryKey: accountsQueryKey,
     queryFn: ({ signal }) => accountsService.list(signal),
-    enabled: Boolean(user),
+    enabled: Boolean(user) && enabled,
   });
 }
 

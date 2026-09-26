@@ -11,6 +11,7 @@ import type {
 } from '@furniture-erp/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { personalGrowthXpKeys } from '@/features/personal/growth/hooks/use-growth-xp';
 import { personalGrowthHabitsService } from '@/services/personal-growth-habits.service';
 
 export const personalGrowthHabitsKeys = {
@@ -27,7 +28,7 @@ export const personalGrowthHabitsKeys = {
 
 function invalidateHabits(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: personalGrowthHabitsKeys.all });
-  void queryClient.invalidateQueries({ queryKey: ['personal'] });
+  void queryClient.invalidateQueries({ queryKey: personalGrowthXpKeys.all });
 }
 
 export function useGrowthHabits(includeArchived = false) {

@@ -138,6 +138,15 @@ const CUSTOMERS = [
 ] as const;
 
 async function main(): Promise<void> {
+  if (env.isProduction) {
+    console.error(
+      'Refusing to run prisma/seed-demo.ts in production.\n' +
+        'Demo seeds use known passwords and must only run in development/test.',
+    );
+    process.exitCode = 1;
+    return;
+  }
+
   console.log('Seeding database (demo)…');
 
   // --- Store ----------------------------------------------------------------

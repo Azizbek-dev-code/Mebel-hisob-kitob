@@ -198,3 +198,27 @@ export async function revokeOtherSessions(user: AuthPrincipal, currentSid: strin
     data: { revokedAt: new Date() },
   });
 }
+
+/** Revoke every active session for this principal (e.g. after password change). */
+export async function revokeAllSessions(user: AuthPrincipal): Promise<void> {
+  await prisma.authSession.updateMany({
+    where: { ...ownerWhere(user), revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+}
+
+/** Revoke every active session for a store user id (worker password reset). */
+export async function revokeAllSessionsForUserId(userId: string): Promise<void> {
+  await prisma.authSession.updateMany({
+    where: { userId, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+}
+
+/** Revoke every active session for a personal identity. */
+export async function revokeAllSessionsForIdentityId(identityId: string): Promise<void> {
+  await prisma.authSession.updateMany({
+    where: { identityId, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+}

@@ -23,8 +23,8 @@ export function AccountSwitcher({
 }) {
   const { t } = useTranslation();
   const { data: user } = useCurrentUser();
-  const accounts = useAccountWorkspaces();
   const [isOpen, setOpen] = useState(false);
+  const accounts = useAccountWorkspaces({ enabled: isOpen });
   const containerRef = useRef<HTMLDivElement>(null);
   const items = accounts.data?.items ?? [];
   const current = items.find((item) => item.id === currentWorkspaceId(user, items));

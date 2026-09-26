@@ -1,7 +1,7 @@
 import { UserRole } from '@furniture-erp/shared';
 import type { RequestHandler } from 'express';
 
-import { assertCanUseFeature } from '../services/entitlement.service.js';
+import { snapshotAllowsFeature } from '../repositories/user.repository.js';
 import { ApiError } from '../utils/api-error.js';
 
 /**
@@ -12,7 +12,12 @@ import { ApiError } from '../utils/api-error.js';
  * calling the API directly. Hiding a sidebar link is a UI convenience, never the
  * boundary — this middleware is the boundary.
  *
+ * Uses the subscription snapshot already loaded on `req.auth` during
+ * authenticate() so feature-gated reads do not re-query plan features.
  * PLATFORM_ADMIN is exempt: it operates the control plane and holds no plan.
+ *
+ * Expiry persistence still runs on write/billing paths that call
+ * getCurrentSubscription(); this gate only checks the auth-time snapshot.
  */
 export function requireFeature(featureKey: string): RequestHandler {
   return (req, _res, next) => {
@@ -24,6 +29,14 @@ export function requireFeature(featureKey: string): RequestHandler {
       next();
       return;
     }
-    assertCanUseFeature(req.auth.storeId, featureKey).then(() => next(), next);
+    if (!snapshotAllowsFeature(req.auth.subscription, featureKey)) {
+      if (req.auth.subscription && !req.auth.subscription.canWrite) {
+        next(ApiError.subscriptionRequired());
+        return;
+      }
+      next(ApiError.featureNotIncluded());
+      return;
+    }
+    next();
   };
 }

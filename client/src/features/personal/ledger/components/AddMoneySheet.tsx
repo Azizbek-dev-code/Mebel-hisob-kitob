@@ -35,13 +35,14 @@ export function AddMoneySheet({
 }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<SheetTab | null>(null);
-  const wallets = usePersonalWallets();
+  const wallets = usePersonalWallets({ enabled: open });
   const categories = usePersonalCategories(
     tab === 'TRANSFER' || tab == null
       ? undefined
       : tab === 'INCOME'
         ? PersonalCategoryKind.INCOME
         : PersonalCategoryKind.EXPENSE,
+    { enabled: open },
   );
   const createEntry = useCreatePersonalEntry();
   const createTransfer = useCreatePersonalTransfer();

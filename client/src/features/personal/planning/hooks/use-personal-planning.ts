@@ -15,7 +15,9 @@ export const personalPlanningKeys = {
 };
 
 function invalidatePlanning(queryClient: ReturnType<typeof useQueryClient>) {
-  void queryClient.invalidateQueries({ queryKey: ['personal'] });
+  void queryClient.invalidateQueries({ queryKey: personalPlanningKeys.budgets });
+  void queryClient.invalidateQueries({ queryKey: personalPlanningKeys.goals });
+  void queryClient.invalidateQueries({ queryKey: ['personal', 'notifications'] });
 }
 
 export function usePersonalBudgets() {

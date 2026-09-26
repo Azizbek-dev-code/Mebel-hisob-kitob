@@ -27,8 +27,10 @@ import { ApiError } from '../utils/api-error.js';
 import { tryEnsureUserOnBusinessWorkspace } from '../modules/accounts/account-layer.service.js';
 import { recordAudit } from './audit.service.js';
 import { assertAccountNotDeleted } from './account-deletion.service.js';
+import * as authSessions from './auth-sessions.service.js';
 import { assertCanCreateResource, assertCanUseFeature } from './entitlement.service.js';
 import * as sellerCommissionService from './seller-commission.service.js';
+import { assertPasswordNotCompromised } from './security/compromised-password.service.js';
 
 const WORKER_MANAGERS: ReadonlySet<string> = new Set([UserRole.ADMIN, UserRole.PLATFORM_ADMIN]);
 
@@ -141,6 +143,7 @@ export async function createWorker(
     throw ApiError.conflict('A worker with this email already exists');
   }
 
+  await assertPasswordNotCompromised(input.password);
   const passwordHash = await hashPassword(input.password);
   const fullName = buildFullName(input.firstName, input.lastName);
 
@@ -307,6 +310,7 @@ export async function resetWorkerPassword(
     throw ApiError.notFound('Worker not found');
   }
 
+  await assertPasswordNotCompromised(input.password);
   const passwordHash = await hashPassword(input.password);
   await prisma.$transaction(async (tx) => {
     await tx.user.update({ where: { id: workerId }, data: { passwordHash } });
@@ -321,6 +325,7 @@ export async function resetWorkerPassword(
       tx,
     );
   });
+  await authSessions.revokeAllSessionsForUserId(workerId);
 }
 
 export async function getMyProfile(storeId: string, workerId: string): Promise<WorkerDetail> {

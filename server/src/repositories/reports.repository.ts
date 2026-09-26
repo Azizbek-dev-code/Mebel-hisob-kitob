@@ -7,10 +7,10 @@ import {
 } from '@furniture-erp/shared';
 import {
   ExpenseStatus,
+  Prisma,
   PurchaseStatus,
   SaleStatus,
   StockMovementType,
-  type Prisma,
 } from '@prisma/client';
 
 import { fromDbMoney, fromDbMoneySum } from '../lib/money-mapper.js';
@@ -327,13 +327,12 @@ export async function aggregateSaleItemsByProduct(
   to: Date,
   limit = 50,
 ): Promise<ProductSaleAggregateRow[]> {
-  const items = await prisma.saleItem.findMany({
+  const groups = await prisma.saleItem.groupBy({
+    by: ['productId', 'productName'],
     where: {
       sale: salesInPeriod(storeId, from, to),
     },
-    select: {
-      productId: true,
-      productName: true,
+    _sum: {
       quantity: true,
       lineSaleTotal: true,
       lineCostTotal: true,
@@ -345,18 +344,18 @@ export async function aggregateSaleItemsByProduct(
     { productId: string | null; productName: string; quantity: number; revenue: number; cogs: number }
   >();
 
-  for (const item of items) {
-    const key = item.productId ?? `name:${item.productName}`;
+  for (const group of groups) {
+    const key = group.productId ?? `name:${group.productName}`;
     const current = map.get(key) ?? {
-      productId: item.productId,
-      productName: item.productName,
+      productId: group.productId,
+      productName: group.productName,
       quantity: 0,
       revenue: 0,
       cogs: 0,
     };
-    current.quantity += item.quantity;
-    current.revenue += fromDbMoney(item.lineSaleTotal);
-    current.cogs += fromDbMoney(item.lineCostTotal);
+    current.quantity += group._sum.quantity ?? 0;
+    current.revenue += fromDbMoneySum(group._sum.lineSaleTotal);
+    current.cogs += fromDbMoneySum(group._sum.lineCostTotal);
     map.set(key, current);
   }
 
@@ -444,47 +443,40 @@ export async function aggregateSalesByDay(
   from: Date,
   to: Date,
 ): Promise<DaySaleAggregateRow[]> {
-  const sales = await prisma.sale.findMany({
-    where: salesInPeriod(storeId, from, to),
-    select: {
-      saleDate: true,
-      totalSalePrice: true,
-      totalCostPrice: true,
-      grossProfit: true,
-    },
-  });
+  const rows = await prisma.$queryRaw<
+    Array<{
+      day_key: Date;
+      sales_count: bigint;
+      revenue: bigint | null;
+      cogs: bigint | null;
+      gross_profit: bigint | null;
+    }>
+  >`
+    SELECT
+      date_trunc('day', "saleDate" AT TIME ZONE 'UTC') AS day_key,
+      COUNT(*)::bigint AS sales_count,
+      COALESCE(SUM("totalSalePrice"), 0)::bigint AS revenue,
+      COALESCE(SUM("totalCostPrice"), 0)::bigint AS cogs,
+      COALESCE(SUM("grossProfit"), 0)::bigint AS gross_profit
+    FROM sales
+    WHERE "storeId" = ${storeId}
+      AND status::text IN (${Prisma.join(revenueStatuses.map((status) => Prisma.sql`${status}`))})
+      AND "saleDate" >= ${from}
+      AND "saleDate" < ${to}
+    GROUP BY 1
+    ORDER BY 1 ASC
+  `;
 
-  const map = new Map<
-    string,
-    { dayStart: Date; salesCount: number; revenue: number; cogs: number; grossProfit: number }
-  >();
-
-  for (const sale of sales) {
-    const key = sale.saleDate.toISOString().slice(0, 10);
-    const dayStart = new Date(`${key}T00:00:00.000Z`);
-    const current = map.get(key) ?? {
-      dayStart,
-      salesCount: 0,
-      revenue: 0,
-      cogs: 0,
-      grossProfit: 0,
+  return rows.map((row) => {
+    const key = row.day_key.toISOString().slice(0, 10);
+    return {
+      dayStart: new Date(`${key}T00:00:00.000Z`),
+      salesCount: Number(row.sales_count),
+      revenue: fromDbMoneySum(row.revenue),
+      cogs: fromDbMoneySum(row.cogs),
+      grossProfit: fromDbMoneySum(row.gross_profit),
     };
-    current.salesCount += 1;
-    current.revenue += fromDbMoney(sale.totalSalePrice);
-    current.cogs += fromDbMoney(sale.totalCostPrice);
-    current.grossProfit += fromDbMoney(sale.grossProfit);
-    map.set(key, current);
-  }
-
-  return [...map.values()]
-    .map((row) => ({
-      dayStart: row.dayStart,
-      salesCount: row.salesCount,
-      revenue: row.revenue,
-      cogs: row.cogs,
-      grossProfit: row.grossProfit,
-    }))
-    .sort((a, b) => a.dayStart.getTime() - b.dayStart.getTime());
+  });
 }
 
 export async function aggregateInventoryMovements(

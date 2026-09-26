@@ -39,6 +39,16 @@ async function setResponsibilities(
 }
 
 async function main(): Promise<void> {
+  if (env.isProduction) {
+    console.error(
+      'Refusing to run prisma/seed.ts in production.\n' +
+        'Seed resets admin passwords from SEED_* env defaults and must only run in development/test.\n' +
+        'Create or rotate the platform admin password from the admin panel instead.',
+    );
+    process.exitCode = 1;
+    return;
+  }
+
   console.log('Seeding database (minimal)…');
 
   // --- Store ----------------------------------------------------------------

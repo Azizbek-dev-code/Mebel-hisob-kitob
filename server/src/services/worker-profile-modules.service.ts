@@ -44,6 +44,45 @@ function startOfUtcMonth(d = new Date()): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
 }
 
+function commissionRefKey(referenceType: string, referenceId: string): string {
+  return `${referenceType}::${referenceId}`;
+}
+
+/**
+ * Batch-load open + any COMMISSION rows for a set of operational fee refs.
+ * Preserves findOpenCommissionByRef / findFirst semantics without N+1 loops.
+ */
+async function loadCommissionLedgerMaps(
+  storeId: string,
+  refs: Array<{ referenceType: string; referenceId: string }>,
+): Promise<{ open: Set<string>; any: Set<string> }> {
+  const open = new Set<string>();
+  const any = new Set<string>();
+  if (refs.length === 0) return { open, any };
+
+  const referenceIds = [...new Set(refs.map((ref) => ref.referenceId))];
+  const rows = await prisma.workerFinancialTransaction.findMany({
+    where: {
+      storeId,
+      type: WorkerFinancialTransactionType.COMMISSION,
+      referenceId: { in: referenceIds },
+    },
+    select: { referenceId: true, referenceType: true, isOpen: true },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  for (const row of rows) {
+    if (!row.referenceId || !row.referenceType) continue;
+    const key = commissionRefKey(row.referenceType, row.referenceId);
+    any.add(key);
+    // Match findOpenCommissionByRef: first open row in createdAt order.
+    if (row.isOpen) open.add(key);
+    // Also allow "any" lookups that omit referenceType (assembler path).
+    any.add(`*::${row.referenceId}`);
+  }
+  return { open, any };
+}
+
 async function storeRange(
   storeId: string,
   preset: (typeof DateRangePreset)[keyof typeof DateRangePreset],
@@ -478,6 +517,14 @@ async function buildAssemblerModule(
   let completedThisMonth = 0;
   let feeTotal = 0;
 
+  const feeRefs = tasks
+    .filter((task) => fromDbMoney(task.sale.installationCost) > 0)
+    .map((task) => ({
+      referenceType: WorkerFinancialReferenceType.ASSEMBLY,
+      referenceId: `${task.saleId}:ASSEMBLY_FEE`,
+    }));
+  const ledger = await loadCommissionLedgerMaps(storeId, feeRefs);
+
   const items = [];
   for (const task of tasks) {
     if (task.status === AssemblyTaskStatus.PENDING) pending += 1;
@@ -490,23 +537,15 @@ async function buildAssemblerModule(
     const fee = fromDbMoney(task.sale.installationCost);
     let ledgerStatus: 'PENDING' | 'POSTED' | 'REVERSED' | 'NONE' = 'NONE';
     if (fee > 0) {
-      const open = await workerFinancialRepository.findOpenCommissionByRef(
-        storeId,
+      const typedKey = commissionRefKey(
         WorkerFinancialReferenceType.ASSEMBLY,
         `${task.saleId}:ASSEMBLY_FEE`,
       );
-      if (open) {
+      if (ledger.open.has(typedKey)) {
         ledgerStatus = 'POSTED';
         if (task.status === AssemblyTaskStatus.COMPLETED) feeTotal += fee;
       } else if (task.status === AssemblyTaskStatus.COMPLETED) {
-        const any = await prisma.workerFinancialTransaction.findFirst({
-          where: {
-            storeId,
-            type: WorkerFinancialTransactionType.COMMISSION,
-            referenceId: `${task.saleId}:ASSEMBLY_FEE`,
-          },
-        });
-        ledgerStatus = any ? 'REVERSED' : 'PENDING';
+        ledgerStatus = ledger.any.has(`*::${task.saleId}:ASSEMBLY_FEE`) ? 'REVERSED' : 'PENDING';
       } else {
         ledgerStatus = 'PENDING';
       }
@@ -574,6 +613,14 @@ async function buildDeliveryModule(
   let feeTotal = 0;
   let feeThisMonth = 0;
 
+  const saleFeeRefs = sales
+    .filter((sale) => fromDbMoney(sale.deliveryCost) > 0)
+    .map((sale) => ({
+      referenceType: WorkerFinancialReferenceType.SALE,
+      referenceId: `${sale.id}:DELIVERY_FEE`,
+    }));
+  const saleLedger = await loadCommissionLedgerMaps(storeId, saleFeeRefs);
+
   const saleDeliveries = [];
   for (const sale of sales) {
     const status = sale.deliveryStatus as FulfilmentStatus;
@@ -585,12 +632,8 @@ async function buildDeliveryModule(
     const fee = fromDbMoney(sale.deliveryCost);
     let ledgerStatus: 'PENDING' | 'POSTED' | 'REVERSED' | 'NONE' = 'NONE';
     if (fee > 0) {
-      const open = await workerFinancialRepository.findOpenCommissionByRef(
-        storeId,
-        WorkerFinancialReferenceType.SALE,
-        `${sale.id}:DELIVERY_FEE`,
-      );
-      if (open) {
+      const key = commissionRefKey(WorkerFinancialReferenceType.SALE, `${sale.id}:DELIVERY_FEE`);
+      if (saleLedger.open.has(key)) {
         ledgerStatus = 'POSTED';
         feeTotal += fee;
         if (sale.deliveryDate && sale.deliveryDate >= monthStart) feeThisMonth += fee;
@@ -635,6 +678,14 @@ async function buildDeliveryModule(
     take: 50,
   });
 
+  const purchaseFeeRefs = purchases
+    .filter((p) => fromDbMoney(p.driverFee) > 0)
+    .map((p) => ({
+      referenceType: WorkerFinancialReferenceType.PURCHASE,
+      referenceId: `${p.id}:DRIVER_FEE`,
+    }));
+  const purchaseLedger = await loadCommissionLedgerMaps(storeId, purchaseFeeRefs);
+
   const purchaseDeliveries = [];
   for (const p of purchases) {
     const fee = fromDbMoney(p.driverFee);
@@ -651,26 +702,15 @@ async function buildDeliveryModule(
 
     let ledgerStatus: 'PENDING' | 'POSTED' | 'REVERSED' | 'NONE' = 'NONE';
     if (fee > 0) {
-      const open = await workerFinancialRepository.findOpenCommissionByRef(
-        storeId,
-        WorkerFinancialReferenceType.PURCHASE,
-        `${p.id}:DRIVER_FEE`,
-      );
-      if (open) {
+      const key = commissionRefKey(WorkerFinancialReferenceType.PURCHASE, `${p.id}:DRIVER_FEE`);
+      if (purchaseLedger.open.has(key)) {
         ledgerStatus = 'POSTED';
         feeTotal += fee;
         if ((p.deliveredAt ?? p.purchaseDate) >= monthStart) feeThisMonth += fee;
       } else if (delivered) {
-        const any = await prisma.workerFinancialTransaction.findFirst({
-          where: {
-            storeId,
-            type: WorkerFinancialTransactionType.COMMISSION,
-            referenceType: WorkerFinancialReferenceType.PURCHASE,
-            referenceId: `${p.id}:DRIVER_FEE`,
-          },
-          select: { id: true },
-        });
-        ledgerStatus = any ? 'REVERSED' : 'PENDING';
+        ledgerStatus = purchaseLedger.any.has(key) || purchaseLedger.any.has(`*::${p.id}:DRIVER_FEE`)
+          ? 'REVERSED'
+          : 'PENDING';
       } else {
         ledgerStatus = 'PENDING';
       }
@@ -731,6 +771,13 @@ async function buildInstallerModule(
   let completed = 0;
   let cancelled = 0;
   let feeTotal = 0;
+  const feeRefs = sales
+    .filter((sale) => fromDbMoney(sale.installerFee) > 0)
+    .map((sale) => ({
+      referenceType: WorkerFinancialReferenceType.ASSEMBLY,
+      referenceId: `${sale.id}:INSTALLER_FEE`,
+    }));
+  const ledger = await loadCommissionLedgerMaps(storeId, feeRefs);
   const installations = [];
 
   for (const sale of sales) {
@@ -743,12 +790,8 @@ async function buildInstallerModule(
     const fee = fromDbMoney(sale.installerFee);
     let ledgerStatus: 'PENDING' | 'POSTED' | 'REVERSED' | 'NONE' = 'NONE';
     if (fee > 0) {
-      const open = await workerFinancialRepository.findOpenCommissionByRef(
-        storeId,
-        WorkerFinancialReferenceType.ASSEMBLY,
-        `${sale.id}:INSTALLER_FEE`,
-      );
-      if (open) {
+      const key = commissionRefKey(WorkerFinancialReferenceType.ASSEMBLY, `${sale.id}:INSTALLER_FEE`);
+      if (ledger.open.has(key)) {
         ledgerStatus = 'POSTED';
         feeTotal += fee;
       } else if (status === FulfilmentStatus.COMPLETED) ledgerStatus = 'REVERSED';

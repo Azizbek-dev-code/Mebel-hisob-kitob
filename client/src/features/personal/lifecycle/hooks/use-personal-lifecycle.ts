@@ -17,7 +17,9 @@ export const personalLifecycleKeys = {
 };
 
 function invalidateLifecycle(queryClient: ReturnType<typeof useQueryClient>) {
-  void queryClient.invalidateQueries({ queryKey: ['personal'] });
+  void queryClient.invalidateQueries({ queryKey: personalLifecycleKeys.recurring });
+  void queryClient.invalidateQueries({ queryKey: personalLifecycleKeys.debts });
+  void queryClient.invalidateQueries({ queryKey: personalLifecycleKeys.notifications });
 }
 
 export function usePersonalRecurring() {

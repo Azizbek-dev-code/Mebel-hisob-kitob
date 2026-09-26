@@ -1,6 +1,6 @@
 import { ExpenseStatus, type ExpenseListItem } from '@furniture-erp/shared';
 import { Pencil, Plus, Search, Trash2, Wallet } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { EmptyState } from '@/components/feedback/EmptyState';
@@ -33,19 +33,6 @@ function listErrorMessage(error: unknown, t: (key: string) => string): string {
     return error.message || t('common.retry');
   }
   return t('common.retry');
-}
-
-function matchesSearch(expense: ExpenseListItem, search: string): boolean {
-  if (!search) return true;
-  const haystack = [
-    expense.category.name,
-    expense.description ?? '',
-    expense.createdBy?.fullName ?? '',
-    String(expense.amount),
-  ]
-    .join(' ')
-    .toLowerCase();
-  return haystack.includes(search);
 }
 
 function ExpenseActions({
@@ -100,8 +87,8 @@ export function ExpensesPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const list = useExpensesList({
-    page: 1,
-    pageSize: 100,
+    page,
+    pageSize: PAGE_SIZE,
     status: statusFilter,
     categoryId: categoryId || undefined,
     from: fromDate || undefined,
@@ -116,17 +103,11 @@ export function ExpensesPage() {
     return () => window.clearTimeout(timer);
   }, [successMessage]);
 
-  const filtered = useMemo(() => {
-    const items = list.data?.items ?? [];
-    const needle = search.trim().toLowerCase();
-    // Server already applies status/category/date/search; keep light client search for
-    // typing latency while previous page data is shown.
-    return items.filter((expense) => matchesSearch(expense, needle));
-  }, [list.data?.items, search]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageItems = list.data?.items ?? [];
+  const meta = list.data?.meta;
+  const totalPages = Math.max(1, meta?.totalPages ?? 1);
   const safePage = Math.min(page, totalPages);
-  const pageItems = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const isEmpty = pageItems.length === 0;
 
   return (
     <PageContainer className="space-y-6">
@@ -243,7 +224,7 @@ export function ExpensesPage() {
         </div>
       ) : null}
 
-      {!list.isLoading && !list.isError && filtered.length === 0 ? (
+      {!list.isLoading && !list.isError && isEmpty ? (
         <EmptyState
           icon={Wallet}
           title={t('expenses.emptyTitle')}

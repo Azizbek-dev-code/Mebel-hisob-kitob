@@ -19,7 +19,7 @@ const { prismaMock, recordAuditMock, ensurePersonalLedger, tryAwardXpMock, tryEv
         update: vi.fn(),
       },
       personalCategory: { findFirst: vi.fn() },
-      personalEntry: { aggregate: vi.fn() },
+      personalEntry: { aggregate: vi.fn(), groupBy: vi.fn() },
       personalSavingGoal: {
         findMany: vi.fn(),
         findFirst: vi.fn(),
@@ -65,6 +65,7 @@ beforeEach(() => {
   tryEvaluateAchievementsMock.mockResolvedValue(undefined);
   prismaMock.workspace.findUnique.mockResolvedValue(WORKSPACE);
   prismaMock.personalEntry.aggregate.mockResolvedValue({ _sum: { amount: 0n } });
+  prismaMock.personalEntry.groupBy.mockResolvedValue([]);
 });
 
 describe('listPersonalBudgets', () => {
@@ -81,7 +82,9 @@ describe('listPersonalBudgets', () => {
         category: { id: 'cat_1', name: 'Oziq-ovqat' },
       },
     ]);
-    prismaMock.personalEntry.aggregate.mockResolvedValue({ _sum: { amount: 40_000n } });
+    prismaMock.personalEntry.groupBy.mockResolvedValue([
+      { categoryId: 'cat_1', _sum: { amount: 40_000n } },
+    ]);
 
     const items = await listPersonalBudgets('ws_1');
     expect(items[0]?.spentSom).toBe(40_000);
@@ -89,12 +92,11 @@ describe('listPersonalBudgets', () => {
     expect(items[0]?.percent).toBe(40);
     expect(items[0]?.warningLevel).toBe('NONE');
     expect(items[0]?.overspentSom).toBe(0);
-    expect(prismaMock.personalEntry.aggregate.mock.calls[0][0].where).toEqual(
+    expect(prismaMock.personalEntry.groupBy.mock.calls[0][0].where).toEqual(
       expect.objectContaining({
         workspaceId: 'ws_1',
         type: PersonalEntryType.EXPENSE,
         status: ExpenseStatus.ACTIVE,
-        categoryId: 'cat_1',
       }),
     );
     expect(JSON.stringify(items)).not.toMatch(/storeId/);
@@ -113,12 +115,14 @@ describe('listPersonalBudgets', () => {
         category: null,
       },
     ]);
-    prismaMock.personalEntry.aggregate.mockResolvedValue({ _sum: { amount: 8_000n } });
+    prismaMock.personalEntry.groupBy.mockResolvedValue([
+      { categoryId: 'cat_x', _sum: { amount: 8_000n } },
+    ]);
 
     const items = await listPersonalBudgets('ws_1');
     expect(items[0]?.warningLevel).toBe('NEAR');
     expect(items[0]?.percent).toBe(80);
-    expect(prismaMock.personalEntry.aggregate.mock.calls[0][0].where.type).toBe(PersonalEntryType.EXPENSE);
+    expect(prismaMock.personalEntry.groupBy.mock.calls[0][0].where.type).toBe(PersonalEntryType.EXPENSE);
   });
 });
 

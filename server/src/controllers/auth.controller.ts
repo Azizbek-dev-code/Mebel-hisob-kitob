@@ -96,8 +96,49 @@ export const postLogout = asyncHandler(async (req: Request, res: Response) => {
 export const postChangePassword = asyncHandler(async (req: Request, res: Response) => {
   const user = req.auth ?? req.personalAuth;
   if (!user) throw ApiError.unauthorized();
-  await accountSecurity.changePasswordWithCurrent(user, req.body);
-  sendNoContent(res);
+
+  const meta = sessionMetaFrom(req);
+  const actorUserId = 'kind' in user && user.kind === 'PERSONAL' ? null : user.id;
+
+  try {
+    await accountSecurity.changePasswordWithCurrent(user, req.body);
+  } catch (error) {
+    await recordAudit({
+      storeId: 'storeId' in user ? user.storeId : null,
+      actorUserId,
+      eventType: AuditEventType.PASSWORD_CHANGE_FAILED,
+      entityType: AuditEntityType.USER,
+      entityId: user.id,
+      summary: 'Password change failed',
+      metadata: {
+        status: 'failed',
+        ipAddress: meta.ipAddress,
+        userAgent: meta.userAgent,
+      },
+    });
+    throw error;
+  }
+
+  await recordAudit({
+    storeId: 'storeId' in user ? user.storeId : null,
+    actorUserId,
+    eventType: AuditEventType.PASSWORD_CHANGED,
+    entityType: AuditEntityType.USER,
+    entityId: user.id,
+    summary: 'Password changed',
+    metadata: {
+      status: 'success',
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+    },
+  });
+
+  clearAuthCookie(res);
+  sendSuccess(res, {
+    ok: true as const,
+    requiresReauth: true as const,
+    message: 'Parol o‘zgartirildi. Xavfsizlik sababli qayta tizimga kiring.',
+  });
 });
 
 export const postForgotPassword = asyncHandler(async (req: Request, res: Response) => {

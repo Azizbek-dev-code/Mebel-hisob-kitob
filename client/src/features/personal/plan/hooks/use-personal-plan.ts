@@ -15,7 +15,6 @@ export const personalPlanKeys = {
 
 function invalidatePlan(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: personalPlanKeys.all });
-  void queryClient.invalidateQueries({ queryKey: ['personal'] });
 }
 
 export function usePersonalPlanEvents(from: string, to: string, enabled = true) {

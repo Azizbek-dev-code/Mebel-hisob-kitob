@@ -33,6 +33,7 @@ const {
   prismaMock: {
     $transaction: vi.fn(),
     user: { update: vi.fn() },
+    authSession: { updateMany: vi.fn() },
   },
   hashPasswordMock: vi.fn(),
   assertAccountNotDeletedMock: vi.fn(),

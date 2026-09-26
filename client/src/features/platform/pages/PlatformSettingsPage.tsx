@@ -9,6 +9,9 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { ApiClientError } from '@/lib/api-client';
 
 import { AccountDeleteSection } from '@/features/settings/components/AccountDeleteSection';
+import {
+  ChangePasswordForm,
+} from '@/features/auth/components/AccountSecurityForms';
 
 import { usePlatformSettings, useUpdatePlatformSettings } from '../hooks/use-platform-billing';
 
@@ -178,6 +181,21 @@ export function PlatformSettingsPage() {
           </form>
         </SectionCard>
       )}
+
+      <SectionCard
+        title="Xavfsizlik"
+        description="Hisobingiz xavfsizligini oshirish uchun parolingizni muntazam yangilang."
+      >
+        <div className="max-w-lg">
+          <h3 className="text-sm font-semibold text-ink">Parol</h3>
+          <p className="mt-1 text-xs text-ink-muted">
+            Hisobingiz xavfsizligini oshirish uchun parolingizni muntazam yangilang.
+          </p>
+          <div className="mt-3">
+            <ChangePasswordForm variant="platformAdmin" />
+          </div>
+        </div>
+      </SectionCard>
 
       <AccountDeleteSection />
     </PageContainer>

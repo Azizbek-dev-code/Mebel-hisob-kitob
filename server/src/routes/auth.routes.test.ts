@@ -48,6 +48,14 @@ const { prismaMock } = vi.hoisted(() => ({
     storeCreationRequest: {
       findFirst: vi.fn(),
     },
+    authSession: {
+      create: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+      findUnique: vi.fn(),
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+    },
   },
 }));
 
@@ -142,6 +150,12 @@ beforeEach(() => {
   prismaMock.personalSubscription.update.mockReset();
   prismaMock.subscriptionRequest.findFirst.mockReset();
   prismaMock.storeCreationRequest.findFirst.mockReset();
+  prismaMock.authSession.create.mockReset();
+  prismaMock.authSession.update.mockReset();
+  prismaMock.authSession.updateMany.mockReset();
+  prismaMock.authSession.findUnique.mockReset();
+  prismaMock.authSession.findFirst.mockReset();
+  prismaMock.authSession.findMany.mockReset();
   prismaMock.user.findFirst.mockResolvedValue(ADMIN_RECORD);
   prismaMock.user.findUnique.mockResolvedValue({
     id: ADMIN_RECORD.id,
@@ -161,6 +175,10 @@ beforeEach(() => {
   prismaMock.authEmailCode.count.mockResolvedValue(0);
   prismaMock.authEmailCode.updateMany.mockResolvedValue({ count: 0 });
   prismaMock.authEmailCode.create.mockResolvedValue({ id: 'c1' });
+  // Leave create failing so JWTs stay sid-less in these route tests (legacy path).
+  prismaMock.authSession.create.mockRejectedValue(new Error('authSession.create not stubbed'));
+  prismaMock.authSession.update.mockResolvedValue({});
+  prismaMock.authSession.updateMany.mockResolvedValue({ count: 1 });
 });
 
 describe('POST /api/auth/login', () => {
@@ -427,9 +445,10 @@ describe('password change and reset', () => {
         newPassword: 'NewAdmin123!',
         newPasswordConfirmation: 'NewAdmin123!',
       })
-      .expect(204);
+      .expect(200);
 
     expect(prismaMock.user.update).toHaveBeenCalled();
+    expect(prismaMock.authSession.updateMany).toHaveBeenCalled();
   });
 
   it('rejects a wrong current password', async () => {

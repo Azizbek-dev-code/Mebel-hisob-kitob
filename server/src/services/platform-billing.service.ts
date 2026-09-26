@@ -25,7 +25,6 @@ import {
   canWriteWithSubscription,
   computePlatformNetProfit,
   effectiveSubscriptionStatus,
-  isDueDateOverdue,
   monthKey,
   trialDaysRemaining,
   type ApproveSubscriptionRequestBody,
@@ -195,19 +194,13 @@ export function toInvoiceDto(
 }
 
 export async function syncBillingStatuses(now = new Date()): Promise<void> {
-  const open = await prisma.platformInvoice.findMany({
-    where: { status: { in: [PlatformBillingStatus.PENDING, PlatformBillingStatus.OVERDUE] } },
-    include: { subscription: true, store: { select: { id: true, accessStatus: true } } },
+  await prisma.platformInvoice.updateMany({
+    where: {
+      status: PlatformBillingStatus.PENDING,
+      dueDate: { lt: now },
+    },
+    data: { status: PlatformBillingStatus.OVERDUE },
   });
-
-  for (const invoice of open) {
-    if (invoice.status === PlatformBillingStatus.PENDING && isDueDateOverdue(invoice.dueDate, now)) {
-      await prisma.platformInvoice.update({
-        where: { id: invoice.id },
-        data: { status: PlatformBillingStatus.OVERDUE },
-      });
-    }
-  }
 
   const subscriptions = await prisma.storeSubscription.findMany({
     where: {
@@ -218,23 +211,34 @@ export async function syncBillingStatuses(now = new Date()): Promise<void> {
     },
   });
 
+  const expiredIds: string[] = [];
+  const expiredMeta: Array<{ id: string; storeId: string; previousStatus: string }> = [];
   for (const sub of subscriptions) {
     const effective = effectiveSubscriptionStatus(sub, now);
     if (effective !== sub.status && effective === SubscriptionStatus.EXPIRED) {
-      await prisma.storeSubscription.update({
-        where: { id: sub.id },
-        data: { status: SubscriptionStatus.EXPIRED },
-      });
-      await recordAudit({
-        storeId: sub.storeId,
-        actorUserId: null,
-        eventType: AuditEventType.SUBSCRIPTION_EXPIRED,
-        entityType: AuditEntityType.STORE_SUBSCRIPTION,
-        entityId: sub.id,
-        summary: 'Subscription expired',
-        metadata: { previousStatus: sub.status },
-      });
+      expiredIds.push(sub.id);
+      expiredMeta.push({ id: sub.id, storeId: sub.storeId, previousStatus: sub.status });
     }
+  }
+
+  if (expiredIds.length > 0) {
+    await prisma.storeSubscription.updateMany({
+      where: { id: { in: expiredIds } },
+      data: { status: SubscriptionStatus.EXPIRED },
+    });
+    await Promise.all(
+      expiredMeta.map((row) =>
+        recordAudit({
+          storeId: row.storeId,
+          actorUserId: null,
+          eventType: AuditEventType.SUBSCRIPTION_EXPIRED,
+          entityType: AuditEntityType.STORE_SUBSCRIPTION,
+          entityId: row.id,
+          summary: 'Subscription expired',
+          metadata: { previousStatus: row.previousStatus },
+        }),
+      ),
+    );
   }
 }
 
@@ -878,65 +882,71 @@ export async function setManualBlock(
   return shop;
 }
 
+const shopListInclude = {
+  subscriptions: { where: { isCurrent: true }, include: { plan: true }, take: 1 },
+  subscriptionRequests: {
+    where: { status: SubscriptionRequestStatus.PENDING },
+    take: 1,
+    select: { id: true },
+  },
+  platformInvoices: {
+    orderBy: { createdAt: 'desc' as const },
+    take: 8,
+    select: { status: true, paidAt: true },
+  },
+  users: {
+    where: { role: UserRole.ADMIN },
+    take: 1,
+    select: { fullName: true, phone: true, email: true },
+  },
+} satisfies Prisma.StoreInclude;
+
+type ShopListStore = Prisma.StoreGetPayload<{ include: typeof shopListInclude }>;
+
+function toShopListItem(store: ShopListStore, now: Date): PlatformShopSummary {
+  const sub = store.subscriptions[0];
+  const owner = store.users[0];
+  const effective = sub ? effectiveSubscriptionStatus(sub) : null;
+  const lastPaid = store.platformInvoices.find((row) => row.status === PlatformBillingStatus.PAID);
+  return {
+    id: store.id,
+    name: store.name,
+    phone: store.phone,
+    address: store.address,
+    isActive: store.isActive,
+    accessStatus: store.accessStatus,
+    planName: sub?.plan.name ?? null,
+    monthlyPrice: sub ? money(sub.plan.monthlyPrice) : null,
+    nextPaymentDue: sub?.nextPaymentDue.toISOString() ?? null,
+    hasPendingPayment:
+      (store.subscriptionRequests?.length ?? 0) > 0 ||
+      (store.platformInvoices ?? []).some(
+        (row) =>
+          row.status === PlatformBillingStatus.PENDING || row.status === PlatformBillingStatus.OVERDUE,
+      ),
+    ownerName: owner?.fullName ?? null,
+    ownerPhone: owner?.phone ?? store.phone,
+    ownerEmail: owner?.email ?? null,
+    createdAt: store.createdAt.toISOString(),
+    daysSinceCreated: Math.max(0, calendarDaysBetween(store.createdAt, now)),
+    subscriptionStatus: effective,
+    trialEndsAt: sub?.trialEndsAt?.toISOString() ?? null,
+    currentPeriodEnd: sub?.currentPeriodEnd.toISOString() ?? null,
+    lastPaymentAt: lastPaid?.paidAt?.toISOString() ?? null,
+  };
+}
+
 export async function listShops(actorRole: string): Promise<PlatformShopListResponse> {
   assertPlatform(actorRole);
   await syncBillingStatuses();
   const stores = await prisma.store.findMany({
     where: TENANT_STORE_WHERE,
     orderBy: { createdAt: 'desc' },
-    include: {
-      subscriptions: { where: { isCurrent: true }, include: { plan: true }, take: 1 },
-      subscriptionRequests: {
-        where: { status: SubscriptionRequestStatus.PENDING },
-        take: 1,
-        select: { id: true },
-      },
-      platformInvoices: {
-        orderBy: { createdAt: 'desc' },
-        take: 8,
-        select: { status: true, paidAt: true },
-      },
-      users: {
-        where: { role: UserRole.ADMIN },
-        take: 1,
-        select: { fullName: true, phone: true, email: true },
-      },
-    },
+    include: shopListInclude,
   });
   const now = new Date();
   return {
-    items: stores.map((store) => {
-      const sub = store.subscriptions[0];
-      const owner = store.users[0];
-      const effective = sub ? effectiveSubscriptionStatus(sub) : null;
-      const lastPaid = store.platformInvoices.find((row) => row.status === PlatformBillingStatus.PAID);
-      return {
-        id: store.id,
-        name: store.name,
-        phone: store.phone,
-        address: store.address,
-        isActive: store.isActive,
-        accessStatus: store.accessStatus,
-        planName: sub?.plan.name ?? null,
-        monthlyPrice: sub ? money(sub.plan.monthlyPrice) : null,
-        nextPaymentDue: sub?.nextPaymentDue.toISOString() ?? null,
-        hasPendingPayment:
-          (store.subscriptionRequests?.length ?? 0) > 0 ||
-          (store.platformInvoices ?? []).some(
-            (row) =>
-              row.status === PlatformBillingStatus.PENDING || row.status === PlatformBillingStatus.OVERDUE,
-          ),
-        ownerName: owner?.fullName ?? null,
-        ownerPhone: owner?.phone ?? store.phone,
-        ownerEmail: owner?.email ?? null,
-        createdAt: store.createdAt.toISOString(),
-        daysSinceCreated: Math.max(0, calendarDaysBetween(store.createdAt, now)),
-        subscriptionStatus: effective,
-        trialEndsAt: sub?.trialEndsAt?.toISOString() ?? null,
-        currentPeriodEnd: sub?.currentPeriodEnd.toISOString() ?? null,
-        lastPaymentAt: lastPaid?.paidAt?.toISOString() ?? null,
-      };
-    }),
+    items: stores.map((store) => toShopListItem(store, now)),
   };
 }
 
@@ -1023,10 +1033,13 @@ async function getStorePayments(storeId: string): Promise<PlatformStorePaymentsD
 export async function getShopDetail(actorRole: string, storeId: string): Promise<PlatformShopDetail> {
   assertPlatform(actorRole);
   await syncBillingStatuses();
-  const shops = await listShops(actorRole);
-  const shop = shops.items.find((item) => item.id === storeId);
-  if (!shop) throw ApiError.notFound("Do'kon topilmadi");
-  const [sub, latest, stats, payments, requests] = await Promise.all([
+  const store = await prisma.store.findFirst({
+    where: { id: storeId, ...TENANT_STORE_WHERE },
+    include: shopListInclude,
+  });
+  if (!store) throw ApiError.notFound("Do'kon topilmadi");
+  const shop = toShopListItem(store, new Date());
+  const [sub, latest, stats, payments, requests, usage] = await Promise.all([
     getCurrentSubscription(storeId),
     prisma.platformInvoice.findFirst({
       where: { storeId },
@@ -1041,10 +1054,11 @@ export async function getShopDetail(actorRole: string, storeId: string): Promise
       orderBy: { requestedAt: 'desc' },
       take: 50,
     }),
+    getResourceUsage(storeId),
   ]);
   return {
     shop,
-    subscription: sub ? toSubscriptionDto({ ...sub, usage: await getResourceUsage(storeId) }) : null,
+    subscription: sub ? toSubscriptionDto({ ...sub, usage }) : null,
     latestInvoice: latest ? toInvoiceDto(latest) : null,
     stats,
     payments,

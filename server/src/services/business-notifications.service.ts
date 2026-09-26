@@ -105,20 +105,88 @@ export async function listBusinessNotifications(
   const since = new Date(Date.now() - LOOKBACK_MS);
   const items: BusinessNotificationDto[] = [];
 
-  if (prefs.notifySales && canSeeSales(actor)) {
-    const sales = await db.sale.findMany({
-      where: { storeId, OR: [{ createdAt: { gte: since } }, { cancelledAt: { gte: since } }] },
-      select: {
-        id: true,
-        saleNumber: true,
-        status: true,
-        createdAt: true,
-        cancelledAt: true,
-        customer: { select: { firstName: true, lastName: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-    });
+  const loadSales = prefs.notifySales && canSeeSales(actor);
+  const loadInventory = prefs.notifyInventory && canSeeInventory(actor);
+  const loadDelivery = prefs.notifyDelivery && canSeeDelivery(actor);
+  const loadAssembly = prefs.notifyAssembly && canSeeAssembly(actor);
+  const loadWorkers = prefs.notifyWorkers && canSeeWorkers(actor);
+  const loadBilling = (prefs.notifyBilling || prefs.notifyImportant) && canSeeBilling(actor);
+
+  const [sales, products, deliveries, tasks, payments, subscription] = await Promise.all([
+    loadSales
+      ? db.sale.findMany({
+          where: { storeId, OR: [{ createdAt: { gte: since } }, { cancelledAt: { gte: since } }] },
+          select: {
+            id: true,
+            saleNumber: true,
+            status: true,
+            createdAt: true,
+            cancelledAt: true,
+            customer: { select: { firstName: true, lastName: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+        })
+      : Promise.resolve([]),
+    loadInventory
+      ? db.product.findMany({
+          where: { storeId, trackStock: true, status: ProductStatus.ACTIVE, minStockQty: { gt: 0 } },
+          select: { id: true, name: true, stockQty: true, minStockQty: true, updatedAt: true },
+          take: 80,
+        })
+      : Promise.resolve([]),
+    loadDelivery
+      ? db.sale.findMany({
+          where: {
+            storeId,
+            deliveryStatus: {
+              in: [FulfilmentStatus.PENDING, FulfilmentStatus.SCHEDULED, FulfilmentStatus.IN_TRANSIT],
+            },
+          },
+          select: {
+            id: true,
+            saleNumber: true,
+            deliveryDueDate: true,
+            createdAt: true,
+            deliveryPerson: { select: { fullName: true } },
+          },
+          take: 40,
+        })
+      : Promise.resolve([]),
+    loadAssembly
+      ? db.assemblyTask.findMany({
+          where: {
+            storeId,
+            status: { in: [AssemblyTaskStatus.PENDING, AssemblyTaskStatus.IN_PROGRESS] },
+          },
+          select: {
+            id: true,
+            assignedAt: true,
+            sale: { select: { saleNumber: true, items: { select: { productName: true }, take: 1 } } },
+            assignee: { select: { fullName: true } },
+          },
+          take: 40,
+        })
+      : Promise.resolve([]),
+    loadWorkers
+      ? db.workerFinancialTransaction.findMany({
+          where: {
+            storeId,
+            type: WorkerFinancialTransactionType.PAYMENT,
+            createdAt: { gte: since },
+          },
+          select: {
+            id: true,
+            createdAt: true,
+            worker: { select: { fullName: true } },
+          },
+          take: 20,
+        })
+      : Promise.resolve([]),
+    loadBilling ? getStoreSubscription(storeId) : Promise.resolve(null),
+  ]);
+
+  if (loadSales) {
     for (const sale of sales) {
       const name = `${sale.customer.firstName} ${sale.customer.lastName}`.trim();
       if (sale.status === SaleStatus.CANCELLED && sale.cancelledAt && sale.cancelledAt >= since) {
@@ -149,12 +217,7 @@ export async function listBusinessNotifications(
     }
   }
 
-  if (prefs.notifyInventory && canSeeInventory(actor)) {
-    const products = await db.product.findMany({
-      where: { storeId, trackStock: true, status: ProductStatus.ACTIVE, minStockQty: { gt: 0 } },
-      select: { id: true, name: true, stockQty: true, minStockQty: true, updatedAt: true },
-      take: 80,
-    });
+  if (loadInventory) {
     for (const product of products) {
       if (product.stockQty > product.minStockQty) continue;
       items.push({
@@ -172,23 +235,7 @@ export async function listBusinessNotifications(
     }
   }
 
-  if (prefs.notifyDelivery && canSeeDelivery(actor)) {
-    const deliveries = await db.sale.findMany({
-      where: {
-        storeId,
-        deliveryStatus: {
-          in: [FulfilmentStatus.PENDING, FulfilmentStatus.SCHEDULED, FulfilmentStatus.IN_TRANSIT],
-        },
-      },
-      select: {
-        id: true,
-        saleNumber: true,
-        deliveryDueDate: true,
-        createdAt: true,
-        deliveryPerson: { select: { fullName: true } },
-      },
-      take: 40,
-    });
+  if (loadDelivery) {
     const now = Date.now();
     for (const sale of deliveries) {
       const overdue = sale.deliveryDueDate != null && sale.deliveryDueDate.getTime() < now;
@@ -208,20 +255,7 @@ export async function listBusinessNotifications(
     }
   }
 
-  if (prefs.notifyAssembly && canSeeAssembly(actor)) {
-    const tasks = await db.assemblyTask.findMany({
-      where: {
-        storeId,
-        status: { in: [AssemblyTaskStatus.PENDING, AssemblyTaskStatus.IN_PROGRESS] },
-      },
-      select: {
-        id: true,
-        assignedAt: true,
-        sale: { select: { saleNumber: true, items: { select: { productName: true }, take: 1 } } },
-        assignee: { select: { fullName: true } },
-      },
-      take: 40,
-    });
+  if (loadAssembly) {
     for (const task of tasks) {
       const product = task.sale.items[0]?.productName ?? 'Mebel';
       items.push({
@@ -238,20 +272,7 @@ export async function listBusinessNotifications(
     }
   }
 
-  if (prefs.notifyWorkers && canSeeWorkers(actor)) {
-    const payments = await db.workerFinancialTransaction.findMany({
-      where: {
-        storeId,
-        type: WorkerFinancialTransactionType.PAYMENT,
-        createdAt: { gte: since },
-      },
-      select: {
-        id: true,
-        createdAt: true,
-        worker: { select: { fullName: true } },
-      },
-      take: 20,
-    });
+  if (loadWorkers) {
     for (const payment of payments) {
       items.push({
         id: `worker-pay:${payment.id}`,
@@ -267,35 +288,32 @@ export async function listBusinessNotifications(
     }
   }
 
-  if ((prefs.notifyBilling || prefs.notifyImportant) && canSeeBilling(actor)) {
-    const subscription = await getStoreSubscription(storeId);
-    if (subscription) {
-      const days = subscription.daysRemaining;
-      if (prefs.notifyImportant && (subscription.status === 'EXPIRED' || subscription.status === 'CANCELLED')) {
-        items.push({
-          id: `sub-expired:${subscription.planId ?? 'none'}`,
-          category: BusinessNotificationCategory.IMPORTANT,
-          kind: BusinessNotificationKind.SUBSCRIPTION_EXPIRED,
-          severity: PersonalNotificationSeverity.DANGER,
-          href: '/billing',
-          title: 'Obuna muddati tugagan',
-          body: subscription.planName,
-          createdAt: subscription.expiresAt,
-          read: false,
-        });
-      } else if (prefs.notifyBilling && days != null && days <= 7) {
-        items.push({
-          id: `sub-expiring:${subscription.planId ?? 'none'}:${days}`,
-          category: BusinessNotificationCategory.BILLING,
-          kind: BusinessNotificationKind.SUBSCRIPTION_EXPIRING,
-          severity: days <= 2 ? PersonalNotificationSeverity.DANGER : PersonalNotificationSeverity.WARNING,
-          href: '/billing',
-          title: `Obunaga ${days} kun qoldi`,
-          body: subscription.planName,
-          createdAt: subscription.expiresAt,
-          read: false,
-        });
-      }
+  if (loadBilling && subscription) {
+    const days = subscription.daysRemaining;
+    if (prefs.notifyImportant && (subscription.status === 'EXPIRED' || subscription.status === 'CANCELLED')) {
+      items.push({
+        id: `sub-expired:${subscription.planId ?? 'none'}`,
+        category: BusinessNotificationCategory.IMPORTANT,
+        kind: BusinessNotificationKind.SUBSCRIPTION_EXPIRED,
+        severity: PersonalNotificationSeverity.DANGER,
+        href: '/billing',
+        title: 'Obuna muddati tugagan',
+        body: subscription.planName,
+        createdAt: subscription.expiresAt,
+        read: false,
+      });
+    } else if (prefs.notifyBilling && days != null && days <= 7) {
+      items.push({
+        id: `sub-expiring:${subscription.planId ?? 'none'}:${days}`,
+        category: BusinessNotificationCategory.BILLING,
+        kind: BusinessNotificationKind.SUBSCRIPTION_EXPIRING,
+        severity: days <= 2 ? PersonalNotificationSeverity.DANGER : PersonalNotificationSeverity.WARNING,
+        href: '/billing',
+        title: `Obunaga ${days} kun qoldi`,
+        body: subscription.planName,
+        createdAt: subscription.expiresAt,
+        read: false,
+      });
     }
   }
 

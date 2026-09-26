@@ -62,6 +62,7 @@ const { prismaMock, recordAuditMock, grantFirstPaymentCommission, countPendingRe
       findUnique: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       count: vi.fn(),
       aggregate: vi.fn(),
       groupBy: vi.fn(),
@@ -72,7 +73,7 @@ const { prismaMock, recordAuditMock, grantFirstPaymentCommission, countPendingRe
       update: vi.fn(),
     },
     platformSettings: { upsert: vi.fn(), update: vi.fn() },
-    store: { findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+    store: { findMany: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
     storeCreationRequest: { count: vi.fn(), findMany: vi.fn() },
     workspace: { findMany: vi.fn(), groupBy: vi.fn(), count: vi.fn() },
     user: { count: vi.fn() },
@@ -134,6 +135,8 @@ beforeEach(() => {
   grantFirstPaymentCommission.mockResolvedValue(undefined);
   countPendingReferralWithdrawals.mockResolvedValue(0);
   countReferralSignups.mockResolvedValue(0);
+  prismaMock.platformInvoice.updateMany.mockResolvedValue({ count: 0 });
+  prismaMock.storeSubscription.updateMany.mockResolvedValue({ count: 0 });
   prismaMock.$transaction.mockImplementation(async (fn: (tx: typeof prismaMock) => Promise<unknown>) =>
     fn(prismaMock),
   );
@@ -350,27 +353,23 @@ describe('payments and blocking', () => {
   });
 
   it('marks PENDING invoices OVERDUE after the due date', async () => {
-    prismaMock.platformInvoice.findMany.mockResolvedValue([
-      {
-        id: 'inv_1',
-        dueDate: new Date('2026-09-22T12:00:00+05:00'),
-        status: PlatformBillingStatus.PENDING,
-        storeId: 'store_1',
-        subscriptionId: 'sub_1',
-        subscription: { status: SubscriptionStatus.ACTIVE },
-        store: { id: 'store_1', accessStatus: StoreAccessStatus.ACTIVE },
-      },
-    ]);
+    prismaMock.platformInvoice.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.storeSubscription.findMany.mockResolvedValue([]);
 
     await syncBillingStatuses(new Date('2026-09-23T08:00:00+05:00'));
-    expect(prismaMock.platformInvoice.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { status: PlatformBillingStatus.OVERDUE } }),
+    expect(prismaMock.platformInvoice.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: PlatformBillingStatus.PENDING,
+          dueDate: { lt: expect.any(Date) },
+        }),
+        data: { status: PlatformBillingStatus.OVERDUE },
+      }),
     );
   });
 
   it('expires a trial when trialEndsAt has passed', async () => {
-    prismaMock.platformInvoice.findMany.mockResolvedValue([]);
+    prismaMock.platformInvoice.updateMany.mockResolvedValue({ count: 0 });
     prismaMock.storeSubscription.findMany.mockResolvedValue([
       {
         id: 'sub_1',
@@ -380,10 +379,12 @@ describe('payments and blocking', () => {
         currentPeriodEnd: new Date('2026-08-20T00:00:00+05:00'),
       },
     ]);
+    prismaMock.storeSubscription.updateMany.mockResolvedValue({ count: 1 });
 
     await syncBillingStatuses(new Date('2026-08-22T12:00:00+05:00'));
-    expect(prismaMock.storeSubscription.update).toHaveBeenCalledWith(
+    expect(prismaMock.storeSubscription.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: { id: { in: ['sub_1'] } },
         data: { status: SubscriptionStatus.EXPIRED },
       }),
     );
@@ -392,7 +393,7 @@ describe('payments and blocking', () => {
 
   it('keeps a manual block distinct from payment block', async () => {
     prismaMock.store.findUnique.mockResolvedValue({ id: 'store_1', name: 'Fayz', accessStatus: 'ACTIVE' });
-    prismaMock.platformInvoice.findMany.mockResolvedValue([]);
+    prismaMock.platformInvoice.updateMany.mockResolvedValue({ count: 0 });
     prismaMock.storeSubscription.findMany.mockResolvedValue([]);
     prismaMock.store.findMany.mockResolvedValue([
       {
@@ -404,6 +405,7 @@ describe('payments and blocking', () => {
         accessStatus: StoreAccessStatus.MANUALLY_BLOCKED,
         createdAt: new Date(),
         subscriptions: [],
+        subscriptionRequests: [],
         platformInvoices: [],
         users: [],
       },
@@ -461,11 +463,9 @@ describe('expenses and P&L', () => {
   });
 
   it('aggregates the dashboard without a second P&L/analytics pass', async () => {
-    prismaMock.platformInvoice.findMany
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
-        { amount: 200000n, paidAt: new Date('2026-08-10'), dueDate: new Date('2026-08-22') },
-      ]);
+    prismaMock.platformInvoice.findMany.mockResolvedValue([
+      { amount: 200000n, paidAt: new Date('2026-08-10'), dueDate: new Date('2026-08-22') },
+    ]);
     prismaMock.storeSubscription.findMany.mockResolvedValue([]);
     prismaMock.platformExpense.findMany.mockResolvedValue([
       { amount: 50000n, date: new Date('2026-08-05') },

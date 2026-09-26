@@ -67,8 +67,14 @@ export async function listPersonalNotifications(
   const prefs = await loadPrefs(workspaceId, db);
   const items: PersonalNotificationDto[] = [];
 
+  const [budgets, recurring, goals, debts] = await Promise.all([
+    prefs.notifyBudget ? listPersonalBudgets(workspaceId, db) : Promise.resolve([]),
+    prefs.notifyRecurring ? listPersonalRecurringRules(workspaceId, db) : Promise.resolve(null),
+    prefs.notifyGoals ? listPersonalSavingGoals(workspaceId, db) : Promise.resolve([]),
+    prefs.notifyDebts ? listPersonalDebts(workspaceId, db) : Promise.resolve(null),
+  ]);
+
   if (prefs.notifyBudget) {
-    const budgets = await listPersonalBudgets(workspaceId, db);
     for (const budget of budgets.filter((item) => item.isActive)) {
       if (budget.warningLevel === BudgetWarningLevel.OVER || budget.warningLevel === BudgetWarningLevel.LIMIT) {
         items.push({
@@ -94,8 +100,7 @@ export async function listPersonalNotifications(
     }
   }
 
-  if (prefs.notifyRecurring) {
-    const recurring = await listPersonalRecurringRules(workspaceId, db);
+  if (prefs.notifyRecurring && recurring) {
     for (const rule of recurring.upcoming) {
       items.push({
         id: `recurring:${rule.id}:${rule.dueState}`,
@@ -116,7 +121,6 @@ export async function listPersonalNotifications(
   }
 
   if (prefs.notifyGoals) {
-    const goals = await listPersonalSavingGoals(workspaceId, db);
     for (const goal of goals.filter((item) => item.status === PersonalSavingGoalStatus.ACTIVE)) {
       if (goal.onTrack === false) {
         items.push({
@@ -146,8 +150,7 @@ export async function listPersonalNotifications(
     }
   }
 
-  if (prefs.notifyDebts) {
-    const debts = await listPersonalDebts(workspaceId, db);
+  if (prefs.notifyDebts && debts) {
     for (const debt of debts.items.filter((item) => !item.isArchived && item.status === 'OVERDUE')) {
       items.push({
         id: `debt:${debt.id}:OVERDUE`,
