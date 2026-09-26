@@ -46,6 +46,7 @@ export * from './personal-growth-social.js';
 export * from './personal-growth-notifications.js';
 export * from './personal-growth-reviews.js';
 export * from './personal-growth-ranking.js';
+export * from './personal-growth-competition.js';
 export * from './presence.js';
 export * from './platform-usage-analytics.js';
 export * from './app-feedback.js';

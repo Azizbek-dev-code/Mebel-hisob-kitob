@@ -57,10 +57,13 @@ export function Dialog({ open, title, description, onClose, children, className 
           aria-modal="true"
           aria-labelledby={titleId}
           className={cn(
-            'relative z-10 flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-panel border border-line bg-surface shadow-overlay sm:max-w-lg sm:rounded-panel',
+            'relative z-10 flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-panel border border-line bg-surface pb-[env(safe-area-inset-bottom)] shadow-overlay sm:max-w-lg sm:rounded-panel sm:pb-0',
             className,
           )}
         >
+          <div className="flex justify-center pt-2 sm:hidden" aria-hidden="true">
+            <span className="h-1 w-10 rounded-full bg-line-strong/80" />
+          </div>
           <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
             <div className="min-w-0">
               <h3 id={titleId} className="text-base font-semibold text-ink">
@@ -71,7 +74,7 @@ export function Dialog({ open, title, description, onClose, children, className 
             <button
               type="button"
               onClick={onClose}
-              className="rounded-input p-1.5 text-ink-muted hover:bg-surface-hover hover:text-ink"
+              className="rounded-input p-1.5 text-ink-muted hover:bg-surface-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               aria-label="Close"
             >
               <X className="size-4" />

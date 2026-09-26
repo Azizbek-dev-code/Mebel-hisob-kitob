@@ -6,14 +6,16 @@ import {
   type GrowthTodoDto,
 } from '@furniture-erp/shared';
 import { Check, Plus, Star, Timer } from 'lucide-react';
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
+import { EmptyState } from '@/components/feedback/EmptyState';
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { Dialog } from '@/components/ui/Dialog';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useCurrentUser } from '@/features/auth/hooks/use-auth';
+import { showPersonalToast } from '@/features/personal/feedback/personal-toast';
 import { ApiClientError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { ROUTES } from '@/routes/paths';
@@ -33,8 +35,17 @@ export function PersonalGrowthTodosPage() {
   const canWrite = Boolean(user && 'subscription' in user && user.subscription?.canWrite);
   const [filter, setFilter] = useState<'OPEN' | 'DONE' | 'all'>('OPEN');
   const [composerOpen, setComposerOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const list = useGrowthTodos(filter === 'all' ? undefined : filter);
+
+  useEffect(() => {
+    if (searchParams.get('compose') !== '1') return;
+    if (canWrite) setComposerOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('compose');
+    setSearchParams(next, { replace: true });
+  }, [canWrite, searchParams, setSearchParams]);
 
   const items = useMemo(() => list.data?.items ?? [], [list.data?.items]);
 
@@ -47,7 +58,7 @@ export function PersonalGrowthTodosPage() {
               {t('personal.navGrowth')}
             </Link>
           </p>
-          <h1 className="mt-1 text-lg font-semibold tracking-tight text-ink">
+          <h1 className="pf-page-title mt-1">
             {t('personal.todoTitle')}
           </h1>
           <p className="mt-1 text-sm text-ink-muted">{t('personal.todoHint')}</p>
@@ -105,9 +116,18 @@ export function PersonalGrowthTodosPage() {
           onRetry={() => void list.refetch()}
         />
       ) : items.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-line-strong px-4 py-8 text-center text-sm text-ink-muted">
-          {t('personal.todoEmpty')}
-        </p>
+        <EmptyState
+          icon={Check}
+          title={t('personal.todoEmpty')}
+          description={t('personal.todoHint')}
+          action={
+            canWrite ? (
+              <button type="button" className="pf-btn-primary" onClick={() => setComposerOpen(true)}>
+                {t('personal.todoAdd')}
+              </button>
+            ) : undefined
+          }
+        />
       ) : (
         <ul className="space-y-2">
           {items.map((todo) => (
@@ -127,19 +147,16 @@ function TodoRow({ todo, canWrite }: { todo: GrowthTodoDto; canWrite: boolean })
   const open = todo.status === GrowthTodoStatus.TODO || todo.status === GrowthTodoStatus.IN_PROGRESS;
 
   return (
-    <li className="flex items-start gap-3 rounded-2xl border border-line bg-surface px-3 py-3">
+    <li className="flex items-start gap-3 pf-card px-3 py-3">
       <button
         type="button"
         disabled={!canWrite || update.isPending || !open}
         aria-label={t('personal.todoMarkDone')}
-        className={cn(
-          'mt-0.5 flex size-11 shrink-0 items-center justify-center rounded-full border',
-          open
-            ? 'border-line-strong text-transparent hover:border-brand-500 hover:text-brand-600'
-            : 'border-brand-500 bg-brand-500 text-white',
-        )}
+        className={cn('pf-check mt-0.5', !open && 'pf-check--done')}
         onClick={() =>
-          void update.mutateAsync({ id: todo.id, body: { status: GrowthTodoStatus.DONE } })
+          void update.mutateAsync({ id: todo.id, body: { status: GrowthTodoStatus.DONE } }).then(() => {
+            showPersonalToast({ message: t('personal.toastTaskDone'), tone: 'success' });
+          })
         }
       >
         <Check className="size-4" aria-hidden="true" />

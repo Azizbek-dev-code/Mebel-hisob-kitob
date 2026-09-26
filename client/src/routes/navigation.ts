@@ -27,6 +27,7 @@ import {
   Sofa,
   Sprout,
   Truck,
+  Trophy,
   UserRound,
   Users,
   Wallet,
@@ -172,6 +173,12 @@ export const PLATFORM_NAV_ITEMS: readonly NavItem[] = [
       ROUTES.platformAnalyticsExpenses,
       ROUTES.platformAnalyticsProfit,
     ],
+  },
+  {
+    key: 'platform-global-ranking',
+    labelKey: 'nav.globalRanking',
+    to: ROUTES.platformGlobalRanking,
+    icon: Trophy,
   },
   {
     key: 'platform-referral',

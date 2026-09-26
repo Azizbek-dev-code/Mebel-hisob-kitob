@@ -34,14 +34,14 @@ import {
 } from 'lucide-react';
 
 export const HABIT_COLORS = [
-  '#4f46e5',
-  '#16a34a',
-  '#d97706',
-  '#dc2626',
-  '#0891b2',
-  '#7c3aed',
-  '#db2777',
-  '#475569',
+  '#064e3b',
+  '#10b981',
+  '#f59e0b',
+  '#ef4444',
+  '#0e6251',
+  '#64748b',
+  '#059669',
+  '#334155',
 ] as const;
 
 export const HABIT_CATEGORIES = [

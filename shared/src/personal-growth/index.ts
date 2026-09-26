@@ -13,3 +13,4 @@ export * from './notifications.js';
 export * from './reviews.js';
 export * from './premium.js';
 export * from './json-ids.js';
+export * from './level-unlocks.js';

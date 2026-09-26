@@ -135,23 +135,57 @@
   }
 }
 
-/* Personal Finance shell — scoped so Mebel ERP screens keep indigo tokens. */
+/* Personal Account shell — Balancy design system (ERP keeps indigo tokens). */
 .pf-shell {
-  --color-canvas: #f3f6f4;
+  --color-canvas: #f8fafc;
   --color-surface: #ffffff;
-  --color-surface-muted: #f7faf8;
-  --color-surface-hover: #eef4f1;
-  --color-line: #e4ece8;
-  --color-line-strong: #cfdcd6;
-  --color-brand-50: #ecf8f4;
-  --color-brand-100: #d7f0e8;
-  --color-brand-500: #0f766e;
-  --color-brand-600: #0d5f59;
-  --color-brand-700: #115e59;
-  --color-brand-800: #134e4a;
-  --pf-income: #0f766e;
-  --pf-expense: #dc2626;
-  --pf-negative: #b42318;
+  --color-surface-muted: #f1f5f9;
+  --color-surface-hover: #eef2f6;
+  --color-line: #e2e8f0;
+  --color-line-strong: #cbd5e1;
+  --color-ink: #0f172a;
+  --color-ink-soft: #334155;
+  --color-ink-muted: #64748b;
+  --color-ink-subtle: #94a3b8;
+  --color-brand-50: #ecfdf5;
+  --color-brand-100: #d1fae5;
+  --color-brand-200: #a7f3d0;
+  --color-brand-300: #6ee7b7;
+  --color-brand-400: #34d399;
+  --color-brand-500: #064e3b;
+  --color-brand-600: #0e6251;
+  --color-brand-700: #064e3b;
+  --color-brand-800: #043528;
+  --color-brand-900: #022c22;
+  --color-success-50: #ecfdf5;
+  --color-success-100: #d1fae5;
+  --color-success-500: #10b981;
+  --color-success-600: #059669;
+  --color-success-700: #047857;
+  --color-warning-50: #fffbeb;
+  --color-warning-100: #fef3c7;
+  --color-warning-500: #f59e0b;
+  --color-warning-600: #d97706;
+  --color-warning-700: #b45309;
+  --color-danger-50: #fef2f2;
+  --color-danger-100: #fee2e2;
+  --color-danger-500: #ef4444;
+  --color-danger-600: #dc2626;
+  --color-danger-700: #b91c1c;
+  --radius-input: 0.75rem;
+  --radius-card: 1rem;
+  --radius-panel: 1.25rem;
+  --shadow-card: 0 4px 12px rgb(15 23 42 / 0.04);
+  --shadow-raised: 0 8px 20px rgb(15 23 42 / 0.06);
+  --shadow-overlay: 0 20px 40px rgb(15 23 42 / 0.12);
+  --pf-income: #10b981;
+  --pf-expense: #ef4444;
+  --pf-negative: #dc2626;
+  --pf-streak: #f59e0b;
+  --font-sans: 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background-color: var(--color-canvas);
 }
 
 .pf-amount-income {
@@ -166,6 +200,323 @@
   color: var(--pf-negative);
 }
 
+.pf-page-title {
+  font-size: 1.375rem;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--color-ink);
+}
+
+.pf-page-hint {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--color-ink-muted);
+}
+
+.pf-section-title {
+  font-size: 1rem;
+  line-height: 1.35;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.pf-card {
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  border: 1px solid rgb(226 232 240 / 0.7);
+}
+
+.pf-card-flush {
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  border: 1px solid rgb(226 232 240 / 0.7);
+  overflow: hidden;
+}
+
+.pf-hero-balance {
+  border-radius: var(--radius-card);
+  background: linear-gradient(160deg, #064e3b 0%, #0e6251 100%);
+  color: #fff;
+  box-shadow: 0 8px 24px rgb(6 78 59 / 0.22);
+  padding: 1.25rem 1.25rem 1.35rem;
+}
+
+.pf-hero-balance .pf-hero-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: rgb(255 255 255 / 0.72);
+}
+
+.pf-hero-balance .pf-hero-value {
+  margin-top: 0.35rem;
+  font-size: 1.75rem;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-btn-primary {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  background: var(--color-brand-500);
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  transition: background-color 120ms ease, transform 120ms ease;
+}
+
+.pf-btn-primary:hover {
+  background: var(--color-brand-600);
+}
+
+.pf-btn-primary:active {
+  transform: scale(0.98);
+}
+
+.pf-btn-primary:disabled {
+  opacity: 0.55;
+}
+
+.pf-btn-secondary {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  background: #f1f5f9;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  transition: background-color 120ms ease, transform 120ms ease;
+}
+
+.pf-btn-secondary:hover {
+  background: #e2e8f0;
+}
+
+.pf-btn-secondary:active {
+  transform: scale(0.98);
+}
+
+.pf-btn-ghost {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e2e8f0;
+  background: transparent;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 550;
+  color: var(--color-ink-soft);
+  transition: background-color 120ms ease;
+}
+
+.pf-btn-ghost:hover {
+  background: var(--color-surface-hover);
+}
+
+.pf-check {
+  display: flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1.5px solid var(--color-line-strong);
+  color: var(--color-ink-muted);
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.pf-check:hover:not(:disabled) {
+  border-color: var(--color-brand-500);
+  color: var(--color-brand-600);
+}
+
+.pf-check:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.pf-check--done {
+  border-color: var(--color-success-500);
+  background: var(--color-success-500);
+  color: #fff;
+  animation: pf-pop 280ms ease;
+}
+
+@keyframes pf-pop {
+  0% {
+    transform: scale(0.86);
+  }
+  55% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.pf-progress-track {
+  height: 0.5rem;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: var(--color-surface-muted);
+}
+
+.pf-progress-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: var(--color-brand-500);
+  transition: width 320ms ease;
+}
+
+.pf-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  background: var(--color-brand-500);
+  padding: 0.15rem 0.45rem;
+  font-size: 0.625rem;
+  font-weight: 650;
+  line-height: 1.1;
+  color: #fff;
+}
+
+.pf-bottom-nav {
+  border-top: 1px solid rgb(226 232 240 / 0.9);
+  background: rgb(255 255 255 / 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.pf-bottom-nav-item {
+  position: relative;
+  display: flex;
+  min-height: 3.5rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  padding: 0.25rem 0.15rem;
+  font-size: 0.625rem;
+  line-height: 1.15;
+  color: var(--color-ink-muted);
+  transition: color 140ms ease;
+}
+
+.pf-bottom-nav-item--active {
+  color: var(--color-brand-500);
+  font-weight: 600;
+}
+
+.pf-bottom-nav-item--active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 1.75rem;
+  height: 2px;
+  border-radius: 9999px;
+  background: var(--color-brand-500);
+  transform: translateX(-50%);
+}
+
+.pf-focus-ring {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 14.5rem;
+  height: 14.5rem;
+  margin-inline: auto;
+}
+
+.pf-focus-ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.pf-focus-ring-track {
+  fill: none;
+  stroke: #e2e8f0;
+  stroke-width: 8;
+}
+
+.pf-focus-ring-progress {
+  fill: none;
+  stroke: #064e3b;
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 400ms ease;
+}
+
+.pf-focus-ring-progress--break {
+  stroke: #f59e0b;
+}
+
+.pf-focus-time {
+  position: relative;
+  z-index: 1;
+  font-size: 2.75rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink);
+}
+
+.pf-sheet-choice {
+  border-radius: var(--radius-card);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  padding: 0.95rem 1rem;
+  text-align: left;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.pf-sheet-choice:hover {
+  background: var(--color-surface-hover);
+}
+
+.pf-sheet-choice--income {
+  border-color: rgb(16 185 129 / 0.35);
+}
+
+.pf-sheet-choice--expense {
+  border-color: rgb(239 68 68 / 0.3);
+}
+
+.pf-amount-field input,
+.pf-shell .pf-amount-field input {
+  font-size: 1.5rem !important;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Mobile (≤390px class of phone): prefer 44px taps, avoid accidental zooms. */
 .pf-shell button,
 .pf-shell a,
@@ -176,6 +527,103 @@
 .pf-touch-target {
   min-height: 2.75rem;
   min-width: 2.75rem;
+}
+
+/* Legacy personal pages: keep one visual language without rewriting every screen. */
+.pf-shell main h1 {
+  font-size: 1.375rem;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--color-ink);
+}
+
+.pf-shell main h2 {
+  font-size: 1rem;
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+.pf-shell .rounded-2xl.border.border-line.bg-surface,
+.pf-shell .rounded-panel.border.border-line.bg-surface,
+.pf-shell .rounded-2xl.border.border-line.bg-surface.shadow-card,
+.pf-shell .rounded-panel.border.border-line.bg-surface.shadow-card {
+  border-radius: var(--radius-card);
+  border-color: rgb(226 232 240 / 0.7);
+  box-shadow: var(--shadow-card);
+}
+
+.pf-shell button.rounded-input.bg-brand-500,
+.pf-shell a.rounded-input.bg-brand-500,
+.pf-shell button.bg-brand-500,
+.pf-shell a.bg-brand-500 {
+  border-radius: 0.75rem;
+  font-weight: 600;
+}
+
+.pf-shell input.rounded-input,
+.pf-shell select.rounded-input,
+.pf-shell textarea.rounded-input {
+  border-radius: 0.75rem;
+}
+
+.pf-shell .tabular-nums,
+.pf-shell .tabular-money {
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-level-up {
+  isolation: isolate;
+}
+
+.pf-level-up-glow {
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(circle at 50% 30%, rgb(16 185 129 / 0.28), transparent 55%);
+  pointer-events: none;
+}
+
+.pf-level-up-particles {
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 18% 28%, rgb(255 255 255 / 0.35) 0 1px, transparent 2px),
+    radial-gradient(circle at 78% 22%, rgb(167 243 208 / 0.45) 0 1px, transparent 2px),
+    radial-gradient(circle at 62% 68%, rgb(255 255 255 / 0.28) 0 1px, transparent 2px),
+    radial-gradient(circle at 28% 74%, rgb(52 211 153 / 0.35) 0 1px, transparent 2px);
+  opacity: 0.85;
+  pointer-events: none;
+  animation: pf-level-fade 900ms ease both;
+}
+
+@keyframes pf-level-fade {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-check--done,
+  .pf-progress-fill,
+  .pf-focus-ring-progress,
+  .pf-level-up-particles,
+  .pf-btn-primary,
+  .pf-btn-secondary {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+.pf-shell a:focus-visible,
+.pf-shell button:focus-visible,
+.pf-shell [role='button']:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
 }
 
 /* Public marketing (Balancy.Space) */

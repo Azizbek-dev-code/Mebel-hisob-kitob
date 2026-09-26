@@ -1164,3 +1164,30 @@ export type GlobalLeaderboardPeriod =
   (typeof GlobalLeaderboardPeriod)[keyof typeof GlobalLeaderboardPeriod];
 
 export const GLOBAL_LEADERBOARD_PERIODS = Object.values(GlobalLeaderboardPeriod);
+
+export const GlobalCompetitionStatus = {
+  DRAFT: 'DRAFT',
+  ACTIVE: 'ACTIVE',
+  FINALIZED: 'FINALIZED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type GlobalCompetitionStatus =
+  (typeof GlobalCompetitionStatus)[keyof typeof GlobalCompetitionStatus];
+export const GLOBAL_COMPETITION_STATUSES = Object.values(GlobalCompetitionStatus);
+
+export const GlobalRewardPlace = {
+  FIRST: 'FIRST',
+  SECOND: 'SECOND',
+  THIRD: 'THIRD',
+} as const;
+export type GlobalRewardPlace = (typeof GlobalRewardPlace)[keyof typeof GlobalRewardPlace];
+export const GLOBAL_REWARD_PLACES = Object.values(GlobalRewardPlace);
+
+export const GlobalRewardDeliveryStatus = {
+  PENDING: 'PENDING',
+  CONFIRMED: 'CONFIRMED',
+  DELIVERED: 'DELIVERED',
+} as const;
+export type GlobalRewardDeliveryStatus =
+  (typeof GlobalRewardDeliveryStatus)[keyof typeof GlobalRewardDeliveryStatus];
+export const GLOBAL_REWARD_DELIVERY_STATUSES = Object.values(GlobalRewardDeliveryStatus);

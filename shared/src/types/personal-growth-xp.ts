@@ -14,6 +14,8 @@ export interface GrowthXpEventDto {
 export interface GrowthProgressDto {
   totalXp: number;
   level: number;
+  /** Soft title key (i18n personal.levelTitleName.*). */
+  levelTitleKey: string;
   xpIntoLevel: number;
   xpForNextLevel: number;
   percent: number;
@@ -22,6 +24,13 @@ export interface GrowthProgressDto {
   lastActivityDayKey: string | null;
   todayXp: number;
   recentEvents: GrowthXpEventDto[];
+  /** Unlocked progression rewards (catalog — does not gate core features). */
+  unlockedKeys: string[];
+  /** Next unlock minLevel / key, if any. */
+  nextUnlock: { key: string; minLevel: number; titleKey: string; hintKey: string } | null;
+  /** Monthly Global Ranking position when available. */
+  globalRank: number | null;
+  xpToTop3: number | null;
 }
 
 export interface GrowthProgressResponse {

@@ -74,6 +74,31 @@ describe('PersonalGrowthHubPage', () => {
         status: 200,
         body: { success: true, data: { items: [], activeCount: 0, dueTodayCount: 3, bestCurrentStreak: 0 } },
       },
+      '/personal/growth/progress': {
+        status: 200,
+        body: {
+          success: true,
+          data: {
+            progress: {
+              level: 2,
+              totalXp: 120,
+              xpIntoLevel: 20,
+              xpForNextLevel: 200,
+              percent: 10,
+              currentStreak: 3,
+              bestStreak: 5,
+              lastActivityDayKey: '2026-09-17',
+              todayXp: 15,
+              recentEvents: [],
+              levelTitleKey: 'starter',
+              unlockedKeys: [],
+              nextUnlock: null,
+              globalRank: null,
+              xpToTop3: null,
+            },
+          },
+        },
+      },
     });
 
     renderWithProviders(

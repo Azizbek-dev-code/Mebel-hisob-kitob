@@ -88,6 +88,7 @@ export const ROUTES = {
   platformPaymentsPending: '/platform/payments/pending',
   platformPaymentsOverdue: '/platform/payments/overdue',
   platformPlans: '/platform/plans',
+  platformGlobalRanking: '/platform/global-ranking',
   platformExpenses: '/platform/expenses',
   platformPnl: '/platform/pnl',
   platformAnalytics: '/platform/analytics',

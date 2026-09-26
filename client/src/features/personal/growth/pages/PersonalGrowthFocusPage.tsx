@@ -22,6 +22,7 @@ import {
 import { ApiClientError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { ROUTES } from '@/routes/paths';
+import { showPersonalToast } from '@/features/personal/feedback/personal-toast';
 
 function formatCountdown(totalSeconds: number): string {
   const safe = Math.max(0, totalSeconds);
@@ -82,6 +83,12 @@ export function PersonalGrowthFocusPage() {
     return Math.max(0, active.plannedMinutes * 60 - elapsed);
   }, [active, plannedMinutes, tick]);
 
+  const ringProgress = useMemo(() => {
+    const total = (active?.plannedMinutes ?? plannedMinutes) * 60;
+    if (total <= 0) return 0;
+    return Math.min(1, Math.max(0, remainingSeconds / total));
+  }, [active?.plannedMinutes, plannedMinutes, remainingSeconds]);
+
   const openTodos = (todos.data?.items ?? []) as GrowthTodoDto[];
 
   async function onStart(kind: 'FOCUS' | 'BREAK' = 'FOCUS') {
@@ -113,27 +120,31 @@ export function PersonalGrowthFocusPage() {
         id: active.id,
         body: { interrupted, clientReportedSeconds: elapsed },
       });
+      if (!interrupted) {
+        showPersonalToast({ message: t('personal.toastFocusDone'), tone: 'xp' });
+      }
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : t('personal.focusCompleteFailed'));
     }
   }
 
+  const circumference = 2 * Math.PI * 54;
+  const dashOffset = circumference * (1 - ringProgress);
+
   return (
     <div className="space-y-5 overflow-x-hidden">
       <div>
-        <p className="text-xs font-medium text-brand-700">
+        <p className="text-xs font-semibold text-brand-600">
           <Link to={ROUTES.personalGrowth} className="hover:underline">
             {t('personal.navGrowth')}
           </Link>
         </p>
-        <h1 className="mt-1 text-lg font-semibold tracking-tight text-ink">
-          {t('personal.focusTitle')}
-        </h1>
-        <p className="mt-1 text-sm text-ink-muted">{t('personal.focusHint')}</p>
+        <h1 className="pf-page-title mt-1">{t('personal.focusTitle')}</h1>
+        <p className="pf-page-hint">{t('personal.focusHint')}</p>
       </div>
 
       {statsQuery.isPending && !statsQuery.data ? (
-        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-24 w-full rounded-2xl" />
       ) : statsQuery.isError ? (
         <ErrorState
           title={t('personal.focusLoadFailed')}
@@ -157,7 +168,7 @@ export function PersonalGrowthFocusPage() {
         </div>
       )}
 
-      <section className="rounded-2xl border border-line bg-surface px-4 py-8 text-center shadow-card">
+      <section className="pf-card px-4 py-8 text-center">
         <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
           {active
             ? active.kind === 'BREAK'
@@ -165,9 +176,23 @@ export function PersonalGrowthFocusPage() {
               : t('personal.focusRunning')
             : t('personal.focusReady')}
         </p>
-        <p className="mt-3 font-semibold tabular-nums tracking-tight text-ink text-5xl sm:text-6xl">
-          {formatCountdown(remainingSeconds)}
-        </p>
+        <div className="pf-focus-ring mt-5">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <circle className="pf-focus-ring-track" cx="60" cy="60" r="54" />
+            <circle
+              className={cn(
+                'pf-focus-ring-progress',
+                active?.kind === 'BREAK' && 'pf-focus-ring-progress--break',
+              )}
+              cx="60"
+              cy="60"
+              r="54"
+              strokeDasharray={circumference}
+              strokeDashoffset={dashOffset}
+            />
+          </svg>
+          <p className="pf-focus-time">{formatCountdown(remainingSeconds)}</p>
+        </div>
         {active?.habitTitle || linkedHabit?.title ? (
           <p className="mt-3 text-sm text-ink-soft">{active?.habitTitle ?? linkedHabit?.title}</p>
         ) : active?.todoTitle ? (
@@ -180,7 +205,7 @@ export function PersonalGrowthFocusPage() {
               type="button"
               disabled={!canWrite || start.isPending}
               onClick={() => void onStart('FOCUS')}
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-input bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+              className="pf-btn-primary"
             >
               <Play className="size-4" aria-hidden="true" />
               {t('personal.focusStart')}
@@ -191,7 +216,7 @@ export function PersonalGrowthFocusPage() {
                 type="button"
                 disabled={complete.isPending}
                 onClick={() => void onFinish(false)}
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-input bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+                className="pf-btn-primary"
               >
                 <Square className="size-4" aria-hidden="true" />
                 {t('personal.focusComplete')}
@@ -200,7 +225,7 @@ export function PersonalGrowthFocusPage() {
                 type="button"
                 disabled={complete.isPending}
                 onClick={() => void onFinish(true)}
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-input border border-line px-4 py-2.5 text-sm font-medium text-ink-soft hover:bg-surface-hover disabled:opacity-60"
+                className="pf-btn-ghost"
               >
                 <Pause className="size-4" aria-hidden="true" />
                 {t('personal.focusInterrupt')}
@@ -217,8 +242,8 @@ export function PersonalGrowthFocusPage() {
       </section>
 
       {!active ? (
-        <section className="space-y-3 rounded-2xl border border-line bg-surface p-4">
-          <p className="text-sm font-semibold text-ink">{t('personal.focusPresets')}</p>
+        <section className="pf-card space-y-3 p-4">
+          <p className="pf-section-title">{t('personal.focusPresets')}</p>
           <div className="flex flex-wrap gap-2">
             {GROWTH_FOCUS_PRESETS.map((preset) => (
               <button
@@ -230,7 +255,7 @@ export function PersonalGrowthFocusPage() {
                   setCustomMinutes(String(preset.focusMinutes));
                 }}
                 className={cn(
-                  'rounded-full border px-3 py-1.5 text-xs font-medium',
+                  'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
                   plannedMinutes === preset.focusMinutes
                     ? 'border-brand-200 bg-brand-50 text-brand-800'
                     : 'border-line text-ink-soft hover:bg-surface-hover',
@@ -252,7 +277,7 @@ export function PersonalGrowthFocusPage() {
                 const n = Number(e.target.value);
                 if (n > 0) setPlannedMinutes(n);
               }}
-              className="w-full rounded-input border border-line bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+              className="w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-500"
             />
           </label>
           <label className="block space-y-1 text-sm">
@@ -260,7 +285,7 @@ export function PersonalGrowthFocusPage() {
             <select
               value={todoId}
               onChange={(e) => setTodoId(e.target.value)}
-              className="w-full rounded-input border border-line bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+              className="w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-500"
             >
               <option value="">{t('personal.focusNoTodo')}</option>
               {openTodos.map((todo) => (
@@ -274,7 +299,7 @@ export function PersonalGrowthFocusPage() {
             type="button"
             disabled={!canWrite || start.isPending}
             onClick={() => void onStart('BREAK')}
-            className="w-full rounded-input border border-line px-3 py-2 text-sm text-ink-soft hover:bg-surface-hover disabled:opacity-60"
+            className="pf-btn-secondary w-full"
           >
             {t('personal.focusStartBreak', { minutes: breakMinutes })}
           </button>
@@ -286,7 +311,7 @@ export function PersonalGrowthFocusPage() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-line bg-surface px-2.5 py-3 text-center">
+    <div className="pf-card px-2.5 py-3 text-center">
       <p className="text-[10px] text-ink-muted">{label}</p>
       <p className="mt-1 text-sm font-semibold tabular-nums text-ink">{value}</p>
     </div>

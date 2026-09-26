@@ -23,6 +23,10 @@ import { personalGrowthNotificationsRouter } from '../modules/personal-finance/g
 import { personalGrowthReviewsRouter } from '../modules/personal-finance/growth/personal-growth-reviews.routes.js';
 import { personalGrowthPremiumRouter } from '../modules/personal-finance/growth/personal-growth-premium.routes.js';
 import { personalGrowthRankingRouter } from '../modules/personal-finance/growth/personal-growth-ranking.routes.js';
+import {
+  personalGrowthCompetitionRouter,
+  platformGlobalRankingRouter,
+} from '../modules/personal-finance/growth/personal-growth-competition.routes.js';
 import { personalFeedbackRouter } from '../modules/personal-finance/growth/personal-feedback.routes.js';
 import { personalRecurringRouter } from '../modules/personal-finance/recurring/personal-recurring.routes.js';
 import { platformPersonalRouter } from '../modules/personal-finance/stats/personal-stats.routes.js';
@@ -92,6 +96,8 @@ apiRouter.use('/personal', personalGrowthNotificationsRouter);
 apiRouter.use('/personal', personalGrowthReviewsRouter);
 apiRouter.use('/personal', personalGrowthPremiumRouter);
 apiRouter.use('/personal', personalGrowthRankingRouter);
+apiRouter.use('/personal', personalGrowthCompetitionRouter);
+apiRouter.use('/platform/global-ranking', platformGlobalRankingRouter);
 apiRouter.use('/personal', personalFeedbackRouter);
 apiRouter.use('/referrals', referralsRouter);
 apiRouter.use('/platform/referrals', platformReferralsRouter);

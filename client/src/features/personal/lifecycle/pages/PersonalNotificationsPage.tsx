@@ -45,10 +45,10 @@ export function PersonalNotificationsPage() {
   const unread = (finance.data?.unreadCount ?? 0) + (growth.data?.unreadCount ?? 0);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 overflow-x-hidden">
       <div>
-        <h1 className="text-lg font-semibold tracking-tight text-ink">{t('personal.notifications')}</h1>
-        <p className="mt-1 text-sm text-ink-muted">{t('personal.notificationsHint')}</p>
+        <h1 className="pf-page-title">{t('personal.notifications')}</h1>
+        <p className="pf-page-hint">{t('personal.notificationsHint')}</p>
       </div>
 
       {pending ? (

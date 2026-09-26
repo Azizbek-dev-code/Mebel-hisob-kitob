@@ -578,6 +578,28 @@ enum GrowthXpSource {
   FINANCE_DISCIPLINE
 }
 
+/// Monthly Global Ranking competition lifecycle.
+enum GlobalCompetitionStatus {
+  DRAFT
+  ACTIVE
+  FINALIZED
+  CANCELLED
+}
+
+/// Podium place for monthly rewards (admin-configured).
+enum GlobalRewardPlace {
+  FIRST
+  SECOND
+  THIRD
+}
+
+/// Admin-managed reward fulfillment for monthly winners.
+enum GlobalRewardDeliveryStatus {
+  PENDING
+  CONFIRMED
+  DELIVERED
+}
+
 /// Friendship lifecycle between two Identities (social — not workspace-scoped).
 enum GrowthFriendshipStatus {
   PENDING
@@ -3745,4 +3767,75 @@ model PlatformXpTransaction {
   @@index([identityId, createdAt])
   @@index([eventType, createdAt])
   @@map("platform_xp_transactions")
+}
+
+/// Monthly Global Ranking competition (XP activity — never money-based).
+model GlobalMonthlyCompetition {
+  id          String                  @id @default(cuid())
+  /// UTC calendar month key, e.g. "2026-09".
+  periodKey   String                  @unique
+  title       String
+  description String?
+  startsAt    DateTime
+  endsAt      DateTime
+  status      GlobalCompetitionStatus @default(DRAFT)
+  finalizedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rewards GlobalMonthlyReward[]
+  winners GlobalMonthlyWinner[]
+
+  @@index([status, startsAt])
+  @@map("global_monthly_competitions")
+}
+
+/// Admin-configured podium rewards for a monthly competition.
+model GlobalMonthlyReward {
+  id            String            @id @default(cuid())
+  competitionId String
+  place         GlobalRewardPlace
+  title         String
+  description   String?
+  valueText     String?
+  imageUrl      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  competition GlobalMonthlyCompetition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  winners     GlobalMonthlyWinner[]
+
+  @@unique([competitionId, place])
+  @@map("global_monthly_rewards")
+}
+
+/// Immutable monthly winner snapshot + delivery status (admin-only mutations).
+model GlobalMonthlyWinner {
+  id             String                     @id @default(cuid())
+  competitionId  String
+  rewardId       String?
+  identityId     String
+  place          Int
+  displayName    String
+  handle         String?
+  level          Int
+  periodXp       Int
+  totalXp        Int
+  deliveryStatus GlobalRewardDeliveryStatus @default(PENDING)
+  confirmedAt    DateTime?
+  deliveredAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  competition GlobalMonthlyCompetition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  reward      GlobalMonthlyReward?     @relation(fields: [rewardId], references: [id], onDelete: SetNull)
+
+  @@unique([competitionId, place])
+  @@unique([competitionId, identityId])
+  @@index([identityId])
+  @@index([deliveryStatus])
+  @@map("global_monthly_winners")
 }

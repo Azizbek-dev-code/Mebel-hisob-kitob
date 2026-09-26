@@ -64,11 +64,11 @@ export function PersonalGrowthHabitDetailPage() {
         </p>
       ) : (
         <>
-          <section className="rounded-2xl border border-line bg-surface p-4">
+          <section className="pf-card p-4">
             <div className="flex items-start gap-3">
               <span
                 className="flex size-12 items-center justify-center rounded-2xl text-white"
-                style={{ background: habit.color || '#4f46e5' }}
+                style={{ background: habit.color || '#064e3b' }}
               >
                 <Icon className="size-5" />
               </span>
@@ -119,9 +119,17 @@ export function PersonalGrowthHabitDetailPage() {
             {canWrite && !habit.isArchived && isDurationHabit(habit) && habit.todayStatus !== 'COMPLETED' ? (
               <Link
                 to={`${ROUTES.personalGrowthFocus}?habitId=${habit.id}&minutes=${remainingHabitMinutes(habit)}`}
-                className="mt-3 inline-flex min-h-11 items-center justify-center rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
+                className="mt-4 flex w-full items-center justify-between gap-3 rounded-xl bg-brand-500 px-4 py-3.5 text-left text-white shadow-card transition-colors hover:bg-brand-600"
               >
-                {t('personal.habitStartTimer')}
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold">{t('personal.habitStartTimer')}</span>
+                  <span className="mt-0.5 block text-xs text-white/75 tabular-nums">
+                    {remainingHabitMinutes(habit)} {t('personal.plan.minutes')}
+                  </span>
+                </span>
+                <span className="shrink-0 rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold">
+                  {t('personal.focusStart')}
+                </span>
               </Link>
             ) : null}
             {canWrite && !habit.isArchived ? (
@@ -180,14 +188,14 @@ export function PersonalGrowthHabitDetailPage() {
           <p className="text-sm text-ink-muted">
             {t('personal.habitGoalProgress')}: {formatPct(stats.kpi.goalProgress)}
           </p>
-          <section className="rounded-2xl border border-line bg-surface p-4">
+          <section className="pf-card p-4">
             <HabitHeatmap cells={stats.calendar} />
           </section>
-          <section className="rounded-2xl border border-line bg-surface p-4">
+          <section className="pf-card p-4">
             <HabitTrendBars points={stats.trend} />
           </section>
-          <section className="rounded-2xl border border-line bg-surface p-4">
-            <h2 className="text-sm font-semibold text-ink">{t('personal.habitLogs')}</h2>
+          <section className="pf-card p-4">
+            <h2 className="pf-section-title">{t('personal.habitLogs')}</h2>
             {detail.data.logs.length === 0 ? (
               <p className="mt-2 text-sm text-ink-muted">{t('personal.habitNoLogs')}</p>
             ) : (

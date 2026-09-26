@@ -50,7 +50,7 @@ describe('PersonalGlobalRankingPage', () => {
         body: {
           success: true,
           data: {
-            period: 'WEEKLY',
+            period: 'MONTHLY',
             items: [
               {
                 identityId: 'idn_other',
@@ -84,6 +84,55 @@ describe('PersonalGlobalRankingPage', () => {
           },
         },
       },
+      '/personal/growth/monthly-competition': {
+        status: 200,
+        body: {
+          success: true,
+          data: {
+            competition: {
+              id: 'comp_1',
+              periodKey: '2026-09',
+              title: 'September 2026',
+              description: null,
+              startsAt: '2026-09-01T00:00:00.000Z',
+              endsAt: '2026-10-01T00:00:00.000Z',
+              status: 'ACTIVE',
+              finalizedAt: null,
+              rewards: [],
+            },
+            top3: [
+              {
+                identityId: 'idn_other',
+                displayName: 'Jasur',
+                handle: 'jasur',
+                level: 8,
+                totalXp: 900,
+                periodXp: 40,
+                currentStreak: 12,
+                rank: 1,
+                isMe: false,
+              },
+            ],
+            myEntry: {
+              identityId: 'idn_1',
+              displayName: 'Aziz',
+              handle: 'aziz',
+              level: 4,
+              totalXp: 120,
+              periodXp: 10,
+              currentStreak: 3,
+              rank: 4,
+              isMe: true,
+            },
+            xpToTop3: 30,
+            showMeInRanking: true,
+          },
+        },
+      },
+      '/personal/growth/monthly-competition/history': {
+        status: 200,
+        body: { success: true, data: { items: [] } },
+      },
     });
 
     renderWithProviders(
@@ -93,8 +142,9 @@ describe('PersonalGlobalRankingPage', () => {
     );
 
     expect(await screen.findByRole('heading', { name: 'Global reyting' })).toBeInTheDocument();
-    expect(await screen.findByText('Jasur')).toBeInTheDocument();
+    expect(await screen.findAllByText('Jasur')).not.toHaveLength(0);
     expect(screen.getByText('Aziz')).toBeInTheDocument();
+    expect(screen.getByText(/Sizning o‘rningiz/)).toBeInTheDocument();
     expect(screen.queryByText('aziz@example.com')).not.toBeInTheDocument();
   });
 });

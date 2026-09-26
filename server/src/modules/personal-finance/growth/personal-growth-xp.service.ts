@@ -5,8 +5,10 @@ import {
   baseXpForSource,
   clampXpToDailyCap,
   computeLevelProgress,
+  levelTitleKeyFor,
   nextStreakState,
   toDayKey,
+  unlocksForLevel,
   xpForFocusMinutes,
   xpForLearningMinutes,
   type GrowthProgressDto,
@@ -61,11 +63,14 @@ function toProgressDto(
   row: GrowthProgress,
   todayXp: number,
   recentEvents: GrowthXpEvent[],
+  extras?: { globalRank: number | null; xpToTop3: number | null },
 ): GrowthProgressDto {
   const level = computeLevelProgress(row.totalXp, row.level);
+  const unlocks = unlocksForLevel(level.level);
   return {
     totalXp: row.totalXp,
     level: level.level,
+    levelTitleKey: levelTitleKeyFor(level.level),
     xpIntoLevel: level.xpIntoLevel,
     xpForNextLevel: level.xpForNextLevel,
     percent: level.percent,
@@ -74,6 +79,17 @@ function toProgressDto(
     lastActivityDayKey: row.lastActivityDayKey,
     todayXp,
     recentEvents: recentEvents.map(toEventDto),
+    unlockedKeys: unlocks.unlocked.map((u) => u.key),
+    nextUnlock: unlocks.next
+      ? {
+          key: unlocks.next.key,
+          minLevel: unlocks.next.minLevel,
+          titleKey: unlocks.next.titleKey,
+          hintKey: unlocks.next.hintKey,
+        }
+      : null,
+    globalRank: extras?.globalRank ?? null,
+    xpToTop3: extras?.xpToTop3 ?? null,
   };
 }
 
@@ -284,7 +300,25 @@ export async function getGrowthProgress(
     }),
   ]);
 
-  return toProgressDto(progressRow, todayXp, recent);
+  let globalRank: number | null = null;
+  let xpToTop3: number | null = null;
+  try {
+    const { getMonthlyCompetitionOverview } = await import('./personal-growth-competition.service.js');
+    const overview = await getMonthlyCompetitionOverview(
+      workspaceId,
+      identityId,
+      db as PrismaClient,
+      now,
+    );
+    if (overview.showMeInRanking && overview.myEntry && overview.myEntry.rank > 0) {
+      globalRank = overview.myEntry.rank;
+      xpToTop3 = overview.xpToTop3;
+    }
+  } catch {
+    /* ranking enrichment is best-effort */
+  }
+
+  return toProgressDto(progressRow, todayXp, recent, { globalRank, xpToTop3 });
 }
 
 export function focusXpAmount(creditedMinutes: number): number {

@@ -1,4 +1,6 @@
 import type {
+  GlobalMonthlyCompetitionOverviewDto,
+  GlobalMonthlyWinnersHistoryResponse,
   GlobalLeaderboardPeriod,
   GlobalRankingListResponse,
   GlobalRankingProfileDto,
@@ -15,4 +17,10 @@ export const personalGrowthRankingService = {
   profile: (id: string, signal?: AbortSignal) =>
     apiClient.get<{ profile: GlobalRankingProfileDto }>(`/personal/growth/global-ranking/${id}`, { signal }),
   like: (id: string) => apiClient.post<{ liked: boolean; likeCount: number }>(`/personal/growth/feedback/${id}/like`),
+  monthlyCompetition: (signal?: AbortSignal) =>
+    apiClient.get<GlobalMonthlyCompetitionOverviewDto>('/personal/growth/monthly-competition', { signal }),
+  winnersHistory: (signal?: AbortSignal) =>
+    apiClient.get<GlobalMonthlyWinnersHistoryResponse>('/personal/growth/monthly-competition/history', {
+      signal,
+    }),
 };

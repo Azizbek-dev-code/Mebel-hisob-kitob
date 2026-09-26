@@ -65,29 +65,56 @@ const NOTIFY_ROUTES = {
   },
 } as const;
 
-describe('PersonalLayout navigation', () => {
-  it('renders the five O‘sish primary tabs without overflow class on the shell', async () => {
-    mockApi({
-      '/auth/me': { status: 200, body: { success: true, data: { user: PERSONAL } } },
-      '/accounts': { status: 200, body: { success: true, data: { items: [] } } },
-      '/personal/billing': {
-        status: 200,
-        body: {
-          success: true,
-          data: {
-            subscription: PERSONAL.subscription,
-            plans: [],
-            paymentInstructions: null,
-            pendingRequest: null,
-          },
+const LAYOUT_APIS = {
+  '/auth/me': { status: 200, body: { success: true, data: { user: PERSONAL } } },
+  '/accounts': { status: 200, body: { success: true, data: { items: [] } } },
+  '/personal/billing': {
+    status: 200,
+    body: {
+      success: true,
+      data: {
+        subscription: PERSONAL.subscription,
+        plans: [],
+        paymentInstructions: null,
+        pendingRequest: null,
+      },
+    },
+  },
+  '/personal/feedback/status': {
+    status: 200,
+    body: { success: true, data: { prompts: { showOnboarding: false, showOutcome: false } } },
+  },
+  '/personal/growth/progress': {
+    status: 200,
+    body: {
+      success: true,
+      data: {
+        progress: {
+          level: 2,
+          totalXp: 120,
+          xpIntoLevel: 20,
+          xpForNextLevel: 200,
+          percent: 10,
+          currentStreak: 3,
+          bestStreak: 5,
+          lastActivityDayKey: '2026-09-17',
+          todayXp: 15,
+          recentEvents: [],
+          levelTitleKey: 'starter',
+          unlockedKeys: [],
+          nextUnlock: null,
+          globalRank: null,
+          xpToTop3: null,
         },
       },
-      '/personal/feedback/status': {
-        status: 200,
-        body: { success: true, data: { prompts: { showOnboarding: false, showOutcome: false } } },
-      },
-      ...NOTIFY_ROUTES,
-    });
+    },
+  },
+  ...NOTIFY_ROUTES,
+} as const;
+
+describe('PersonalLayout navigation', () => {
+  it('renders the five O‘sish primary tabs without overflow class on the shell', async () => {
+    mockApi(LAYOUT_APIS);
 
     const { container } = renderWithProviders(
       <MemoryRouter initialEntries={['/personal/dashboard']}>
@@ -108,28 +135,8 @@ describe('PersonalLayout navigation', () => {
     expect(screen.getByLabelText('Qo‘shish')).toBeInTheDocument();
   });
 
-  it('hides money FAB on Growth routes at 390px', async () => {
-    mockApi({
-      '/auth/me': { status: 200, body: { success: true, data: { user: PERSONAL } } },
-      '/accounts': { status: 200, body: { success: true, data: { items: [] } } },
-      '/personal/billing': {
-        status: 200,
-        body: {
-          success: true,
-          data: {
-            subscription: PERSONAL.subscription,
-            plans: [],
-            paymentInstructions: null,
-            pendingRequest: null,
-          },
-        },
-      },
-      '/personal/feedback/status': {
-        status: 200,
-        body: { success: true, data: { prompts: { showOnboarding: false, showOutcome: false } } },
-      },
-      ...NOTIFY_ROUTES,
-    });
+  it('keeps quick-actions FAB available on Growth routes at 390px', async () => {
+    mockApi(LAYOUT_APIS);
 
     renderWithProviders(
       <MemoryRouter initialEntries={['/personal/growth']}>
@@ -140,6 +147,6 @@ describe('PersonalLayout navigation', () => {
     );
 
     expect(await screen.findAllByText('O‘sish')).not.toHaveLength(0);
-    expect(screen.queryByLabelText('Qo‘shish')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Qo‘shish')).toBeInTheDocument();
   });
 });

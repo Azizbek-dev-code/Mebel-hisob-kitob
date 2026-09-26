@@ -343,6 +343,10 @@ const PlatformPlansPage = lazyPage(
   () => import('@/features/platform/pages/PlatformPlansPage'),
   'PlatformPlansPage',
 );
+const PlatformGlobalRankingPage = lazyPage(
+  () => import('@/features/platform/pages/PlatformGlobalRankingPage'),
+  'PlatformGlobalRankingPage',
+);
 const PlatformPnlPage = lazyPage(() => import('@/features/platform/pages/PlatformPnlPage'), 'PlatformPnlPage');
 const PlatformAccountDeletionsPage = lazyPage(
   () => import('@/features/platform/pages/PlatformAccountDeletionsPage'),
@@ -812,6 +816,7 @@ export const routes: RouteObject[] = [
             element: platformOnly(<PlatformPaymentsOverduePage />),
           },
           { path: ROUTES.platformPlans, element: platformOnly(<PlatformPlansPage />) },
+          { path: ROUTES.platformGlobalRanking, element: platformOnly(<PlatformGlobalRankingPage />) },
           { path: ROUTES.platformExpenses, element: platformOnly(<PlatformExpensesPage />) },
           { path: ROUTES.platformPnl, element: platformOnly(<PlatformPnlPage />) },
           { path: ROUTES.platformAnalytics, element: platformOnly(<PlatformAnalyticsPage />) },

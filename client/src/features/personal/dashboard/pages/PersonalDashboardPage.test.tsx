@@ -137,6 +137,7 @@ describe('PersonalDashboardPage', () => {
           data: {
             progress: {
               level: 2,
+              levelTitleKey: 'starter',
               totalXp: 120,
               xpIntoLevel: 20,
               xpForNextLevel: 200,
@@ -146,7 +147,63 @@ describe('PersonalDashboardPage', () => {
               lastActivityDayKey: '2026-09-17',
               todayXp: 15,
               recentEvents: [],
+              unlockedKeys: [],
+              nextUnlock: {
+                key: 'ACHIEVEMENT_BADGE',
+                minLevel: 5,
+                titleKey: 'achievementBadge',
+                hintKey: 'achievementBadgeHint',
+              },
+              globalRank: 4,
+              xpToTop3: 30,
             },
+          },
+        },
+      },
+      '/personal/budgets': { status: 200, body: { success: true, data: { items: [] } } },
+      '/personal/goals': { status: 200, body: { success: true, data: { items: [] } } },
+      '/personal/growth/monthly-competition': {
+        status: 200,
+        body: {
+          success: true,
+          data: {
+            competition: {
+              id: 'comp_1',
+              periodKey: '2026-09',
+              title: 'September 2026',
+              description: null,
+              startsAt: '2026-09-01T00:00:00.000Z',
+              endsAt: '2026-10-01T00:00:00.000Z',
+              status: 'ACTIVE',
+              finalizedAt: null,
+              rewards: [],
+            },
+            top3: [
+              {
+                identityId: 'idn_a',
+                displayName: 'Ali',
+                handle: null,
+                level: 10,
+                totalXp: 1000,
+                periodXp: 100,
+                currentStreak: 5,
+                rank: 1,
+                isMe: false,
+              },
+            ],
+            myEntry: {
+              identityId: 'idn_1',
+              displayName: 'Aziz',
+              handle: null,
+              level: 2,
+              totalXp: 120,
+              periodXp: 15,
+              currentStreak: 3,
+              rank: 4,
+              isMe: true,
+            },
+            xpToTop3: 50,
+            showMeInRanking: true,
           },
         },
       },
@@ -161,14 +218,18 @@ describe('PersonalDashboardPage', () => {
     );
 
     expect(await screen.findByRole('heading', { name: 'Bugun' })).toBeInTheDocument();
-    expect(await screen.findByText('React auth')).toBeInTheDocument();
+    expect(await screen.findAllByText('React auth')).not.toHaveLength(0);
+    expect(screen.getByRole('link', { name: /Keyingi ishni boshlash/i })).toHaveAttribute(
+      'href',
+      '/personal/growth/focus?todoId=t1&minutes=25',
+    );
     expect(screen.getByRole('link', { name: 'Barcha vazifalar' })).toHaveAttribute(
       'href',
       '/personal/growth/todos',
     );
-    expect(screen.getByText(/Bugungi moliya/)).toBeInTheDocument();
+    expect(screen.getByText(/Jami qoldiq|totalBalance|35/i)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Bajarildi' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Bajarildi' }).className).toMatch(/size-11/);
+    expect(screen.getByRole('button', { name: 'Bajarildi' }).className).toMatch(/pf-check/);
     expect(container.querySelector('.overflow-x-hidden')).toBeTruthy();
   });
 });

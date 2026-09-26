@@ -81,10 +81,10 @@ export function PersonalGoalsPage() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 overflow-x-hidden">
       <div>
-        <h1 className="text-lg font-semibold tracking-tight text-ink">{t('personal.goals')}</h1>
-        <p className="mt-1 text-sm text-ink-muted">{t('personal.goalsHint')}</p>
+        <h1 className="pf-page-title">{t('personal.goals')}</h1>
+        <p className="pf-page-hint">{t('personal.goalsHint')}</p>
       </div>
 
       {goals.isPending && !goals.data ? (
@@ -96,21 +96,20 @@ export function PersonalGoalsPage() {
           onRetry={() => void goals.refetch()}
         />
       ) : (goals.data?.items.length ?? 0) === 0 ? (
-        <p className="text-sm text-ink-muted">{t('personal.noGoals')}</p>
+        <p className="pf-card px-4 py-8 text-center text-sm text-ink-muted">{t('personal.noGoals')}</p>
       ) : (
         <ul className="space-y-3">
           {goals.data?.items.map((goal) => (
-            <li
-              key={goal.id}
-              className="space-y-2 rounded-panel border border-line bg-surface px-4 py-3 text-sm shadow-card"
-            >
+            <li key={goal.id} className="pf-card space-y-3 px-4 py-3.5 text-sm">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="font-medium text-ink">{goal.name}</p>
-                  <p className="text-xs text-ink-muted">
-                    {formatMoney(goal.savedSom)} / {formatMoney(goal.targetSom)}
-                    {` · ${t('personal.goalRemaining')}: ${formatMoney(Math.max(0, goal.targetSom - goal.savedSom))}`}
-                    {` · ${goal.percent}%`}
+                  <p className="font-semibold text-ink">{goal.name}</p>
+                  <p className="mt-1 text-sm tabular-nums text-ink">
+                    <span className="font-semibold">{formatMoney(goal.savedSom)}</span>
+                    <span className="text-ink-muted"> → {formatMoney(goal.targetSom)}</span>
+                  </p>
+                  <p className="mt-0.5 text-xs text-ink-muted">
+                    {t('personal.goalRemaining')}: {formatMoney(Math.max(0, goal.targetSom - goal.savedSom))}
                     {goal.targetDate ? ` · ${t('personal.goalBy')} ${formatDate(goal.targetDate)}` : ''}
                   </p>
                   <div className="mt-1">
@@ -134,13 +133,19 @@ export function PersonalGoalsPage() {
                   <span className="text-xs text-ink-muted">{t(`personal.goalStatus.${goal.status}`)}</span>
                 )}
               </div>
-              <ProgressBar percent={goal.percent} over={false} />
+              <div>
+                <div className="mb-1.5 flex justify-between text-[11px] text-ink-muted">
+                  <span>{t('personal.goalProgress')}</span>
+                  <span className="tabular-nums">{goal.percent}%</span>
+                </div>
+                <ProgressBar percent={goal.percent} over={false} />
+              </div>
               {goal.contributions.length > 0 ? (
-                <ul className="space-y-1 border-t border-line pt-2">
+                <ul className="space-y-1 border-t border-line/70 pt-2">
                   {goal.contributions.slice(0, 5).map((item) => (
                     <li key={item.id} className="flex justify-between text-xs text-ink-muted">
                       <span>{formatDate(item.occurredAt)}</span>
-                      <span>{formatMoney(item.amount)}</span>
+                      <span className="tabular-nums">{formatMoney(item.amount)}</span>
                     </li>
                   ))}
                 </ul>
@@ -155,9 +160,9 @@ export function PersonalGoalsPage() {
           {activeGoals.length > 0 ? (
             <form
               onSubmit={onContribute}
-              className="space-y-3 rounded-panel border border-line bg-surface p-4 shadow-card"
+              className="pf-card space-y-3 p-4"
             >
-              <h2 className="text-sm font-semibold text-ink">{t('personal.addContribution')}</h2>
+              <h2 className="pf-section-title">{t('personal.addContribution')}</h2>
               <p className="text-xs text-ink-muted">{t('personal.goalContributeHint')}</p>
               {error ? <p className="text-sm text-danger-700">{error}</p> : null}
               <select
@@ -187,15 +192,15 @@ export function PersonalGoalsPage() {
               <button
                 type="submit"
                 disabled={contribute.isPending}
-                className="rounded-input bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-60"
+                className="pf-btn-primary w-full disabled:opacity-60"
               >
                 {t('common.save')}
               </button>
             </form>
           ) : null}
 
-          <form onSubmit={onCreate} className="space-y-3 rounded-panel border border-line bg-surface p-4 shadow-card">
-            <h2 className="text-sm font-semibold text-ink">{t('personal.addGoal')}</h2>
+          <form onSubmit={onCreate} className="pf-card space-y-3 p-4">
+            <h2 className="pf-section-title">{t('personal.addGoal')}</h2>
             {error && activeGoals.length === 0 ? <p className="text-sm text-danger-700">{error}</p> : null}
             <input
               value={name}
@@ -217,7 +222,7 @@ export function PersonalGoalsPage() {
             <button
               type="submit"
               disabled={createGoal.isPending}
-              className="rounded-input bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-60"
+              className="pf-btn-primary w-full disabled:opacity-60"
             >
               {t('common.save')}
             </button>

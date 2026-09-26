@@ -27,12 +27,12 @@ export function PersonalFinanceHubPage() {
   return (
     <div className="space-y-5 overflow-x-hidden">
       <div>
-        <h1 className="text-lg font-semibold tracking-tight text-ink">{t('personal.financeTitle')}</h1>
-        <p className="mt-1 text-sm text-ink-muted">{t('personal.financeHint')}</p>
+        <h1 className="pf-page-title">{t('personal.financeTitle')}</h1>
+        <p className="pf-page-hint">{t('personal.financeHint')}</p>
       </div>
 
       {summary.isPending && !summary.data ? (
-        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-36 w-full rounded-2xl" />
       ) : summary.isError ? (
         <ErrorState
           title={t('personal.ledgerLoadFailed')}
@@ -40,51 +40,37 @@ export function PersonalFinanceHubPage() {
           onRetry={() => void summary.refetch()}
         />
       ) : (
-        <section className="grid grid-cols-2 gap-3">
-          <div className="rounded-2xl border border-line bg-surface p-4">
-            <p className="text-xs text-ink-muted">{t('personal.totalBalance')}</p>
-            <p
-              className={
-                (summary.data?.totalBalanceSom ?? 0) < 0
-                  ? 'mt-1 text-lg font-semibold tabular-nums pf-amount-negative'
-                  : 'mt-1 text-lg font-semibold tabular-nums text-ink'
-              }
-            >
-              {formatMoney(summary.data?.totalBalanceSom ?? 0)}
+        <section className="space-y-3">
+          <div className="pf-hero-balance">
+            <p className="pf-hero-label">{t('personal.totalBalance')}</p>
+            <p className="pf-hero-value">{formatMoney(summary.data?.totalBalanceSom ?? 0)}</p>
+            <p className="mt-2 text-xs text-white/70">
+              {t('personal.monthNet')}:{' '}
+              <span className="font-semibold tabular-nums text-white">
+                {formatMoney(summary.data?.monthNetSom ?? 0)}
+              </span>
             </p>
           </div>
-          <div className="rounded-2xl border border-line bg-surface p-4">
-            <p className="text-xs text-ink-muted">{t('personal.monthNet')}</p>
-            <p
-              className={
-                (summary.data?.monthNetSom ?? 0) < 0
-                  ? 'mt-1 text-lg font-semibold tabular-nums pf-amount-negative'
-                  : (summary.data?.monthNetSom ?? 0) > 0
-                    ? 'mt-1 text-lg font-semibold tabular-nums pf-amount-income'
-                    : 'mt-1 text-lg font-semibold tabular-nums text-ink'
-              }
+          <div className="grid grid-cols-2 gap-3">
+            <Link
+              to={ROUTES.personalIncome}
+              className="pf-card p-4 transition-colors hover:bg-surface-hover active:scale-[0.99]"
             >
-              {formatMoney(summary.data?.monthNetSom ?? 0)}
-            </p>
+              <p className="text-xs text-ink-muted">{t('personal.monthIncome')}</p>
+              <p className="mt-1 text-lg font-semibold tabular-nums pf-amount-income">
+                {formatMoney(summary.data?.monthIncomeSom ?? 0)}
+              </p>
+            </Link>
+            <Link
+              to={ROUTES.personalExpenses}
+              className="pf-card p-4 transition-colors hover:bg-surface-hover active:scale-[0.99]"
+            >
+              <p className="text-xs text-ink-muted">{t('personal.monthExpense')}</p>
+              <p className="mt-1 text-lg font-semibold tabular-nums pf-amount-expense">
+                {formatMoney(summary.data?.monthExpenseSom ?? 0)}
+              </p>
+            </Link>
           </div>
-          <Link
-            to={ROUTES.personalIncome}
-            className="rounded-2xl border border-line bg-surface p-4 hover:bg-surface-hover"
-          >
-            <p className="text-xs text-ink-muted">{t('personal.monthIncome')}</p>
-            <p className="mt-1 text-base font-semibold tabular-nums pf-amount-income">
-              {formatMoney(summary.data?.monthIncomeSom ?? 0)}
-            </p>
-          </Link>
-          <Link
-            to={ROUTES.personalExpenses}
-            className="rounded-2xl border border-line bg-surface p-4 hover:bg-surface-hover"
-          >
-            <p className="text-xs text-ink-muted">{t('personal.monthExpense')}</p>
-            <p className="mt-1 text-base font-semibold tabular-nums pf-amount-expense">
-              {formatMoney(summary.data?.monthExpenseSom ?? 0)}
-            </p>
-          </Link>
         </section>
       )}
 
@@ -93,7 +79,7 @@ export function PersonalFinanceHubPage() {
 
       <p className="text-xs text-ink-muted">
         {t('personal.financeXpHint')}{' '}
-        <Link to={ROUTES.personalGrowthLevel} className="font-medium text-brand-700 hover:underline">
+        <Link to={ROUTES.personalGrowthLevel} className="font-semibold text-brand-600 hover:underline">
           {t('personal.growth.level')}
         </Link>
       </p>

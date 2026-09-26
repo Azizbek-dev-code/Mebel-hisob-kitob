@@ -143,7 +143,7 @@ export async function listGlobalRanking(
       ...row,
       periodXp: from ? periodXp.get(row.identityId) ?? 0 : row.totalXp,
     }))
-    .sort((a, b) => b.periodXp - a.periodXp || b.totalXp - a.totalXp);
+    .sort((a, b) => b.periodXp - a.periodXp || b.totalXp - a.totalXp || a.identityId.localeCompare(b.identityId));
 
   const publicRanked = ranked.filter((row) => row.showInRanking);
   const withRank: GlobalRankingEntryDto[] = publicRanked.map((row, index) => ({

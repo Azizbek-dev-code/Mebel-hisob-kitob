@@ -48,26 +48,32 @@ export function PersonalSettingsPage() {
   return (
     <div className="space-y-5 overflow-x-hidden">
       <div>
-        <h1 className="text-lg font-semibold tracking-tight text-ink">{t('personal.navProfile')}</h1>
-        <p className="mt-1 text-sm text-ink-muted">{t('personal.profileHint')}</p>
+        <h1 className="pf-page-title">{t('personal.navProfile')}</h1>
+        <p className="pf-page-hint">{t('personal.profileHint')}</p>
       </div>
 
-      <section className="rounded-2xl border border-line bg-surface px-4 py-3.5">
+      <section className="pf-card px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="truncate text-lg font-semibold text-ink">{user?.fullName || currentName}</p>
+            <p className="truncate text-xl font-semibold tracking-tight text-ink">
+              {user?.fullName || currentName}
+            </p>
             {user?.email ? <p className="mt-0.5 truncate text-xs text-ink-muted">{user.email}</p> : null}
+            <p className="mt-2 inline-flex rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-semibold text-brand-700">
+              {t('personal.switchPersonal')}
+              {user?.fullName ? ` · ${user.fullName.split(' ')[0]}` : ''}
+            </p>
             {progress.data ? (
-              <div className="mt-3 space-y-1.5">
-                <p className="text-sm font-medium text-ink">
+              <div className="mt-4 space-y-1.5">
+                <p className="text-sm font-semibold text-ink">
                   {t('personal.levelLabel', { level: progress.data.level })}
                 </p>
                 <p className="text-xs tabular-nums text-ink-muted">
                   XP: {progress.data.xpIntoLevel.toLocaleString()} / {progress.data.xpForNextLevel.toLocaleString()}
                 </p>
-                <div className="h-2 overflow-hidden rounded-full bg-surface-muted">
+                <div className="pf-progress-track">
                   <div
-                    className="h-full rounded-full bg-brand-500"
+                    className="pf-progress-fill"
                     style={{ width: `${Math.min(100, progress.data.percent)}%` }}
                   />
                 </div>
@@ -81,9 +87,9 @@ export function PersonalSettingsPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-line bg-surface px-4 py-3.5">
+      <section className="pf-card px-4 py-3.5">
         <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">{t('personal.currentAccount')}</p>
-        <p className="mt-1 text-sm font-medium text-ink">{currentName}</p>
+        <p className="mt-1 text-sm font-semibold text-ink">{currentName}</p>
         <div className="mt-3 border-t border-line pt-3">
           <AccountWorkspaceList />
         </div>
@@ -99,14 +105,14 @@ export function PersonalSettingsPage() {
       />
 
       <div>
-        <h2 className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-ink-muted">
+        <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-ink-muted">
           {t('personal.growth.friends')}
         </h2>
         <HubLinkList items={SOCIAL_LINKS} />
       </div>
 
       <div>
-        <h2 className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-ink-muted">
+        <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-ink-muted">
           {t('personal.financeSettings')}
         </h2>
         <HubLinkList items={FINANCE_SETTINGS_LINKS} />
@@ -114,14 +120,14 @@ export function PersonalSettingsPage() {
 
       <HubLinkList items={ACCOUNT_LINKS} />
 
-      <section className="rounded-2xl border border-line bg-surface px-4 py-3.5">
+      <section className="pf-card px-4 py-3.5">
         <p className="text-xs text-ink-muted">{t('lang.switch')}</p>
         <div className="mt-1.5">
           <LanguageSwitcher />
         </div>
       </section>
 
-      <div className="rounded-2xl border border-line bg-surface px-2 py-1">
+      <div className="pf-card px-2 py-1">
         <SignOutButton className="text-danger-700 hover:bg-danger-50" />
       </div>
     </div>

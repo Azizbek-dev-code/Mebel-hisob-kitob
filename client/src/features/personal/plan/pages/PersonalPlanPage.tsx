@@ -124,14 +124,14 @@ export function PersonalPlanPage() {
     <div className="space-y-5 overflow-x-hidden">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-lg font-semibold tracking-tight text-ink">{t('personal.planTitle')}</h1>
-          <p className="mt-1 text-sm text-ink-muted">{t('personal.planHint')}</p>
+          <h1 className="pf-page-title">{t('personal.planTitle')}</h1>
+          <p className="pf-page-hint">{t('personal.planHint')}</p>
         </div>
         <button
           type="button"
           onClick={() => setComposerOpen(true)}
           disabled={!canWrite}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+          className="pf-btn-primary shrink-0 !min-h-10 px-3"
         >
           <Plus className="size-4" aria-hidden="true" />
           {t('personal.plan.add')}
@@ -170,12 +170,12 @@ export function PersonalPlanPage() {
         </section>
       ) : null}
 
-      <section className="rounded-2xl border border-line bg-surface p-4 shadow-card">
+      <section className="pf-card p-4">
         <div className="flex items-center justify-between gap-2">
           <button
             type="button"
             aria-label={t('personal.plan.prevMonth')}
-            className="flex size-11 items-center justify-center rounded-input text-ink-muted hover:bg-surface-hover"
+            className="pf-touch-target flex items-center justify-center rounded-xl text-ink-muted hover:bg-surface-hover"
             onClick={() => setCursor((c) => shiftMonth(c.year, c.month, -1))}
           >
             <ChevronLeft className="size-5" />
@@ -184,7 +184,7 @@ export function PersonalPlanPage() {
           <button
             type="button"
             aria-label={t('personal.plan.nextMonth')}
-            className="flex size-11 items-center justify-center rounded-input text-ink-muted hover:bg-surface-hover"
+            className="pf-touch-target flex items-center justify-center rounded-xl text-ink-muted hover:bg-surface-hover"
             onClick={() => setCursor((c) => shiftMonth(c.year, c.month, 1))}
           >
             <ChevronRight className="size-5" />
@@ -244,7 +244,7 @@ export function PersonalPlanPage() {
         )}
       </section>
 
-      <section className="rounded-2xl border border-line bg-surface p-4 shadow-card">
+      <section className="pf-card p-4">
         <h2 className="text-sm font-semibold text-ink">
           {t('personal.plan.dayTitle', { date: selectedDate })}
         </h2>
