@@ -68,6 +68,7 @@ const {
   clearHabitDay,
   createGrowthHabit,
   createHabitLog,
+  failHabitDay,
   getGrowthHabit,
   getTodayProgress,
   listGrowthHabits,
@@ -593,6 +594,53 @@ describe('clearHabitDay', () => {
     expect(habit.todayStatus).toBe('NONE');
     expect(prismaMock.expense.findMany).not.toHaveBeenCalled();
     expect(prismaMock.sale.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('failHabitDay', () => {
+  it('marks the day as FAILED without awarding completion XP path', async () => {
+    prismaMock.growthHabit.findFirst.mockResolvedValue(HABIT);
+    prismaMock.growthHabitCheckIn.upsert.mockResolvedValue({
+      id: 'ci_fail',
+      workspaceId: 'ws_1',
+      habitId: 'habit_1',
+      dayKey: '2026-09-17',
+      value: 0,
+      note: null,
+      status: 'FAILED',
+      skipped: false,
+      goalValueSnapshot: 20,
+      goalUnitSnapshot: 'words',
+      goalPeriodSnapshot: 'DAY',
+      checklistDone: 0,
+      checklistTotal: 0,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    prismaMock.growthHabit.update.mockResolvedValue(HABIT);
+    prismaMock.growthHabitCheckIn.findMany.mockResolvedValue([
+      {
+        id: 'ci_fail',
+        habitId: 'habit_1',
+        dayKey: '2026-09-17',
+        value: 0,
+        skipped: false,
+        status: 'FAILED',
+        createdAt: NOW,
+        updatedAt: NOW,
+      },
+    ]);
+
+    const habit = await failHabitDay(
+      'ws_1',
+      'habit_1',
+      'idn_1',
+      { dayKey: '2026-09-17' },
+      prismaMock as never,
+      NOW,
+    );
+    expect(habit.todayStatus).toBe('FAILED');
+    expect(prismaMock.growthHabitCheckIn.upsert).toHaveBeenCalled();
   });
 });
 

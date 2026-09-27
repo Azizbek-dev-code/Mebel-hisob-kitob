@@ -187,6 +187,18 @@ export function formatNum(value: number): string {
   return (Math.round(value * 10) / 10).toString();
 }
 
+/** Compact target progress, e.g. "45 / 90 min" or completed label. */
+export function formatHabitTargetProgress(
+  habit: Pick<GrowthHabitDto, 'todayValue' | 'targetValue' | 'targetUnit' | 'todayStatus'>,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  if (habit.todayStatus === 'COMPLETED') {
+    return t('personal.habitTodayDone');
+  }
+  const unitLabel = t(`personal.habitUnit.${habit.targetUnit}`, { defaultValue: habit.targetUnit });
+  return `${formatNum(habit.todayValue)} / ${formatNum(habit.targetValue)} ${unitLabel}`;
+}
+
 export function unitSelectValue(unit: string): string {
   return (HABIT_UNIT_OPTIONS as readonly string[]).includes(unit) ? unit : 'custom';
 }
@@ -200,4 +212,8 @@ export function remainingHabitMinutes(habit: GrowthHabitDto): number {
 
 export function isDurationHabit(habit: Pick<GrowthHabitDto, 'targetUnit' | 'kind'>): boolean {
   return habit.kind !== 'BAD' && isDurationUnit(habit.targetUnit);
+}
+
+export function monthKeyOf(dayKey: string): string {
+  return dayKey.slice(0, 7);
 }

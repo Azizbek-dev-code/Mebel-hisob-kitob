@@ -188,13 +188,20 @@ function mapHabitRow(
   const todayCheckIn = checkIns.find((row) => row.dayKey === viewDayKey) ?? null;
   const todayValue = todayCheckIn?.value ?? 0;
   const todaySkipped = Boolean(todayCheckIn?.skipped);
-  const todayStatus = evaluateDayStatus({
+  const evaluated = evaluateDayStatus({
     config: slice,
     dayKey: viewDayKey,
     todayKey: realTodayKey,
     value: todayValue,
     skipped: todaySkipped,
   });
+  // Respect explicit FAILED mark stored on the check-in (e.g. "Mark as failed" for today).
+  const todayStatus =
+    todaySkipped
+      ? GrowthHabitDayStatus.SKIPPED
+      : todayCheckIn?.status === GrowthHabitDayStatus.FAILED
+        ? GrowthHabitDayStatus.FAILED
+        : evaluated;
   const dueToday = isHabitDueOnConfig({
     config: slice,
     todayKey: viewDayKey,
@@ -257,6 +264,7 @@ async function syncDayRollup(input: {
   todayKey: string;
   note?: string | null;
   skipped?: boolean;
+  forceFailed?: boolean;
   db: DbClient;
 }): Promise<GrowthHabitCheckIn> {
   const { db, habit, dayKey, todayKey } = input;
@@ -276,13 +284,15 @@ async function syncDayRollup(input: {
   const slice = sliceFromHabit(habit);
   const status = skipped
     ? GrowthHabitDayStatus.SKIPPED
-    : evaluateDayStatus({
-        config: slice,
-        dayKey,
-        todayKey,
-        value,
-        skipped,
-      });
+    : input.forceFailed
+      ? GrowthHabitDayStatus.FAILED
+      : evaluateDayStatus({
+          config: slice,
+          dayKey,
+          todayKey,
+          value,
+          skipped,
+        });
   const note = input.note !== undefined ? input.note : logs.find((log) => log.note)?.note ?? null;
   return db.growthHabitCheckIn.upsert({
     where: { habitId_dayKey: { habitId: habit.id, dayKey } },
@@ -941,6 +951,49 @@ export async function skipHabitDay(
     loadChecklist(habitId, todayKey, db),
   ]);
   return mapHabitRow(refreshed, todayKey, checkIns, checklist);
+}
+
+/** Explicitly mark a day as failed (does not award XP). */
+export async function failHabitDay(
+  workspaceId: string,
+  habitId: string,
+  identityId: string,
+  body: SkipGrowthHabitRequest = {},
+  db: DbClient = defaultPrisma,
+  now = new Date(),
+): Promise<GrowthHabitDto> {
+  await assertPersonalWorkspace(workspaceId, db);
+  const timezone = await resolveWorkspaceHabitTimezone(workspaceId, db);
+  const todayKey = todayKeyFor(now, timezone);
+  const habit = await requireHabit(workspaceId, habitId, db, { activeOnly: true });
+  const dayKey = assertDayKey(body.dayKey, todayKey);
+  assertLogWindow(dayKey, todayKey);
+  await syncDayRollup({
+    workspaceId,
+    habit,
+    dayKey,
+    todayKey,
+    skipped: false,
+    forceFailed: true,
+    note: body.note?.trim() || null,
+    db,
+  });
+  await recordAudit({
+    storeId: null,
+    actorUserId: null,
+    eventType: 'GROWTH_HABIT_DAY_FAILED',
+    entityType: 'GROWTH_HABIT',
+    entityId: habitId,
+    summary: `Growth habit day failed: ${habit.title}`,
+    metadata: { workspaceId, dayKey },
+  });
+  const refreshed = await refreshHabitStreak(habit, todayKey, db);
+  const lookback = addDayKey(todayKey, -62);
+  const [checkIns, checklist] = await Promise.all([
+    db.growthHabitCheckIn.findMany({ where: { habitId, dayKey: { gte: lookback } } }),
+    loadChecklist(habitId, todayKey, db),
+  ]);
+  return mapHabitRow(refreshed, todayKey, checkIns, checklist, todayKey);
 }
 
 export async function listHabitLogs(

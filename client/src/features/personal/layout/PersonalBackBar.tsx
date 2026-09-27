@@ -35,6 +35,12 @@ export function personalBackTarget(pathname: string): { to: string; labelKey: st
   if (pathname.startsWith(`${ROUTES.personalRanking}/`)) {
     return { to: ROUTES.personalRanking, labelKey: 'personal.navRanking' };
   }
+  if (pathname === ROUTES.personalGrowthHabitsProgress || pathname.match(/^\/personal\/growth\/habits\/[^/]+$/)) {
+    return { to: ROUTES.personalGrowthHabits, labelKey: 'personal.habitTitle' };
+  }
+  if (pathname === ROUTES.personalGrowthHabits) {
+    return { to: ROUTES.personalGrowth, labelKey: 'personal.navGrowth' };
+  }
   if (pathname.startsWith(`${ROUTES.personalGrowth}/`)) {
     return { to: ROUTES.personalGrowth, labelKey: 'personal.navGrowth' };
   }

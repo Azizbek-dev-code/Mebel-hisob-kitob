@@ -153,6 +153,23 @@ export function useSkipGrowthHabit() {
   });
 }
 
+export function useFailGrowthHabit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body?: SkipGrowthHabitRequest }) =>
+      personalGrowthHabitsService.fail(id, body ?? {}),
+    onSuccess: () => invalidateHabits(queryClient),
+  });
+}
+
+export function useGrowthHabitLogs(id: string | undefined, query?: { from?: string; to?: string }, enabled = true) {
+  return useQuery({
+    queryKey: [...personalGrowthHabitsKeys.all, 'logs', id ?? '', query?.from ?? '', query?.to ?? ''],
+    queryFn: ({ signal }) => personalGrowthHabitsService.logs(id!, query, signal),
+    enabled: Boolean(id) && enabled,
+  });
+}
+
 export function useToggleHabitChecklist() {
   const queryClient = useQueryClient();
   return useMutation({

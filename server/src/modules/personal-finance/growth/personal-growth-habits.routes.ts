@@ -22,6 +22,7 @@ import {
   postHabit,
   postHabitCheckIn,
   postHabitClearDay,
+  postHabitFail,
   postHabitLog,
   postHabitSkip,
   putDailyGoals,
@@ -115,6 +116,11 @@ personalGrowthHabitsRouter.post(
   '/growth/habits/:id/skip',
   validate({ params: idParamsSchema, body: skipHabitBodySchema }),
   postHabitSkip,
+);
+personalGrowthHabitsRouter.post(
+  '/growth/habits/:id/fail',
+  validate({ params: idParamsSchema, body: skipHabitBodySchema }),
+  postHabitFail,
 );
 personalGrowthHabitsRouter.post(
   '/growth/habits/:id/checklist-ticks',

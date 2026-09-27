@@ -92,6 +92,9 @@ export const personalGrowthHabitsService = {
   skip(id: string, body: SkipGrowthHabitRequest = {}) {
     return apiClient.post<{ habit: GrowthHabitDto }>(`/personal/growth/habits/${id}/skip`, { body });
   },
+  fail(id: string, body: SkipGrowthHabitRequest = {}) {
+    return apiClient.post<{ habit: GrowthHabitDto }>(`/personal/growth/habits/${id}/fail`, { body });
+  },
   toggleChecklist(id: string, body: ToggleHabitChecklistTickRequest) {
     return apiClient.post<{ items: GrowthHabitDto['checklist'] }>(
       `/personal/growth/habits/${id}/checklist-ticks`,

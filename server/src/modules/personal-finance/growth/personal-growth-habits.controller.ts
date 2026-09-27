@@ -23,6 +23,7 @@ import {
   createGrowthHabit,
   createHabitLog,
   deleteHabitLog,
+  failHabitDay,
   getDailyGoals,
   getGrowthHabit,
   getHabitDetail,
@@ -165,6 +166,18 @@ export const postHabitSkip = asyncHandler(async (req: Request, res: Response) =>
   const user = requirePersonal(req);
   sendSuccess(res, {
     habit: await skipHabitDay(
+      user.workspaceId,
+      String(req.params.id),
+      user.identityId,
+      req.body as SkipGrowthHabitRequest,
+    ),
+  });
+});
+
+export const postHabitFail = asyncHandler(async (req: Request, res: Response) => {
+  const user = requirePersonal(req);
+  sendSuccess(res, {
+    habit: await failHabitDay(
       user.workspaceId,
       String(req.params.id),
       user.identityId,
