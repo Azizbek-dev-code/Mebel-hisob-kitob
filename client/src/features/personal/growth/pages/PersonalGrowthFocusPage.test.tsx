@@ -42,7 +42,7 @@ afterEach(() => {
 });
 
 describe('PersonalGrowthFocusPage', () => {
-  it('shows focus stats and start controls on 390px layout', async () => {
+  it('shows focus stats, habit selector and start controls on 390px layout', async () => {
     mockApi({
       '/auth/me': { status: 200, body: { success: true, data: { user: PERSONAL } } },
       '/personal/growth/focus/stats': {
@@ -66,12 +66,41 @@ describe('PersonalGrowthFocusPage', () => {
       },
       '/personal/growth/habits': {
         status: 200,
-        body: { success: true, data: { items: [], activeCount: 0, dueTodayCount: 0, bestCurrentStreak: 0 } },
+        body: {
+          success: true,
+          data: {
+            items: [
+              {
+                id: 'habit_1',
+                title: 'English',
+                isArchived: false,
+                kind: 'GOOD',
+                icon: null,
+                color: null,
+                frequency: 'DAILY',
+                scheduleKind: 'EVERY_DAY',
+                targetValue: 1,
+                targetUnit: 'count',
+                todayStatus: 'NONE',
+                todayProgress: 0,
+                dueToday: true,
+                scheduled: true,
+                currentStreak: 0,
+                bestStreak: 0,
+              },
+            ],
+            activeCount: 1,
+            dueTodayCount: 1,
+            bestCurrentStreak: 0,
+            todayKey: '2026-09-17',
+            viewDayKey: '2026-09-17',
+          },
+        },
       },
     });
 
     renderWithProviders(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/personal/growth/focus?habitId=habit_1&minutes=25']}>
         <div className="w-[390px] overflow-x-hidden">
           <PersonalGrowthFocusPage />
         </div>
@@ -82,5 +111,7 @@ describe('PersonalGrowthFocusPage', () => {
     expect(await screen.findByText('2h 20m')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Fokus boshlash' })).toBeInTheDocument();
     expect(screen.getByText('25/5')).toBeInTheDocument();
+    expect(screen.getByText('Umumiy fokus')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('English')).toBeInTheDocument();
   });
 });

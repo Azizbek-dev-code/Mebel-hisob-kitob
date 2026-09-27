@@ -1,5 +1,6 @@
 import {
   GrowthHabitProgressPeriod,
+  formatFocusMinutes,
   type GrowthHabitProgressPeriod as HabitPeriod,
 } from '@furniture-erp/shared';
 import { useMemo, useState } from 'react';
@@ -21,7 +22,7 @@ import {
 } from '../components/HabitCharts';
 import { HabitFormDialog } from '../components/HabitFormDialog';
 import { HabitMonthCalendar } from '../components/HabitMonthCalendar';
-import { formatHabitTargetProgress, formatNum, formatPct, habitIcon, isDurationHabit, remainingHabitMinutes } from '../components/habit-ui';
+import { formatHabitTargetProgress, formatNum, formatPct, habitIcon, remainingHabitMinutes } from '../components/habit-ui';
 import {
   useAddGrowthHabitLog,
   useCheckInGrowthHabit,
@@ -128,14 +129,15 @@ export function PersonalGrowthHabitDetailPage() {
 
           {canWrite && !habit.isArchived ? (
             <div className="flex flex-wrap gap-2">
-              {isDurationHabit(habit) && habit.todayStatus !== 'COMPLETED' ? (
-                <Link
-                  to={`${ROUTES.personalGrowthFocus}?habitId=${habit.id}&minutes=${remainingHabitMinutes(habit)}`}
-                  className="rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
-                >
-                  {t('personal.habitStartTimer')}
-                </Link>
-              ) : habit.todayStatus === 'COMPLETED' || habit.todayStatus === 'SKIPPED' || habit.todayStatus === 'FAILED' ? (
+              <Link
+                to={`${ROUTES.personalGrowthFocus}?habitId=${habit.id}&minutes=${remainingHabitMinutes(habit)}`}
+                className="rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
+              >
+                {t('personal.habitStartTimer')}
+              </Link>
+              {habit.todayStatus === 'COMPLETED' ||
+              habit.todayStatus === 'SKIPPED' ||
+              habit.todayStatus === 'FAILED' ? (
                 <button
                   type="button"
                   disabled={clearDay.isPending}
@@ -148,7 +150,7 @@ export function PersonalGrowthHabitDetailPage() {
                 <button
                   type="button"
                   disabled={checkIn.isPending}
-                  className="rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+                  className="rounded-input border border-line px-3 py-2 text-sm font-medium text-ink hover:bg-surface-hover disabled:opacity-60"
                   onClick={() => void checkIn.mutateAsync({ id: habit.id })}
                 >
                   {t('personal.habitCheckIn')}
@@ -171,6 +173,14 @@ export function PersonalGrowthHabitDetailPage() {
             cells={calendarStats?.calendar ?? activeStats.calendar}
             todayKey={todayKey}
           />
+
+          <section className="rounded-2xl bg-surface px-4 py-3 ring-1 ring-line">
+            <p className="text-xs text-ink-muted">{t('personal.habitFocusTime')}</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums text-ink">
+              {formatFocusMinutes(activeStats.focusMinutes ?? 0)}
+            </p>
+            <p className="mt-0.5 text-xs text-ink-soft">{t('personal.habitFocusTimeHint')}</p>
+          </section>
 
           <HabitSummaryStrip kpi={activeStats.kpi} unit={habit.targetUnit} />
 

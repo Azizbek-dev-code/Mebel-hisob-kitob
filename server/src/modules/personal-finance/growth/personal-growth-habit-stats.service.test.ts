@@ -9,6 +9,7 @@ const { prismaMock } = vi.hoisted(() => ({
     growthHabitCheckIn: { findMany: vi.fn() },
     growthHabitLog: { findMany: vi.fn() },
     growthHabitConfigVersion: { findMany: vi.fn() },
+    growthFocusSession: { findMany: vi.fn() },
   },
 }));
 
@@ -67,6 +68,9 @@ beforeEach(() => {
   prismaMock.growthHabit.findMany.mockResolvedValue([HABIT]);
   prismaMock.growthHabitConfigVersion.findMany.mockResolvedValue([]);
   prismaMock.growthHabitLog.findMany.mockResolvedValue([]);
+  prismaMock.growthFocusSession.findMany.mockResolvedValue([
+    { habitId: 'habit_1', creditedMinutes: 25, startedAt: NOW },
+  ]);
   prismaMock.growthHabitCheckIn.findMany.mockResolvedValue([
     { habitId: 'habit_1', dayKey: '2026-09-16', value: 1, skipped: false },
     { habitId: 'habit_1', dayKey: '2026-09-17', value: 1, skipped: false },
@@ -78,6 +82,7 @@ describe('habit statistics', () => {
     const stats = await getHabitStatistics('ws_1', 'habit_1', {}, prismaMock as never, NOW);
     expect(stats.habitId).toBe('habit_1');
     expect(stats.kpi.totalValue).toBeGreaterThan(0);
+    expect(stats.focusMinutes).toBe(25);
     expect(prismaMock.growthHabit.findFirst).toHaveBeenCalledWith({
       where: { id: 'habit_1', workspaceId: 'ws_1' },
     });

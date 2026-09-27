@@ -281,10 +281,33 @@ export function PersonalGrowthFocusPage() {
             />
           </label>
           <label className="block space-y-1 text-sm">
+            <span className="text-ink-muted">{t('personal.focusLinkHabit')}</span>
+            <select
+              value={habitId}
+              onChange={(e) => {
+                setHabitId(e.target.value);
+                if (e.target.value) setTodoId('');
+              }}
+              className="w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-500"
+            >
+              <option value="">{t('personal.focusNoHabit')}</option>
+              {(habits.data?.items ?? [])
+                .filter((item) => !item.isArchived)
+                .map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.title}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label className="block space-y-1 text-sm">
             <span className="text-ink-muted">{t('personal.focusLinkTodo')}</span>
             <select
               value={todoId}
-              onChange={(e) => setTodoId(e.target.value)}
+              onChange={(e) => {
+                setTodoId(e.target.value);
+                if (e.target.value) setHabitId('');
+              }}
               className="w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-500"
             >
               <option value="">{t('personal.focusNoTodo')}</option>

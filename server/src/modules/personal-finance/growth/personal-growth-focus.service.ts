@@ -4,9 +4,7 @@ import {
   GrowthXpSource,
   WorkspaceStatus,
   WorkspaceType,
-  durationLogFromMinutes,
   evaluateFocusCredit,
-  isDurationUnit,
   type CompleteGrowthFocusRequest,
   type GrowthFocusSessionDto,
   type GrowthFocusStatsDto,
@@ -18,7 +16,6 @@ import { prisma as defaultPrisma } from '../../../lib/prisma.js';
 import { recordAudit } from '../../../services/audit.service.js';
 import { ApiError } from '../../../utils/api-error.js';
 
-import { createHabitLog } from './personal-growth-habits.service.js';
 import { focusXpAmount, tryAwardXp } from './personal-growth-xp.service.js';
 
 type DbClient = Pick<
@@ -292,27 +289,8 @@ export async function completeFocusSession(
     });
   }
 
-  if (
-    credit.creditedMinutes > 0 &&
-    existing.habitId &&
-    existing.kind === GrowthFocusKind.FOCUS &&
-    credit.status !== GrowthFocusStatus.DISCARDED
-  ) {
-    const habit = await db.growthHabit.findFirst({
-      where: { id: existing.habitId, workspaceId },
-      select: { id: true, targetUnit: true },
-    });
-    if (habit && isDurationUnit(habit.targetUnit)) {
-      await createHabitLog(
-        workspaceId,
-        habit.id,
-        identityId,
-        { value: durationLogFromMinutes(habit.targetUnit, credit.creditedMinutes) },
-        db as never,
-        now,
-      );
-    }
-  }
+  // Habit-linked focus updates focus-time analytics via GrowthFocusSession.habitId.
+  // Do NOT auto-log into the habit (Pomodoro ≠ habit completion).
 
   await recordAudit({
     storeId: null,
@@ -324,6 +302,7 @@ export async function completeFocusSession(
     metadata: {
       workspaceId,
       identityId,
+      habitId: existing.habitId,
       creditedMinutes: credit.creditedMinutes,
       discardReason: credit.discardReason,
     },
@@ -332,8 +311,7 @@ export async function completeFocusSession(
   if (
     credit.creditedMinutes > 0 &&
     existing.kind === GrowthFocusKind.FOCUS &&
-    credit.status !== GrowthFocusStatus.DISCARDED &&
-    !existing.habitId
+    credit.status !== GrowthFocusStatus.DISCARDED
   ) {
     await tryAwardXp({
       workspaceId,
@@ -341,7 +319,9 @@ export async function completeFocusSession(
       source: GrowthXpSource.FOCUS_COMPLETED,
       sourceEntityId: row.id,
       amount: focusXpAmount(credit.creditedMinutes),
-      summary: `Focus +${credit.creditedMinutes}m`,
+      summary: existing.habit?.title
+        ? `Focus · ${existing.habit.title} +${credit.creditedMinutes}m`
+        : `Focus +${credit.creditedMinutes}m`,
     });
   }
 

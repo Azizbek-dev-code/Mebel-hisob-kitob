@@ -1,5 +1,7 @@
 import {
   DEFAULT_HABIT_TIMEZONE,
+  GrowthFocusKind,
+  GrowthFocusStatus,
   GrowthHabitProgressPeriod,
   MIN_BROKEN_SAMPLE,
   MIN_WEEKDAY_SAMPLE,
@@ -18,6 +20,7 @@ import {
   mergeCalendars,
   mergeOverallKpi,
   pairCorrelation,
+  parseDayKey,
   resolveProgressRange,
   summarizeAreaStats,
   summarizeDayPerformance,
@@ -46,8 +49,37 @@ type DbClient = Pick<
   | 'growthHabitCheckIn'
   | 'growthHabitLog'
   | 'growthHabitConfigVersion'
+  | 'growthFocusSession'
   | 'personalProfile'
 >;
+
+function rangeBounds(fromDayKey: string, toDayKey: string): { start: Date; end: Date } {
+  const start = parseDayKey(fromDayKey);
+  const end = new Date(parseDayKey(addDayKey(toDayKey, 1)).getTime() - 1);
+  return { start, end };
+}
+
+async function sumHabitFocusMinutes(
+  workspaceId: string,
+  habitId: string,
+  fromDayKey: string,
+  toDayKey: string,
+  db: DbClient,
+): Promise<number> {
+  const { start, end } = rangeBounds(fromDayKey, toDayKey);
+  const rows = await db.growthFocusSession.findMany({
+    where: {
+      workspaceId,
+      habitId,
+      kind: GrowthFocusKind.FOCUS,
+      status: { in: [GrowthFocusStatus.COMPLETED, GrowthFocusStatus.INTERRUPTED] },
+      creditedMinutes: { gt: 0 },
+      startedAt: { gte: start, lte: end },
+    },
+    select: { creditedMinutes: true },
+  });
+  return rows.reduce((sum, row) => sum + row.creditedMinutes, 0);
+}
 
 async function assertPersonalWorkspace(workspaceId: string, db: DbClient): Promise<void> {
   const workspace = await db.workspace.findUnique({
@@ -94,7 +126,7 @@ export async function getHabitStatistics(
   const from = query.from || range.from;
   const to = query.to || range.to;
 
-  const [versions, checkIns] = await Promise.all([
+  const [versions, checkIns, focusMinutes] = await Promise.all([
     db.growthHabitConfigVersion.findMany({
       where: { habitId },
       orderBy: { effectiveFrom: 'asc' },
@@ -103,6 +135,7 @@ export async function getHabitStatistics(
       where: { habitId, workspaceId, dayKey: { gte: from, lte: to } },
       select: { dayKey: true, value: true, skipped: true, goalValueSnapshot: true },
     }),
+    sumHabitFocusMinutes(workspaceId, habitId, from, to, db),
   ]);
 
   const fallback = sliceFromHabit(habit);
@@ -129,6 +162,7 @@ export async function getHabitStatistics(
     kpi: built.kpi,
     calendar: built.calendar,
     trend: built.trend,
+    focusMinutes,
   };
 }
 
@@ -184,7 +218,8 @@ export async function getHabitsProgress(
   const ids = habits.map((habit) => habit.id);
   const lookbackFrom = range.previousFrom < from ? range.previousFrom : from;
 
-  const [versions, checkIns, logs] = await Promise.all([
+  const { start: rangeStart, end: rangeEnd } = rangeBounds(from, to);
+  const [versions, checkIns, logs, focusSessions] = await Promise.all([
     ids.length
       ? db.growthHabitConfigVersion.findMany({
           where: { habitId: { in: ids } },
@@ -205,6 +240,19 @@ export async function getHabitsProgress(
             dayKey: { gte: from, lte: to },
           },
           select: { habitId: true, loggedAt: true },
+        })
+      : [],
+    ids.length
+      ? db.growthFocusSession.findMany({
+          where: {
+            workspaceId,
+            habitId: { in: ids },
+            kind: GrowthFocusKind.FOCUS,
+            status: { in: [GrowthFocusStatus.COMPLETED, GrowthFocusStatus.INTERRUPTED] },
+            creditedMinutes: { gt: 0 },
+            startedAt: { gte: rangeStart, lte: rangeEnd },
+          },
+          select: { habitId: true, startedAt: true, creditedMinutes: true },
         })
       : [],
   ]);
@@ -289,7 +337,10 @@ export async function getHabitsProgress(
       value: bucket.value,
     }));
 
-  const hours = logs.map((log) => hourInTimeZone(log.loggedAt, timezone));
+  const hours = [
+    ...logs.map((log) => hourInTimeZone(log.loggedAt, timezone)),
+    ...focusSessions.map((session) => hourInTimeZone(session.startedAt, timezone)),
+  ];
   const bestTime = bestTimeFromHours(hours);
   const focusZones = focusZonesFromHours(hours);
   const weekday = weekdayCompletion(calendar).find((row) => row.sampleSize >= MIN_WEEKDAY_SAMPLE) ?? null;

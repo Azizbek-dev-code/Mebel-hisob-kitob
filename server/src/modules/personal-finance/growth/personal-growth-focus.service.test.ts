@@ -1,7 +1,7 @@
 import { GrowthFocusKind, GrowthFocusStatus, WorkspaceType } from '@furniture-erp/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { prismaMock, recordAuditMock, createHabitLogMock, tryAwardXpMock } = vi.hoisted(() => ({
+const { prismaMock, recordAuditMock, tryAwardXpMock } = vi.hoisted(() => ({
   prismaMock: {
     workspace: { findUnique: vi.fn() },
     growthFocusSession: {
@@ -20,13 +20,11 @@ const { prismaMock, recordAuditMock, createHabitLogMock, tryAwardXpMock } = vi.h
     sale: { findMany: vi.fn() },
   },
   recordAuditMock: vi.fn(),
-  createHabitLogMock: vi.fn(),
   tryAwardXpMock: vi.fn(),
 }));
 
 vi.mock('../../../lib/prisma.js', () => ({ prisma: prismaMock }));
 vi.mock('../../../services/audit.service.js', () => ({ recordAudit: recordAuditMock }));
-vi.mock('./personal-growth-habits.service.js', () => ({ createHabitLog: createHabitLogMock }));
 vi.mock('./personal-growth-xp.service.js', () => ({
   tryAwardXp: tryAwardXpMock,
   focusXpAmount: (minutes: number) => minutes,
@@ -71,7 +69,6 @@ beforeEach(() => {
   prismaMock.growthFocusSession.findMany.mockResolvedValue([]);
   prismaMock.growthFocusSession.count.mockResolvedValue(0);
   prismaMock.growthTodo.updateMany.mockResolvedValue({ count: 1 });
-  createHabitLogMock.mockResolvedValue({});
   tryAwardXpMock.mockResolvedValue(null);
 });
 
@@ -91,6 +88,45 @@ describe('startFocusSession', () => {
     expect(session.todoTitle).toBe('React auth');
     expect(prismaMock.expense.findMany).not.toHaveBeenCalled();
     expect(prismaMock.sale.findMany).not.toHaveBeenCalled();
+  });
+
+  it('starts a habit-linked session and rejects foreign habits', async () => {
+    prismaMock.growthFocusSession.findFirst.mockResolvedValue(null);
+    prismaMock.growthHabit.findFirst.mockResolvedValue({ id: 'habit_1' });
+    prismaMock.growthFocusSession.create.mockResolvedValue({
+      ...RUNNING,
+      todoId: null,
+      habitId: 'habit_1',
+      todo: null,
+      habit: { id: 'habit_1', title: 'English' },
+    });
+    const session = await startFocusSession(
+      'ws_1',
+      'idn_1',
+      { plannedMinutes: 25, habitId: 'habit_1' },
+      prismaMock as never,
+      START,
+    );
+    expect(session.habitId).toBe('habit_1');
+    expect(session.habitTitle).toBe('English');
+
+    prismaMock.growthHabit.findFirst.mockResolvedValue(null);
+    await expect(
+      startFocusSession(
+        'ws_1',
+        'idn_1',
+        { plannedMinutes: 25, habitId: 'habit_other' },
+        prismaMock as never,
+        START,
+      ),
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('rejects a second concurrent active session', async () => {
+    prismaMock.growthFocusSession.findFirst.mockResolvedValue({ id: 'focus_open' });
+    await expect(
+      startFocusSession('ws_1', 'idn_1', { plannedMinutes: 25 }, prismaMock as never, START),
+    ).rejects.toMatchObject({ statusCode: 409 });
   });
 });
 
@@ -141,7 +177,7 @@ describe('completeFocusSession', () => {
     expect(session.discardReason).toBe('CAPPED_IDLE_TIMER');
   });
 
-  it('logs credited minutes to a duration habit and skips focus XP', async () => {
+  it('keeps habit-linked focus separate from habit completion and still awards focus XP', async () => {
     const linked = {
       ...RUNNING,
       todoId: null,
@@ -150,7 +186,6 @@ describe('completeFocusSession', () => {
       habit: { id: 'habit_1', title: 'Ingliz tili' },
     };
     prismaMock.growthFocusSession.findFirst.mockResolvedValue(linked);
-    prismaMock.growthHabit.findFirst.mockResolvedValue({ id: 'habit_1', targetUnit: 'duration' });
     const end = new Date('2026-09-17T10:20:00.000Z');
     prismaMock.growthFocusSession.update.mockResolvedValue({
       ...linked,
@@ -167,14 +202,12 @@ describe('completeFocusSession', () => {
       prismaMock as never,
       end,
     );
-    expect(createHabitLogMock).toHaveBeenCalledWith(
-      'ws_1',
-      'habit_1',
-      'idn_1',
-      { value: 20 },
-      expect.anything(),
-      end,
+    expect(prismaMock.growthHabit.findFirst).not.toHaveBeenCalled();
+    expect(tryAwardXpMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceEntityId: 'focus_1',
+        amount: 20,
+      }),
     );
-    expect(tryAwardXpMock).not.toHaveBeenCalled();
   });
 });

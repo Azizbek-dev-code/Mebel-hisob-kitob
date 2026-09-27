@@ -76,6 +76,7 @@ type DbClient = Pick<
   | 'growthHabitChecklistItem'
   | 'growthHabitChecklistTick'
   | 'growthHabitConfigVersion'
+  | 'growthFocusSession'
   | 'growthDailyGoal'
   | 'growthTodo'
   | 'personalProfile'

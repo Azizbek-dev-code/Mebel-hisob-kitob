@@ -283,6 +283,8 @@ export interface HabitStatisticsDto {
   kpi: HabitStatsKpiDto;
   calendar: HabitCalendarCellDto[];
   trend: HabitTrendPointDto[];
+  /** Credited Pomodoro/focus minutes linked to this habit in [from, to]. */
+  focusMinutes: number;
 }
 
 export interface HabitProgressHabitRowDto {
