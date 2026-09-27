@@ -74,6 +74,29 @@ describe('validatePersonalOnboardingComplete', () => {
     expect(validatePersonalOnboardingComplete(complete)).toEqual([]);
   });
 
+  it('accepts personal registration v2 answers', () => {
+    expect(
+      validatePersonalOnboardingComplete({
+        purpose: AccountPurpose.PERSONAL,
+        goals: ['CONTROL_MONEY'],
+        growthInterests: ['FINANCE_ONLY'],
+        biggestProblem: 'DONT_KNOW_WHERE_MONEY_GOES',
+        age: '28',
+      }),
+    ).toEqual([]);
+  });
+
+  it('rejects absurd ages', () => {
+    const errors = validatePersonalOnboardingComplete({
+      purpose: AccountPurpose.PERSONAL,
+      goals: ['CONTROL_MONEY'],
+      growthInterests: ['HABITS'],
+      biggestProblem: 'HARD_TO_SAVE',
+      age: '3',
+    });
+    expect(errors.some((error) => error.field === 'age')).toBe(true);
+  });
+
   it('requires a custom amount only when the band is CUSTOM', () => {
     const errors = validatePersonalOnboardingComplete({
       ...complete,

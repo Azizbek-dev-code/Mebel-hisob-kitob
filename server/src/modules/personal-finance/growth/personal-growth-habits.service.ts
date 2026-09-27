@@ -1,6 +1,5 @@
 import {
   GrowthHabitDayStatus,
-  GrowthHabitFrequency,
   GrowthHabitKind,
   GrowthTodoStatus,
   GrowthXpSource,
@@ -20,12 +19,14 @@ import {
   progressRatio,
   toDayKey,
   type CheckInGrowthHabitRequest,
+  type ClearGrowthHabitDayRequest,
   type CreateGrowthHabitLogRequest,
   type CreateGrowthHabitRequest,
   type GrowthDailyGoalDto,
   type GrowthDailyGoalsResponse,
   type GrowthHabitDetailResponse,
   type GrowthHabitDto,
+  type GrowthHabitFrequency,
   type GrowthHabitListResponse,
   type GrowthTodayProgressResponse,
   type HabitLogsResponse,
@@ -178,31 +179,32 @@ function periodValue(
 
 function mapHabitRow(
   habit: GrowthHabit,
-  todayKey: string,
+  viewDayKey: string,
   checkIns: GrowthHabitCheckIn[],
   checklist: ReturnType<typeof toChecklistDto>[] | Awaited<ReturnType<typeof loadChecklist>>,
+  realTodayKey = viewDayKey,
 ): GrowthHabitDto {
   const slice = sliceFromHabit(habit);
-  const todayCheckIn = checkIns.find((row) => row.dayKey === todayKey) ?? null;
+  const todayCheckIn = checkIns.find((row) => row.dayKey === viewDayKey) ?? null;
   const todayValue = todayCheckIn?.value ?? 0;
   const todaySkipped = Boolean(todayCheckIn?.skipped);
   const todayStatus = evaluateDayStatus({
     config: slice,
-    dayKey: todayKey,
-    todayKey,
+    dayKey: viewDayKey,
+    todayKey: realTodayKey,
     value: todayValue,
     skipped: todaySkipped,
   });
   const dueToday = isHabitDueOnConfig({
     config: slice,
-    todayKey,
+    todayKey: viewDayKey,
     todayValue,
     todaySkipped,
-    periodValue: periodValue(habit, todayKey, checkIns),
+    periodValue: periodValue(habit, viewDayKey, checkIns),
   });
   return toHabitDto({
     row: habit,
-    todayKey,
+    todayKey: viewDayKey,
     todayCheckIn,
     dueToday,
     todayValue,
@@ -411,14 +413,17 @@ function assertLogWindow(dayKey: string, todayKey: string): void {
 
 export async function listGrowthHabits(
   workspaceId: string,
-  opts: { includeArchived?: boolean } = {},
+  opts: { includeArchived?: boolean; dayKey?: string } = {},
   db: DbClient = defaultPrisma,
   now = new Date(),
 ): Promise<GrowthHabitListResponse> {
   await assertPersonalWorkspace(workspaceId, db);
   const timezone = await resolveWorkspaceHabitTimezone(workspaceId, db);
   const todayKey = todayKeyFor(now, timezone);
-  const lookback = addDayKey(todayKey, -62);
+  const viewDayKey = opts.dayKey ? assertDayKey(opts.dayKey, todayKey) : todayKey;
+  const rangeStart = viewDayKey < todayKey ? viewDayKey : todayKey;
+  const rangeEnd = viewDayKey > todayKey ? viewDayKey : todayKey;
+  const lookback = addDayKey(rangeStart, -62);
 
   const habits = await db.growthHabit.findMany({
     where: {
@@ -431,7 +436,11 @@ export async function listGrowthHabits(
   const [checkIns, checklistItems, ticks] = await Promise.all([
     ids.length
       ? db.growthHabitCheckIn.findMany({
-          where: { workspaceId, habitId: { in: ids }, dayKey: { gte: lookback } },
+          where: {
+            workspaceId,
+            habitId: { in: ids },
+            dayKey: { gte: lookback, lte: rangeEnd },
+          },
           orderBy: { dayKey: 'asc' },
         })
       : [],
@@ -443,7 +452,7 @@ export async function listGrowthHabits(
       : [],
     ids.length
       ? db.growthHabitChecklistTick.findMany({
-          where: { workspaceId, habitId: { in: ids }, dayKey: todayKey },
+          where: { workspaceId, habitId: { in: ids }, dayKey: viewDayKey },
           select: { habitId: true, itemId: true },
         })
       : [],
@@ -461,7 +470,7 @@ export async function listGrowthHabits(
     const checklist = checklistItems
       .filter((item) => item.habitId === habit.id)
       .map((item) => toChecklistDto(item, tickSet.has(`${habit.id}:${item.id}`)));
-    return mapHabitRow(habit, todayKey, checkInByHabit.get(habit.id) ?? [], checklist);
+    return mapHabitRow(habit, viewDayKey, checkInByHabit.get(habit.id) ?? [], checklist, todayKey);
   });
 
   const active = items.filter((item) => !item.isArchived);
@@ -472,6 +481,7 @@ export async function listGrowthHabits(
     bestCurrentStreak: active.reduce((max, item) => Math.max(max, item.currentStreak), 0),
     timezone,
     todayKey,
+    viewDayKey,
   };
 }
 
@@ -853,6 +863,52 @@ export async function deleteHabitLog(
   assertLogWindow(log.dayKey, todayKey);
   await db.growthHabitLog.delete({ where: { id: logId } });
   return applyLogAndRefresh({ workspaceId, identityId, habit, dayKey: log.dayKey, todayKey, db });
+}
+
+/** Undo check-in / skip for a day without revoking already-awarded XP (idempotent source stays). */
+export async function clearHabitDay(
+  workspaceId: string,
+  habitId: string,
+  identityId: string,
+  body: ClearGrowthHabitDayRequest = {},
+  db: DbClient = defaultPrisma,
+  now = new Date(),
+): Promise<GrowthHabitDto> {
+  await assertPersonalWorkspace(workspaceId, db);
+  const timezone = await resolveWorkspaceHabitTimezone(workspaceId, db);
+  const todayKey = todayKeyFor(now, timezone);
+  const habit = await requireHabit(workspaceId, habitId, db, { activeOnly: true });
+  const dayKey = assertDayKey(body.dayKey, todayKey);
+  assertLogWindow(dayKey, todayKey);
+
+  await db.growthHabitLog.deleteMany({ where: { workspaceId, habitId, dayKey } });
+  await syncDayRollup({
+    workspaceId,
+    habit,
+    dayKey,
+    todayKey,
+    skipped: false,
+    note: null,
+    db,
+  });
+
+  await recordAudit({
+    storeId: null,
+    actorUserId: null,
+    eventType: 'GROWTH_HABIT_DAY_CLEARED',
+    entityType: 'GROWTH_HABIT',
+    entityId: habitId,
+    summary: `Growth habit day cleared: ${habit.title}`,
+    metadata: { workspaceId, dayKey },
+  });
+
+  const refreshed = await refreshHabitStreak(habit, todayKey, db);
+  const lookback = addDayKey(todayKey, -62);
+  const [checkIns, checklist] = await Promise.all([
+    db.growthHabitCheckIn.findMany({ where: { habitId, dayKey: { gte: lookback } } }),
+    loadChecklist(habitId, todayKey, db),
+  ]);
+  return mapHabitRow(refreshed, todayKey, checkIns, checklist, todayKey);
 }
 
 export async function skipHabitDay(

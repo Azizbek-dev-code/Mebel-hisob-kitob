@@ -16,15 +16,33 @@ export const AccountPurpose = {
 } as const;
 export type AccountPurpose = (typeof AccountPurpose)[keyof typeof AccountPurpose];
 
+/** Personal registration goal options (multi-select). Legacy keys remain readable. */
 export const PersonalGoal = {
+  CONTROL_MONEY: 'CONTROL_MONEY',
+  CUT_SPENDING: 'CUT_SPENDING',
+  BUILD_BUDGET: 'BUILD_BUDGET',
+  SAVE_GOAL: 'SAVE_GOAL',
+  MANAGE_DEBT: 'MANAGE_DEBT',
+  MANAGE_INCOME: 'MANAGE_INCOME',
+  ALL_IN_ONE: 'ALL_IN_ONE',
+  /** @deprecated Legacy v1 keys — still accepted when reading old submissions. */
   CONTROL_EXPENSES: 'CONTROL_EXPENSES',
   START_SAVING: 'START_SAVING',
-  BUILD_BUDGET: 'BUILD_BUDGET',
-  MANAGE_DEBT: 'MANAGE_DEBT',
   TRACK_INCOME: 'TRACK_INCOME',
   IMPROVE_FINANCES: 'IMPROVE_FINANCES',
 } as const;
 export type PersonalGoal = (typeof PersonalGoal)[keyof typeof PersonalGoal];
+
+/** Active Personal registration goal keys (shown in UI / seeded catalog). */
+export const PERSONAL_GOALS_V2 = [
+  PersonalGoal.CONTROL_MONEY,
+  PersonalGoal.CUT_SPENDING,
+  PersonalGoal.BUILD_BUDGET,
+  PersonalGoal.SAVE_GOAL,
+  PersonalGoal.MANAGE_DEBT,
+  PersonalGoal.MANAGE_INCOME,
+  PersonalGoal.ALL_IN_ONE,
+] as const;
 
 export const DiscoverySource = {
   INSTAGRAM: 'INSTAGRAM',
@@ -68,16 +86,71 @@ export const FirstSavingGoal = {
 } as const;
 export type FirstSavingGoal = (typeof FirstSavingGoal)[keyof typeof FirstSavingGoal];
 
+/** Growth / lifestyle interests for Personal registration personalization. */
+export const GrowthInterest = {
+  READING_COURSES: 'READING_COURSES',
+  IELTS_LANGUAGE: 'IELTS_LANGUAGE',
+  PROGRAMMING_SKILL: 'PROGRAMMING_SKILL',
+  DAILY_TASKS: 'DAILY_TASKS',
+  HABITS: 'HABITS',
+  FOCUS_POMODORO: 'FOCUS_POMODORO',
+  GOALS: 'GOALS',
+  FINANCE_ONLY: 'FINANCE_ONLY',
+} as const;
+export type GrowthInterest = (typeof GrowthInterest)[keyof typeof GrowthInterest];
+
+export const BiggestProblem = {
+  DONT_KNOW_WHERE_MONEY_GOES: 'DONT_KNOW_WHERE_MONEY_GOES',
+  CANT_HOLD_BUDGET: 'CANT_HOLD_BUDGET',
+  HARD_TO_SAVE: 'HARD_TO_SAVE',
+  CANT_MANAGE_TIME: 'CANT_MANAGE_TIME',
+  HARD_TO_FOLLOW_PLANS: 'HARD_TO_FOLLOW_PLANS',
+  TOO_MANY_APPS: 'TOO_MANY_APPS',
+  WANT_ONE_PLACE: 'WANT_ONE_PLACE',
+  /** @deprecated Legacy v1 */
+  NO_TRACKING: 'NO_TRACKING',
+  OVERSPENDING: 'OVERSPENDING',
+  NO_SAVINGS: 'NO_SAVINGS',
+  DEBT: 'DEBT',
+  NO_BUDGET: 'NO_BUDGET',
+  OTHER: 'OTHER',
+} as const;
+export type BiggestProblem = (typeof BiggestProblem)[keyof typeof BiggestProblem];
+
+export const BIGGEST_PROBLEMS_V2 = [
+  BiggestProblem.DONT_KNOW_WHERE_MONEY_GOES,
+  BiggestProblem.CANT_HOLD_BUDGET,
+  BiggestProblem.HARD_TO_SAVE,
+  BiggestProblem.CANT_MANAGE_TIME,
+  BiggestProblem.HARD_TO_FOLLOW_PLANS,
+  BiggestProblem.TOO_MANY_APPS,
+  BiggestProblem.WANT_ONE_PLACE,
+] as const;
+
+export const GROWTH_INTERESTS = Object.values(GrowthInterest);
+
 export const ACCOUNT_PURPOSES = Object.values(AccountPurpose);
+/** All goal keys accepted when reading answers (v2 + legacy). */
 export const PERSONAL_GOALS = Object.values(PersonalGoal);
 export const DISCOVERY_SOURCES = Object.values(DiscoverySource);
 export const MONTHLY_INCOME_BANDS = Object.values(MonthlyIncomeBand);
 export const HELP_WITH_OPTIONS = Object.values(HelpWith);
 export const FIRST_SAVING_GOALS = Object.values(FirstSavingGoal);
+export const BIGGEST_PROBLEMS = Object.values(BiggestProblem);
+
+/** Personal catalog questions deactivated by registration v2 sync (kept for history). */
+export const PERSONAL_CATALOG_DEPRECATED_KEYS = [
+  'discoverySource',
+  'monthlyIncomeBand',
+  'helpWith',
+  'firstSavingGoal',
+] as const;
 
 export const OnboardingQuestionKey = {
   PURPOSE: 'purpose',
   GOALS: 'goals',
+  GROWTH_INTERESTS: 'growthInterests',
+  BIGGEST_PROBLEM: 'biggestProblem',
   DISCOVERY_SOURCE: 'discoverySource',
   MONTHLY_INCOME_BAND: 'monthlyIncomeBand',
   HELP_WITH: 'helpWith',
@@ -103,26 +176,20 @@ export const ONBOARDING_QUESTIONS: readonly OnboardingQuestionCatalogEntry[] = [
   {
     key: OnboardingQuestionKey.GOALS,
     type: 'multi',
-    optionKeys: PERSONAL_GOALS,
+    optionKeys: PERSONAL_GOALS_V2,
   },
   {
-    key: OnboardingQuestionKey.DISCOVERY_SOURCE,
-    type: 'single',
-    optionKeys: DISCOVERY_SOURCES,
-  },
-  {
-    key: OnboardingQuestionKey.MONTHLY_INCOME_BAND,
-    type: 'single',
-    optionKeys: MONTHLY_INCOME_BANDS,
-  },
-  {
-    key: OnboardingQuestionKey.HELP_WITH,
+    key: OnboardingQuestionKey.GROWTH_INTERESTS,
     type: 'multi',
-    optionKeys: HELP_WITH_OPTIONS,
+    optionKeys: GROWTH_INTERESTS,
   },
   {
-    key: OnboardingQuestionKey.FIRST_SAVING_GOAL,
+    key: OnboardingQuestionKey.BIGGEST_PROBLEM,
     type: 'single',
-    optionKeys: FIRST_SAVING_GOALS,
+    optionKeys: BIGGEST_PROBLEMS_V2,
   },
 ] as const;
+
+/** Age bounds for Personal registration (product personalization only). */
+export const PERSONAL_AGE_MIN = 13;
+export const PERSONAL_AGE_MAX = 120;

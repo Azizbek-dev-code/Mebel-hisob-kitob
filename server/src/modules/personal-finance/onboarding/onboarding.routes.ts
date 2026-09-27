@@ -15,6 +15,7 @@ import {
   getAdminQuestions,
   getAdminSolutions,
   getCatalog,
+  getPublicMetrics,
   getStats,
   getSubmission,
   patchAdminNeed,
@@ -34,14 +35,18 @@ import {
   postCompleteAuthenticated,
   postCompleteBusiness,
   postCompleteRegister,
+  postConfirmRegistrationEmail,
+  postRequestRegistrationEmail,
   postStart,
 } from './onboarding.controller.js';
 import {
   completeAuthenticatedOnboardingBodySchema,
   completePersonalOnboardingBodySchema,
+  confirmRegistrationEmailBodySchema,
   idParamsSchema,
   onboardingTokenParamsSchema,
   reorderBodySchema,
+  requestRegistrationEmailBodySchema,
   saveOnboardingAnswersBodySchema,
   startOnboardingBodySchema,
   upsertMappingBodySchema,
@@ -73,6 +78,7 @@ const onboardingRateLimiter = rateLimit({
 export const onboardingRouter = Router();
 
 onboardingRouter.get('/catalog', getCatalog);
+onboardingRouter.get('/metrics', getPublicMetrics);
 onboardingRouter.post(
   '/',
   onboardingRateLimiter,
@@ -89,6 +95,18 @@ onboardingRouter.patch(
   onboardingRateLimiter,
   validate({ params: onboardingTokenParamsSchema, body: saveOnboardingAnswersBodySchema }),
   patchAnswers,
+);
+onboardingRouter.post(
+  '/:token/register-email/request',
+  onboardingRateLimiter,
+  validate({ params: onboardingTokenParamsSchema, body: requestRegistrationEmailBodySchema }),
+  postRequestRegistrationEmail,
+);
+onboardingRouter.post(
+  '/:token/register-email/confirm',
+  onboardingRateLimiter,
+  validate({ params: onboardingTokenParamsSchema, body: confirmRegistrationEmailBodySchema }),
+  postConfirmRegistrationEmail,
 );
 onboardingRouter.post(
   '/:token/complete-register',

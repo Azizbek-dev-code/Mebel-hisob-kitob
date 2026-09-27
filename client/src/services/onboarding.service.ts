@@ -1,16 +1,21 @@
 import type {
   CompletePersonalOnboardingRequest,
   CompletePersonalOnboardingResponse,
+  ConfirmRegistrationEmailBody,
+  ConfirmRegistrationEmailResponse,
   OnboardingAnswerRowDto,
   OnboardingCatalogResponse,
   OnboardingNeedDto,
   OnboardingNeedMappingDto,
+  OnboardingPublicMetricsResponse,
   OnboardingQuestionDto,
   OnboardingSolutionDto,
   OnboardingStartResponse,
   OnboardingStatsResponse,
   OnboardingSubmissionDto,
   ReorderOnboardingItemsRequest,
+  RequestRegistrationEmailBody,
+  RequestRegistrationEmailResponse,
   SaveOnboardingAnswersRequest,
   UpsertOnboardingMappingRequest,
   UpsertOnboardingNeedRequest,
@@ -45,6 +50,24 @@ export const onboardingService = {
     return apiClient.patch<{ submission: OnboardingSubmissionDto }>(`/onboarding/${token}`, {
       body,
     });
+  },
+
+  requestRegisterEmail(token: string, body: RequestRegistrationEmailBody) {
+    return apiClient.post<RequestRegistrationEmailResponse>(
+      `/onboarding/${token}/register-email/request`,
+      { body },
+    );
+  },
+
+  confirmRegisterEmail(token: string, body: ConfirmRegistrationEmailBody) {
+    return apiClient.post<ConfirmRegistrationEmailResponse>(
+      `/onboarding/${token}/register-email/confirm`,
+      { body },
+    );
+  },
+
+  metrics(signal?: AbortSignal) {
+    return apiClient.get<OnboardingPublicMetricsResponse>('/onboarding/metrics', { signal });
   },
 
   completeRegister(token: string, body: CompletePersonalOnboardingRequest) {

@@ -1,4 +1,9 @@
-import { useState } from 'react';
+import {
+  GrowthHabitProgressPeriod,
+  addDayKey,
+  type GrowthHabitProgressPeriod as HabitPeriod,
+} from '@furniture-erp/shared';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 
@@ -9,17 +14,34 @@ import { useCurrentUser } from '@/features/auth/hooks/use-auth';
 import { cn } from '@/lib/cn';
 import { ROUTES } from '@/routes/paths';
 
-import { HabitHeatmap, HabitKpiGrid, HabitTrendBars } from '../components/HabitCharts';
+import {
+  HabitDailyProgressChart,
+  HabitKpiGrid,
+  HabitStreakHero,
+  HabitSummaryStrip,
+  HabitTrendBars,
+} from '../components/HabitCharts';
 import { HabitFormDialog } from '../components/HabitFormDialog';
+import { HabitMonthCalendar } from '../components/HabitMonthCalendar';
 import { formatNum, formatPct, habitIcon, isDurationHabit, remainingHabitMinutes } from '../components/habit-ui';
 import {
   useAddGrowthHabitLog,
+  useCheckInGrowthHabit,
+  useClearGrowthHabitDay,
   useGrowthHabitDetail,
+  useGrowthHabitStatistics,
   useGrowthHabits,
   useSkipGrowthHabit,
   useToggleHabitChecklist,
   useUpdateGrowthHabit,
 } from '../hooks/use-growth-habits';
+
+const CHART_PERIODS = [
+  { id: 'DAY', period: GrowthHabitProgressPeriod.WEEK, daily: true },
+  { id: 'WEEK', period: GrowthHabitProgressPeriod.WEEK, daily: true },
+  { id: 'MONTH', period: GrowthHabitProgressPeriod.MONTH, daily: false },
+  { id: 'YEAR', period: GrowthHabitProgressPeriod.YEAR, daily: false },
+] as const;
 
 export function PersonalGrowthHabitDetailPage() {
   const { t } = useTranslation();
@@ -30,14 +52,33 @@ export function PersonalGrowthHabitDetailPage() {
   const list = useGrowthHabits();
   const update = useUpdateGrowthHabit();
   const addLog = useAddGrowthHabitLog();
+  const checkIn = useCheckInGrowthHabit();
+  const clearDay = useClearGrowthHabitDay();
   const skip = useSkipGrowthHabit();
   const toggle = useToggleHabitChecklist();
   const [editOpen, setEditOpen] = useState(false);
   const [logValue, setLogValue] = useState('');
+  const [chartPeriod, setChartPeriod] = useState<(typeof CHART_PERIODS)[number]['id']>('MONTH');
+  const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
+  const [monthKey, setMonthKey] = useState<string | null>(null);
+
+  const periodConfig = CHART_PERIODS.find((row) => row.id === chartPeriod) ?? CHART_PERIODS[2];
+  const statsQuery = useMemo(
+    () => ({ period: periodConfig.period as HabitPeriod }),
+    [periodConfig.period],
+  );
+  const stats = useGrowthHabitStatistics(habitId, statsQuery);
+  const monthStats = useGrowthHabitStatistics(habitId, {
+    period: GrowthHabitProgressPeriod.MONTH,
+  });
 
   const habit = detail.data?.habit;
-  const stats = detail.data?.statistics;
+  const activeStats = stats.data ?? detail.data?.statistics;
+  const calendarStats = monthStats.data ?? detail.data?.statistics;
   const Icon = habitIcon(habit?.icon);
+  const todayKey = activeStats?.todayKey ?? calendarStats?.todayKey ?? '';
+  const viewDayKey = selectedDayKey ?? todayKey;
+  const resolvedMonth = monthKey ?? (todayKey ? todayKey.slice(0, 7) : new Date().toISOString().slice(0, 7));
 
   return (
     <div className="space-y-5 overflow-x-hidden">
@@ -58,7 +99,7 @@ export function PersonalGrowthHabitDetailPage() {
           message={t('common.retry')}
           onRetry={() => void detail.refetch()}
         />
-      ) : !habit || !stats ? (
+      ) : !habit || !activeStats ? (
         <p className="rounded-2xl border border-dashed border-line-strong px-4 py-8 text-center text-sm text-ink-muted">
           {t('personal.habitEmpty')}
         </p>
@@ -78,6 +119,14 @@ export function PersonalGrowthHabitDetailPage() {
                   {habit.kind === 'BAD' ? t('personal.habitKindBad') : t('personal.habitKindGood')}
                   {` · ${habit.targetValue} ${t(`personal.habitUnit.${habit.targetUnit}`, { defaultValue: habit.targetUnit })} / ${t(`personal.habitGoalPeriod.${habit.goalPeriod}`)}`}
                 </p>
+                <p className="mt-1 text-xs text-ink-soft">
+                  {habit.todayStatus === 'COMPLETED'
+                    ? t('personal.habitTodayDone')
+                    : habit.todayStatus === 'PARTIAL'
+                      ? formatPct(habit.todayProgress)
+                      : t('personal.habitTodayOpen')}
+                  {` · ${t('personal.habitGoalProgress')}: ${formatPct(activeStats.kpi.goalProgress)}`}
+                </p>
                 {habit.notes ? <p className="mt-2 text-sm text-ink-muted">{habit.notes}</p> : null}
               </div>
               {canWrite ? (
@@ -90,6 +139,47 @@ export function PersonalGrowthHabitDetailPage() {
                 </button>
               ) : null}
             </div>
+
+            {canWrite && !habit.isArchived ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {isDurationHabit(habit) && habit.todayStatus !== 'COMPLETED' ? (
+                  <Link
+                    to={`${ROUTES.personalGrowthFocus}?habitId=${habit.id}&minutes=${remainingHabitMinutes(habit)}`}
+                    className="rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
+                  >
+                    {t('personal.habitStartTimer')}
+                  </Link>
+                ) : habit.todayStatus === 'COMPLETED' || habit.todayStatus === 'SKIPPED' ? (
+                  <button
+                    type="button"
+                    disabled={clearDay.isPending}
+                    className="rounded-input border border-line px-3 py-2 text-sm font-medium text-ink hover:bg-surface-hover"
+                    onClick={() => void clearDay.mutateAsync({ id: habit.id })}
+                  >
+                    {t('personal.habitUncomplete')}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={checkIn.isPending}
+                    className="rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+                    onClick={() => void checkIn.mutateAsync({ id: habit.id })}
+                  >
+                    {t('personal.habitCheckIn')}
+                  </button>
+                )}
+                {habit.dueToday && habit.todayStatus !== 'COMPLETED' && habit.todayStatus !== 'SKIPPED' ? (
+                  <button
+                    type="button"
+                    className="rounded-input border border-line px-3 py-2 text-sm text-ink-muted hover:bg-surface-hover"
+                    onClick={() => void skip.mutateAsync({ id: habit.id })}
+                  >
+                    {t('personal.habitSkip')}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
             {habit.checklist.length > 0 ? (
               <ul className="mt-3 space-y-1">
                 {habit.checklist.map((item) => (
@@ -116,22 +206,7 @@ export function PersonalGrowthHabitDetailPage() {
                 ))}
               </ul>
             ) : null}
-            {canWrite && !habit.isArchived && isDurationHabit(habit) && habit.todayStatus !== 'COMPLETED' ? (
-              <Link
-                to={`${ROUTES.personalGrowthFocus}?habitId=${habit.id}&minutes=${remainingHabitMinutes(habit)}`}
-                className="mt-4 flex w-full items-center justify-between gap-3 rounded-xl bg-brand-500 px-4 py-3.5 text-left text-white shadow-card transition-colors hover:bg-brand-600"
-              >
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold">{t('personal.habitStartTimer')}</span>
-                  <span className="mt-0.5 block text-xs text-white/75 tabular-nums">
-                    {remainingHabitMinutes(habit)} {t('personal.plan.minutes')}
-                  </span>
-                </span>
-                <span className="shrink-0 rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold">
-                  {t('personal.focusStart')}
-                </span>
-              </Link>
-            ) : null}
+
             {canWrite && !habit.isArchived ? (
               <form
                 className="mt-3 flex min-w-0 gap-2"
@@ -163,37 +238,85 @@ export function PersonalGrowthHabitDetailPage() {
             {habit.isArchived ? (
               <p className="mt-3 text-xs text-ink-muted">{t('personal.habitArchived')}</p>
             ) : canWrite ? (
-              <div className="mt-3 flex flex-wrap gap-3">
-                {habit.dueToday && habit.todayStatus !== 'COMPLETED' && habit.todayStatus !== 'SKIPPED' ? (
-                  <button
-                    type="button"
-                    className="text-xs text-ink-muted hover:underline"
-                    onClick={() => void skip.mutateAsync({ id: habit.id })}
-                  >
-                    {t('personal.habitSkip')}
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  className="text-xs text-ink-muted hover:underline"
-                  onClick={() => void update.mutateAsync({ id: habit.id, body: { isArchived: true } })}
-                >
-                  {t('personal.habitArchive')}
-                </button>
-              </div>
+              <button
+                type="button"
+                className="mt-3 text-xs text-ink-muted hover:underline"
+                onClick={() => void update.mutateAsync({ id: habit.id, body: { isArchived: true } })}
+              >
+                {t('personal.habitArchive')}
+              </button>
             ) : null}
           </section>
 
-          <HabitKpiGrid kpi={stats.kpi} unit={habit.targetUnit} />
-          <p className="text-sm text-ink-muted">
-            {t('personal.habitGoalProgress')}: {formatPct(stats.kpi.goalProgress)}
-          </p>
-          <section className="pf-card p-4">
-            <HabitHeatmap cells={stats.calendar} />
+          <HabitSummaryStrip kpi={activeStats.kpi} unit={habit.targetUnit} />
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <HabitStreakHero
+              currentStreak={activeStats.kpi.currentStreak}
+              cells={calendarStats?.calendar ?? activeStats.calendar}
+              todayKey={todayKey}
+            />
+            <section className="pf-card p-4">
+              <HabitMonthCalendar
+                cells={calendarStats?.calendar ?? activeStats.calendar}
+                selectedDayKey={viewDayKey}
+                todayKey={todayKey}
+                monthKey={resolvedMonth}
+                onMonthChange={(next) => {
+                  setMonthKey(next);
+                  setSelectedDayKey(`${next}-01`);
+                }}
+                onSelectDay={(day) => {
+                  setSelectedDayKey(day);
+                  setMonthKey(day.slice(0, 7));
+                }}
+                compact
+              />
+              {viewDayKey ? (
+                <p className="mt-2 text-xs text-ink-muted">
+                  {t('personal.habitSelectedDay')}: {viewDayKey}
+                  {viewDayKey === todayKey ? ` (${t('personal.habitDateToday')})` : ''}
+                  {viewDayKey === addDayKey(todayKey, -1) ? ` (${t('personal.habitDateYesterday')})` : ''}
+                </p>
+              ) : null}
+            </section>
+          </div>
+
+          <HabitKpiGrid kpi={activeStats.kpi} unit={habit.targetUnit} />
+
+          <section className="pf-card space-y-3 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-ink">{t('personal.habitDailyProgress')}</h2>
+              <div className="flex flex-wrap gap-1">
+                {CHART_PERIODS.map((row) => (
+                  <button
+                    key={row.id}
+                    type="button"
+                    className={cn(
+                      'rounded-full px-2.5 py-1 text-[11px] font-medium',
+                      chartPeriod === row.id ? 'bg-brand-600 text-white' : 'bg-surface-muted text-ink-muted',
+                    )}
+                    onClick={() => setChartPeriod(row.id)}
+                  >
+                    {t(`personal.habitChartPeriod.${row.id}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {stats.isPending && !stats.data ? (
+              <Skeleton className="h-36 w-full" />
+            ) : periodConfig.daily ? (
+              <HabitDailyProgressChart
+                cells={activeStats.calendar}
+                targetValue={habit.targetValue}
+                unit={habit.targetUnit}
+              />
+            ) : (
+              <HabitTrendBars points={activeStats.trend} targetValue={habit.targetValue} />
+            )}
+            <InsightLines kpi={activeStats.kpi} calendar={activeStats.calendar} />
           </section>
-          <section className="pf-card p-4">
-            <HabitTrendBars points={stats.trend} />
-          </section>
+
           <section className="pf-card p-4">
             <h2 className="pf-section-title">{t('personal.habitLogs')}</h2>
             {detail.data.logs.length === 0 ? (
@@ -226,5 +349,34 @@ export function PersonalGrowthHabitDetailPage() {
         />
       ) : null}
     </div>
+  );
+}
+
+function InsightLines({
+  kpi,
+  calendar,
+}: {
+  kpi: { completion: number; currentStreak: number; longestStreak: number; failed: number; completed: number };
+  calendar: Array<{ dayKey: string; status: string; value: number }>;
+}) {
+  const { t } = useTranslation();
+  const best = [...calendar]
+    .filter((cell) => cell.value > 0)
+    .sort((a, b) => b.value - a.value)[0];
+  const broken = calendar.find((cell) => cell.status === 'FAILED');
+
+  return (
+    <ul className="space-y-1 text-xs text-ink-muted">
+      <li>
+        {t('personal.habitInsightCompletion', { rate: formatPct(kpi.completion), count: kpi.completed })}
+      </li>
+      {best ? (
+        <li>{t('personal.habitInsightBestDay', { day: best.dayKey, value: formatNum(best.value) })}</li>
+      ) : null}
+      {broken ? <li>{t('personal.habitInsightBroken', { day: broken.dayKey })}</li> : null}
+      {kpi.currentStreak > 0 && kpi.currentStreak === kpi.longestStreak ? (
+        <li>{t('personal.habitInsightRecordStreak', { count: kpi.currentStreak })}</li>
+      ) : null}
+    </ul>
   );
 }

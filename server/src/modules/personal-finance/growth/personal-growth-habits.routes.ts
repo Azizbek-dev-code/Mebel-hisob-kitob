@@ -21,6 +21,7 @@ import {
   postChecklistTick,
   postHabit,
   postHabitCheckIn,
+  postHabitClearDay,
   postHabitLog,
   postHabitSkip,
   putDailyGoals,
@@ -28,6 +29,7 @@ import {
 import {
   checkInHabitBodySchema,
   checklistTickBodySchema,
+  clearHabitDayBodySchema,
   createHabitBodySchema,
   createHabitLogBodySchema,
   dailyGoalsQuerySchema,
@@ -83,6 +85,11 @@ personalGrowthHabitsRouter.post(
   '/growth/habits/:id/check-in',
   validate({ params: idParamsSchema, body: checkInHabitBodySchema }),
   postHabitCheckIn,
+);
+personalGrowthHabitsRouter.post(
+  '/growth/habits/:id/clear-day',
+  validate({ params: idParamsSchema, body: clearHabitDayBodySchema }),
+  postHabitClearDay,
 );
 personalGrowthHabitsRouter.get(
   '/growth/habits/:id/logs',

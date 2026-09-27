@@ -57,6 +57,11 @@ const habitFields = {
 
 export const listHabitsQuerySchema = z.object({
   includeArchived: z.enum(['true', 'false']).optional(),
+  dayKey: dayKeySchema.optional(),
+});
+
+export const clearHabitDayBodySchema = z.object({
+  dayKey: dayKeySchema.optional(),
 });
 
 export const createHabitBodySchema = z

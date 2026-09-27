@@ -58,6 +58,10 @@ export interface OnboardingSubmissionDto {
    * CUSTOM income input; never expose via admin list endpoints without care.
    */
   customMonthlyIncomeSom?: number | null;
+  /** Normalized email awaiting / completed registration verification. */
+  registerEmail?: string | null;
+  /** ISO timestamp when registration email was verified; null if not yet. */
+  emailVerifiedAt?: IsoDateString | null;
   identityId: string | null;
   workspaceId: string | null;
   createdAt: IsoDateString;
@@ -112,6 +116,8 @@ export interface OnboardingStatsResponse {
   businessType: OnboardingCountBucket[];
   discoverySource: OnboardingCountBucket[];
   goals: OnboardingCountBucket[];
+  growthInterests: OnboardingCountBucket[];
+  biggestProblem: OnboardingCountBucket[];
   helpWith: OnboardingCountBucket[];
   monthlyIncomeBand: OnboardingCountBucket[];
   /** Optional first savings target. Counts only; free-text "other" is never returned. */
@@ -120,6 +126,33 @@ export interface OnboardingStatsResponse {
   needs: OnboardingCountBucket[];
   /** True when at least one completed CUSTOM band exists. The amount itself is never returned. */
   customIncomeEnteredCount: number;
+}
+
+export interface OnboardingPublicMetricsResponse {
+  /** Real PERSONAL workspace count. Never a marketing fake. */
+  personalAccounts: number;
+}
+
+export interface RequestRegistrationEmailBody {
+  email: string;
+}
+
+export interface RequestRegistrationEmailResponse {
+  /** `verify` = code sent; `login` = email already registered (safe UX hint). */
+  next: 'verify' | 'login';
+  /** Masked email for UI, e.g. a***@mail.com — only when next=verify. */
+  emailMasked?: string;
+  /** Seconds until resend is allowed. */
+  resendAfterSec?: number;
+}
+
+export interface ConfirmRegistrationEmailBody {
+  email: string;
+  code: string;
+}
+
+export interface ConfirmRegistrationEmailResponse {
+  submission: OnboardingSubmissionDto;
 }
 
 export interface OnboardingNeedDto {

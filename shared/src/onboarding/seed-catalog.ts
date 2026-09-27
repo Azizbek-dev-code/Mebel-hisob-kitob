@@ -2,12 +2,14 @@ import { BusinessType, OnboardingAnswerType, OnboardingAudience } from '../const
 
 import {
   ACCOUNT_PURPOSES,
+  BIGGEST_PROBLEMS_V2,
   DISCOVERY_SOURCES,
   FIRST_SAVING_GOALS,
+  GROWTH_INTERESTS,
   HELP_WITH_OPTIONS,
   MONTHLY_INCOME_BANDS,
   OnboardingQuestionKey,
-  PERSONAL_GOALS,
+  PERSONAL_GOALS_V2,
 } from './catalog.js';
 
 export interface OnboardingSeedOption {
@@ -48,12 +50,46 @@ export interface OnboardingSeedMapping {
 }
 
 const PERSONAL_GOAL_LABELS: Record<string, { uz: string; ru: string }> = {
-  CONTROL_EXPENSES: { uz: 'Xarajatlarni nazorat qilish', ru: 'Контролировать расходы' },
-  START_SAVING: { uz: 'Pul yig‘ish', ru: 'Начать копить' },
+  CONTROL_MONEY: { uz: 'Pulimni nazorat qilish', ru: 'Контролировать деньги' },
+  CUT_SPENDING: { uz: 'Xarajatlarimni kamaytirish', ru: 'Сократить расходы' },
   BUILD_BUDGET: { uz: 'Budjet tuzish', ru: 'Составить бюджет' },
-  MANAGE_DEBT: { uz: 'Qarzlarni boshqarish', ru: 'Управлять долгами' },
-  TRACK_INCOME: { uz: 'Daromadlarni kuzatish', ru: 'Отслеживать доходы' },
-  IMPROVE_FINANCES: { uz: 'Moliyaviy maqsadga erishish', ru: 'Улучшить финансы' },
+  SAVE_GOAL: { uz: 'Jamg‘arish / maqsadga pul yig‘ish', ru: 'Копить на цель' },
+  MANAGE_DEBT: { uz: 'Qarzlarimni boshqarish', ru: 'Управлять долгами' },
+  MANAGE_INCOME: { uz: 'Daromadimni yaxshiroq boshqarish', ru: 'Лучше управлять доходом' },
+  ALL_IN_ONE: { uz: 'Hammasini bir joyda boshqarish', ru: 'Всё в одном месте' },
+};
+
+const GROWTH_LABELS: Record<string, { uz: string; ru: string }> = {
+  READING_COURSES: { uz: 'O‘qish va kurslar', ru: 'Чтение и курсы' },
+  IELTS_LANGUAGE: { uz: 'IELTS / til o‘rganish', ru: 'IELTS / язык' },
+  PROGRAMMING_SKILL: { uz: 'Dasturlash / skill', ru: 'Программирование / навык' },
+  DAILY_TASKS: { uz: 'Kunlik vazifalar', ru: 'Ежедневные задачи' },
+  HABITS: { uz: 'Habitlar', ru: 'Привычки' },
+  FOCUS_POMODORO: { uz: 'Fokus / Pomodoro', ru: 'Фокус / Pomodoro' },
+  GOALS: { uz: 'Maqsadlar', ru: 'Цели' },
+  FINANCE_ONLY: { uz: 'Hozircha faqat moliya', ru: 'Пока только финансы' },
+};
+
+const BIGGEST_PROBLEM_LABELS: Record<string, { uz: string; ru: string }> = {
+  DONT_KNOW_WHERE_MONEY_GOES: {
+    uz: 'Pul qayerga ketayotganini bilmayman',
+    ru: 'Не знаю, куда уходят деньги',
+  },
+  CANT_HOLD_BUDGET: { uz: 'Budjetni ushlab turolmayman', ru: 'Не удерживаю бюджет' },
+  HARD_TO_SAVE: { uz: 'Maqsad uchun pul yig‘ish qiyin', ru: 'Сложно копить на цель' },
+  CANT_MANAGE_TIME: { uz: 'Vaqtimni to‘g‘ri taqsimlay olmayman', ru: 'Не умею распределять время' },
+  HARD_TO_FOLLOW_PLANS: {
+    uz: 'Rejalarimni bajarishda qiynalaman',
+    ru: 'Сложно выполнять планы',
+  },
+  TOO_MANY_APPS: {
+    uz: 'Bir nechta dasturdan foydalanishga to‘g‘ri keladi',
+    ru: 'Приходится пользоваться несколькими приложениями',
+  },
+  WANT_ONE_PLACE: {
+    uz: 'Hammasini bitta joyda boshqarishni xohlayman',
+    ru: 'Хочу управлять всем в одном месте',
+  },
 };
 
 const DISCOVERY_LABELS: Record<string, { uz: string; ru: string }> = {
@@ -115,25 +151,53 @@ function labeled(
   })) as OnboardingSeedOption[];
 }
 
-export const ONBOARDING_SEED_QUESTIONS: readonly OnboardingSeedQuestion[] = [
+/**
+ * Active Personal registration questions (3). Legacy Personal questions remain in
+ * PERSONAL_LEGACY_SEED_QUESTIONS for reference / inactive sync.
+ */
+export const PERSONAL_REGISTRATION_SEED_QUESTIONS: readonly OnboardingSeedQuestion[] = [
   {
     key: OnboardingQuestionKey.GOALS,
     audience: OnboardingAudience.PERSONAL,
-    promptUz: 'Moliyaviy maqsadingiz nima?',
-    promptRu: 'Какая у вас финансовая цель?',
+    promptUz: 'Balancy‘dan eng ko‘p nimada foydalanmoqchisiz?',
+    promptRu: 'Для чего вы хотите использовать Balancy?',
     answerType: OnboardingAnswerType.MULTI,
     required: true,
     sortOrder: 10,
-    options: labeled(PERSONAL_GOALS, PERSONAL_GOAL_LABELS, []),
+    options: labeled(PERSONAL_GOALS_V2, PERSONAL_GOAL_LABELS, []),
   },
+  {
+    key: OnboardingQuestionKey.GROWTH_INTERESTS,
+    audience: OnboardingAudience.PERSONAL,
+    promptUz: 'Vaqtingiz va rivojlanishingizni ham boshqarishni xohlaysizmi?',
+    promptRu: 'Хотите управлять временем и развитием тоже?',
+    answerType: OnboardingAnswerType.MULTI,
+    required: true,
+    sortOrder: 20,
+    options: labeled(GROWTH_INTERESTS, GROWTH_LABELS, []),
+  },
+  {
+    key: OnboardingQuestionKey.BIGGEST_PROBLEM,
+    audience: OnboardingAudience.PERSONAL,
+    promptUz: 'Hozir siz uchun eng katta muammo nima?',
+    promptRu: 'Какая сейчас ваша главная проблема?',
+    answerType: OnboardingAnswerType.SINGLE,
+    required: true,
+    sortOrder: 30,
+    options: labeled(BIGGEST_PROBLEMS_V2, BIGGEST_PROBLEM_LABELS, []),
+  },
+];
+
+/** Legacy Personal questions — deactivated by catalog sync, kept for history. */
+export const PERSONAL_LEGACY_SEED_QUESTIONS: readonly OnboardingSeedQuestion[] = [
   {
     key: OnboardingQuestionKey.DISCOVERY_SOURCE,
     audience: OnboardingAudience.PERSONAL,
     promptUz: 'Platformaga nima sababdan qo‘shildingiz?',
     promptRu: 'Почему вы присоединились к платформе?',
     answerType: OnboardingAnswerType.SINGLE,
-    required: true,
-    sortOrder: 20,
+    required: false,
+    sortOrder: 100,
     options: labeled(DISCOVERY_SOURCES, DISCOVERY_LABELS),
   },
   {
@@ -144,26 +208,9 @@ export const ONBOARDING_SEED_QUESTIONS: readonly OnboardingSeedQuestion[] = [
     hintUz: 'Aniq summa ixtiyoriy. Maxsus summa alohida saqlanadi va admin statistikada ko‘rinmaydi.',
     hintRu: 'Точная сумма необязательна. Сумма хранится отдельно и не попадает в статистику.',
     answerType: OnboardingAnswerType.SINGLE,
-    required: true,
-    sortOrder: 30,
+    required: false,
+    sortOrder: 110,
     options: labeled(MONTHLY_INCOME_BANDS, INCOME_LABELS, ['CUSTOM']),
-  },
-  {
-    key: 'biggestProblem',
-    audience: OnboardingAudience.PERSONAL,
-    promptUz: 'Eng katta muammo?',
-    promptRu: 'Самая большая проблема?',
-    answerType: OnboardingAnswerType.SINGLE,
-    required: true,
-    sortOrder: 40,
-    options: [
-      { key: 'NO_TRACKING', labelUz: 'Hisob-kitob yuritilmaydi', labelRu: 'Нет учёта' },
-      { key: 'OVERSPENDING', labelUz: 'Ortiqcha xarajat', labelRu: 'Лишние траты' },
-      { key: 'NO_SAVINGS', labelUz: 'Jamg‘arma yo‘q', labelRu: 'Нет накоплений' },
-      { key: 'DEBT', labelUz: 'Qarzlar', labelRu: 'Долги' },
-      { key: 'NO_BUDGET', labelUz: 'Budjet yo‘q', labelRu: 'Нет бюджета' },
-      { key: 'OTHER', labelUz: 'Boshqa', labelRu: 'Другое', allowsOther: true },
-    ],
   },
   {
     key: OnboardingQuestionKey.HELP_WITH,
@@ -171,8 +218,8 @@ export const ONBOARDING_SEED_QUESTIONS: readonly OnboardingSeedQuestion[] = [
     promptUz: 'Platformadan nimani kutasiz?',
     promptRu: 'Чего вы ждёте от платформы?',
     answerType: OnboardingAnswerType.MULTI,
-    required: true,
-    sortOrder: 50,
+    required: false,
+    sortOrder: 120,
     options: labeled(HELP_WITH_OPTIONS, HELP_LABELS, []),
   },
   {
@@ -184,9 +231,14 @@ export const ONBOARDING_SEED_QUESTIONS: readonly OnboardingSeedQuestion[] = [
     hintRu: 'Необязательно. Позже можно изменить в целях.',
     answerType: OnboardingAnswerType.SINGLE,
     required: false,
-    sortOrder: 60,
+    sortOrder: 130,
     options: labeled(FIRST_SAVING_GOALS, FIRST_GOAL_LABELS),
   },
+];
+
+export const ONBOARDING_SEED_QUESTIONS: readonly OnboardingSeedQuestion[] = [
+  ...PERSONAL_REGISTRATION_SEED_QUESTIONS,
+  ...PERSONAL_LEGACY_SEED_QUESTIONS,
   {
     key: 'businessType',
     audience: OnboardingAudience.BUSINESS,
@@ -323,6 +375,18 @@ export const ONBOARDING_SEED_NEEDS: readonly OnboardingSeedNeed[] = [
     labelRu: 'Видеть оборот',
     sortOrder: 40,
   },
+  {
+    key: 'MANAGE_TIME',
+    labelUz: 'Vaqtni boshqarish',
+    labelRu: 'Управлять временем',
+    sortOrder: 50,
+  },
+  {
+    key: 'GROW_SKILLS',
+    labelUz: 'Rivojlanish',
+    labelRu: 'Развитие',
+    sortOrder: 60,
+  },
 ];
 
 export const ONBOARDING_SEED_SOLUTIONS: readonly OnboardingSeedNeed[] = [
@@ -350,9 +414,57 @@ export const ONBOARDING_SEED_SOLUTIONS: readonly OnboardingSeedNeed[] = [
     labelRu: 'Учёт продаж и расходов магазина',
     sortOrder: 40,
   },
+  {
+    key: 'GROWTH_SUITE',
+    labelUz: 'O‘sish: vazifa, habit, fokus',
+    labelRu: 'Рост: задачи, привычки, фокус',
+    sortOrder: 50,
+  },
 ];
 
 export const ONBOARDING_SEED_MAPPINGS: readonly OnboardingSeedMapping[] = [
+  {
+    questionKey: OnboardingQuestionKey.GOALS,
+    optionKey: 'CONTROL_MONEY',
+    needKey: 'CONTROL_SPENDING',
+    solutionKey: 'AUTO_TRACK',
+  },
+  {
+    questionKey: OnboardingQuestionKey.GOALS,
+    optionKey: 'BUILD_BUDGET',
+    needKey: 'ORGANIZE_BOOKKEEPING',
+    solutionKey: 'BUDGETS',
+  },
+  {
+    questionKey: OnboardingQuestionKey.GOALS,
+    optionKey: 'SAVE_GOAL',
+    needKey: 'GROW_SAVINGS',
+    solutionKey: 'GOALS',
+  },
+  {
+    questionKey: OnboardingQuestionKey.BIGGEST_PROBLEM,
+    optionKey: 'DONT_KNOW_WHERE_MONEY_GOES',
+    needKey: 'CONTROL_SPENDING',
+    solutionKey: 'AUTO_TRACK',
+  },
+  {
+    questionKey: OnboardingQuestionKey.BIGGEST_PROBLEM,
+    optionKey: 'CANT_HOLD_BUDGET',
+    needKey: 'ORGANIZE_BOOKKEEPING',
+    solutionKey: 'BUDGETS',
+  },
+  {
+    questionKey: OnboardingQuestionKey.GROWTH_INTERESTS,
+    optionKey: 'IELTS_LANGUAGE',
+    needKey: 'GROW_SKILLS',
+    solutionKey: 'GROWTH_SUITE',
+  },
+  {
+    questionKey: OnboardingQuestionKey.GROWTH_INTERESTS,
+    optionKey: 'FOCUS_POMODORO',
+    needKey: 'MANAGE_TIME',
+    solutionKey: 'GROWTH_SUITE',
+  },
   {
     questionKey: OnboardingQuestionKey.HELP_WITH,
     optionKey: 'TRACK_EXPENSES',

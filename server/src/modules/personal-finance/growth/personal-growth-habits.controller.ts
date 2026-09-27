@@ -1,5 +1,6 @@
 import type {
   CheckInGrowthHabitRequest,
+  ClearGrowthHabitDayRequest,
   CreateGrowthHabitLogRequest,
   CreateGrowthHabitRequest,
   SkipGrowthHabitRequest,
@@ -18,6 +19,7 @@ import { sendCreated, sendSuccess } from '../../../utils/http-response.js';
 
 import {
   checkInGrowthHabit,
+  clearHabitDay,
   createGrowthHabit,
   createHabitLog,
   deleteHabitLog,
@@ -46,9 +48,15 @@ function requirePersonal(req: Request) {
 
 export const getHabits = asyncHandler(async (req: Request, res: Response) => {
   const user = requirePersonal(req);
-  const includeArchived =
-    String((req.query as { includeArchived?: string }).includeArchived ?? '') === 'true';
-  sendSuccess(res, await listGrowthHabits(user.workspaceId, { includeArchived }));
+  const query = req.query as { includeArchived?: string; dayKey?: string };
+  const includeArchived = String(query.includeArchived ?? '') === 'true';
+  sendSuccess(
+    res,
+    await listGrowthHabits(user.workspaceId, {
+      includeArchived,
+      dayKey: query.dayKey,
+    }),
+  );
 });
 
 export const getHabit = asyncHandler(async (req: Request, res: Response) => {
@@ -131,6 +139,18 @@ export const deleteHabitLogHandler = asyncHandler(async (req: Request, res: Resp
       String(req.params.id),
       String(req.params.logId),
       user.identityId,
+    ),
+  });
+});
+
+export const postHabitClearDay = asyncHandler(async (req: Request, res: Response) => {
+  const user = requirePersonal(req);
+  sendSuccess(res, {
+    habit: await clearHabitDay(
+      user.workspaceId,
+      String(req.params.id),
+      user.identityId,
+      req.body as ClearGrowthHabitDayRequest,
     ),
   });
 });

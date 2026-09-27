@@ -1,5 +1,6 @@
 import type {
   CheckInGrowthHabitRequest,
+  ClearGrowthHabitDayRequest,
   CreateGrowthHabitLogRequest,
   CreateGrowthHabitRequest,
   GrowthHabitProgressPeriod,
@@ -16,9 +17,11 @@ import { personalGrowthHabitsService } from '@/services/personal-growth-habits.s
 
 export const personalGrowthHabitsKeys = {
   all: ['personal', 'growth', 'habits'] as const,
-  list: (includeArchived?: boolean) =>
-    [...personalGrowthHabitsKeys.all, 'list', includeArchived ? 'archived' : 'active'] as const,
+  list: (includeArchived?: boolean, dayKey?: string) =>
+    [...personalGrowthHabitsKeys.all, 'list', includeArchived ? 'archived' : 'active', dayKey ?? 'today'] as const,
   detail: (id: string) => [...personalGrowthHabitsKeys.all, 'detail', id] as const,
+  statistics: (id: string, period?: string, from?: string, to?: string) =>
+    [...personalGrowthHabitsKeys.all, 'statistics', id, period ?? 'MONTH', from ?? '', to ?? ''] as const,
   progress: (period?: string, from?: string, to?: string) =>
     [...personalGrowthHabitsKeys.all, 'progress', period ?? 'MONTH', from ?? '', to ?? ''] as const,
   dailyGoals: (dayKey?: string) =>
@@ -31,10 +34,11 @@ function invalidateHabits(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: personalGrowthXpKeys.all });
 }
 
-export function useGrowthHabits(includeArchived = false) {
+export function useGrowthHabits(includeArchived = false, dayKey?: string) {
   return useQuery({
-    queryKey: personalGrowthHabitsKeys.list(includeArchived),
-    queryFn: ({ signal }) => personalGrowthHabitsService.list(includeArchived, signal),
+    queryKey: personalGrowthHabitsKeys.list(includeArchived, dayKey),
+    queryFn: ({ signal }) => personalGrowthHabitsService.list(includeArchived, signal, dayKey),
+    placeholderData: (previous) => previous,
   });
 }
 
@@ -42,6 +46,17 @@ export function useGrowthHabitDetail(id: string | undefined) {
   return useQuery({
     queryKey: personalGrowthHabitsKeys.detail(id ?? ''),
     queryFn: ({ signal }) => personalGrowthHabitsService.detail(id!, signal),
+    enabled: Boolean(id),
+  });
+}
+
+export function useGrowthHabitStatistics(
+  id: string | undefined,
+  query: { period?: GrowthHabitProgressPeriod; from?: string; to?: string },
+) {
+  return useQuery({
+    queryKey: personalGrowthHabitsKeys.statistics(id ?? '', query.period, query.from, query.to),
+    queryFn: ({ signal }) => personalGrowthHabitsService.statistics(id!, query, signal),
     enabled: Boolean(id),
   });
 }
@@ -55,6 +70,7 @@ export function useGrowthHabitsProgress(query: {
   return useQuery({
     queryKey: personalGrowthHabitsKeys.progress(query.period, query.from, query.to),
     queryFn: ({ signal }) => personalGrowthHabitsService.progress(query, signal),
+    placeholderData: (previous) => previous,
   });
 }
 
@@ -101,11 +117,29 @@ export function useCheckInGrowthHabit() {
   });
 }
 
+export function useClearGrowthHabitDay() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body?: ClearGrowthHabitDayRequest }) =>
+      personalGrowthHabitsService.clearDay(id, body ?? {}),
+    onSuccess: () => invalidateHabits(queryClient),
+  });
+}
+
 export function useAddGrowthHabitLog() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: CreateGrowthHabitLogRequest }) =>
       personalGrowthHabitsService.addLog(id, body),
+    onSuccess: () => invalidateHabits(queryClient),
+  });
+}
+
+export function useDeleteGrowthHabitLog() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, logId }: { id: string; logId: string }) =>
+      personalGrowthHabitsService.deleteLog(id, logId),
     onSuccess: () => invalidateHabits(queryClient),
   });
 }

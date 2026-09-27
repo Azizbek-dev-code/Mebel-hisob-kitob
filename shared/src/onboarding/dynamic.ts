@@ -1,6 +1,7 @@
 import { isBusinessType } from '../constants/enums.js';
 
 import { AccountPurpose, MonthlyIncomeBand } from './catalog.js';
+import { validatePersonalAge } from './age.js';
 import {
   sanitizeOnboardingAnswers,
   type OnboardingAnswers,
@@ -191,6 +192,18 @@ export function validateOnboardingComplete(
     }
   }
 
+  // Age is collected outside the catalog wizard but required for Personal v2.
+  if (answers.purpose === AccountPurpose.PERSONAL) {
+    const hasV2Answers =
+      Boolean(answers.growthInterests?.length) ||
+      Boolean(answers.biggestProblem) ||
+      Boolean(answers.age) ||
+      relevant.some((question) => question.key === 'growthInterests');
+    if (hasV2Answers) {
+      errors.push(...validatePersonalAge(answers.age));
+    }
+  }
+
   return errors;
 }
 
@@ -202,5 +215,20 @@ export function sanitizeAnswersForPersistence(
     catalog.length > 0
       ? sanitizeOnboardingAnswersWithCatalog(input, catalog)
       : sanitizeOnboardingAnswers(input);
-  return catalog.length > 0 ? scopeOnboardingAnswers(sanitized, catalog) : sanitized;
+  const scoped = catalog.length > 0 ? scopeOnboardingAnswers(sanitized, catalog) : sanitized;
+
+  // Preserve non-catalog Personal draft keys (refresh recovery). Never persists passwords.
+  if (input && typeof input === 'object' && !Array.isArray(input)) {
+    const raw = input as Record<string, unknown>;
+    const draft = sanitizeOnboardingAnswers({
+      firstName: raw.firstName,
+      lastName: raw.lastName,
+      age: raw.age,
+    });
+    if (draft.firstName) scoped.firstName = draft.firstName;
+    if (draft.lastName) scoped.lastName = draft.lastName;
+    if (draft.age) scoped.age = draft.age;
+  }
+
+  return scoped;
 }

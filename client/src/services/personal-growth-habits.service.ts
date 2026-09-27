@@ -1,5 +1,6 @@
 import type {
   CheckInGrowthHabitRequest,
+  ClearGrowthHabitDayRequest,
   CreateGrowthHabitLogRequest,
   CreateGrowthHabitRequest,
   GrowthDailyGoalDto,
@@ -22,21 +23,33 @@ import type {
 
 import { apiClient } from '@/lib/api-client';
 
-function rangeQs(query?: { from?: string; to?: string; period?: GrowthHabitProgressPeriod; includeArchived?: boolean }) {
+function rangeQs(query?: {
+  from?: string;
+  to?: string;
+  period?: GrowthHabitProgressPeriod;
+  includeArchived?: boolean;
+  dayKey?: string;
+}) {
   if (!query) return '';
   const params = new URLSearchParams();
   if (query.from) params.set('from', query.from);
   if (query.to) params.set('to', query.to);
   if (query.period) params.set('period', query.period);
   if (query.includeArchived) params.set('includeArchived', 'true');
+  if (query.dayKey) params.set('dayKey', query.dayKey);
   const qs = params.toString();
   return qs ? `?${qs}` : '';
 }
 
 export const personalGrowthHabitsService = {
-  list(includeArchived = false, signal?: AbortSignal) {
-    const qs = includeArchived ? '?includeArchived=true' : '';
-    return apiClient.get<GrowthHabitListResponse>(`/personal/growth/habits${qs}`, { signal });
+  list(includeArchived = false, signal?: AbortSignal, dayKey?: string) {
+    const params = new URLSearchParams();
+    if (includeArchived) params.set('includeArchived', 'true');
+    if (dayKey) params.set('dayKey', dayKey);
+    const qs = params.toString();
+    return apiClient.get<GrowthHabitListResponse>(`/personal/growth/habits${qs ? `?${qs}` : ''}`, {
+      signal,
+    });
   },
   get(id: string, signal?: AbortSignal) {
     return apiClient.get<{ habit: GrowthHabitDto }>(`/personal/growth/habits/${id}`, { signal });
@@ -52,6 +65,11 @@ export const personalGrowthHabitsService = {
   },
   checkIn(id: string, body: CheckInGrowthHabitRequest = {}) {
     return apiClient.post<{ habit: GrowthHabitDto }>(`/personal/growth/habits/${id}/check-in`, {
+      body,
+    });
+  },
+  clearDay(id: string, body: ClearGrowthHabitDayRequest = {}) {
+    return apiClient.post<{ habit: GrowthHabitDto }>(`/personal/growth/habits/${id}/clear-day`, {
       body,
     });
   },

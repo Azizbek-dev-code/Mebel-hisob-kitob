@@ -5,6 +5,8 @@ import {
   ONBOARDING_SEED_NEEDS,
   ONBOARDING_SEED_QUESTIONS,
   ONBOARDING_SEED_SOLUTIONS,
+  PERSONAL_CATALOG_DEPRECATED_KEYS,
+  PERSONAL_REGISTRATION_SEED_QUESTIONS,
   isBusinessType,
   type CatalogQuestionForSanitize,
   type OnboardingAudience,
@@ -80,39 +82,130 @@ export function toSanitizeCatalog(rows: OnboardingQuestionDto[]): CatalogQuestio
 
 export async function ensureOnboardingCatalog(db: PrismaClient = defaultPrisma): Promise<void> {
   const existing = await db.onboardingQuestion.count();
-  if (existing > 0) {
-    await ensureNeedsAndSolutions(db);
-    return;
+  if (existing === 0) {
+    for (const question of ONBOARDING_SEED_QUESTIONS) {
+      await db.onboardingQuestion.create({
+        data: {
+          key: question.key,
+          audience: question.audience,
+          businessType: question.businessType ?? null,
+          promptUz: question.promptUz,
+          promptRu: question.promptRu,
+          hintUz: question.hintUz ?? null,
+          hintRu: question.hintRu ?? null,
+          answerType: question.answerType,
+          required: question.required,
+          isSystem: question.isSystem ?? false,
+          sortOrder: question.sortOrder,
+          options: {
+            create: question.options.map((option, index) => ({
+              key: option.key,
+              labelUz: option.labelUz,
+              labelRu: option.labelRu,
+              allowsOther: option.allowsOther ?? false,
+              sortOrder: option.sortOrder ?? (index + 1) * 10,
+            })),
+          },
+        },
+      });
+    }
+  } else {
+    await syncPersonalRegistrationCatalog(db);
   }
 
-  for (const question of ONBOARDING_SEED_QUESTIONS) {
-    await db.onboardingQuestion.create({
+  await ensureNeedsAndSolutions(db);
+}
+
+/**
+ * Additive sync for Personal registration v2:
+ * - upsert active Personal questions (goals, growthInterests, biggestProblem)
+ * - deactivate legacy Personal-only questions (discovery/income/help/firstSavingGoal)
+ * Does not touch BUSINESS questions.
+ */
+async function syncPersonalRegistrationCatalog(db: PrismaClient): Promise<void> {
+  for (const key of PERSONAL_CATALOG_DEPRECATED_KEYS) {
+    await db.onboardingQuestion.updateMany({
+      where: { key, audience: 'PERSONAL' },
+      data: { isActive: false, required: false },
+    });
+  }
+
+  for (const question of PERSONAL_REGISTRATION_SEED_QUESTIONS) {
+    const existing = await db.onboardingQuestion.findUnique({ where: { key: question.key } });
+    if (!existing) {
+      await db.onboardingQuestion.create({
+        data: {
+          key: question.key,
+          audience: question.audience,
+          businessType: question.businessType ?? null,
+          promptUz: question.promptUz,
+          promptRu: question.promptRu,
+          hintUz: question.hintUz ?? null,
+          hintRu: question.hintRu ?? null,
+          answerType: question.answerType,
+          required: question.required,
+          isActive: true,
+          isSystem: question.isSystem ?? false,
+          sortOrder: question.sortOrder,
+          options: {
+            create: question.options.map((option, index) => ({
+              key: option.key,
+              labelUz: option.labelUz,
+              labelRu: option.labelRu,
+              allowsOther: option.allowsOther ?? false,
+              isActive: true,
+              sortOrder: option.sortOrder ?? (index + 1) * 10,
+            })),
+          },
+        },
+      });
+      continue;
+    }
+
+    await db.onboardingQuestion.update({
+      where: { id: existing.id },
       data: {
-        key: question.key,
-        audience: question.audience,
-        businessType: question.businessType ?? null,
         promptUz: question.promptUz,
         promptRu: question.promptRu,
         hintUz: question.hintUz ?? null,
         hintRu: question.hintRu ?? null,
         answerType: question.answerType,
         required: question.required,
-        isSystem: question.isSystem ?? false,
+        isActive: true,
         sortOrder: question.sortOrder,
-        options: {
-          create: question.options.map((option, index) => ({
-            key: option.key,
-            labelUz: option.labelUz,
-            labelRu: option.labelRu,
-            allowsOther: option.allowsOther ?? false,
-            sortOrder: option.sortOrder ?? (index + 1) * 10,
-          })),
-        },
       },
     });
-  }
 
-  await ensureNeedsAndSolutions(db);
+    const activeKeys = new Set(question.options.map((option) => option.key));
+    await db.onboardingOption.updateMany({
+      where: { questionId: existing.id, key: { notIn: [...activeKeys] } },
+      data: { isActive: false },
+    });
+
+    for (const [index, option] of question.options.entries()) {
+      await db.onboardingOption.upsert({
+        where: {
+          questionId_key: { questionId: existing.id, key: option.key },
+        },
+        create: {
+          questionId: existing.id,
+          key: option.key,
+          labelUz: option.labelUz,
+          labelRu: option.labelRu,
+          allowsOther: option.allowsOther ?? false,
+          isActive: true,
+          sortOrder: option.sortOrder ?? (index + 1) * 10,
+        },
+        update: {
+          labelUz: option.labelUz,
+          labelRu: option.labelRu,
+          allowsOther: option.allowsOther ?? false,
+          isActive: true,
+          sortOrder: option.sortOrder ?? (index + 1) * 10,
+        },
+      });
+    }
+  }
 }
 
 async function ensureNeedsAndSolutions(db: PrismaClient): Promise<void> {

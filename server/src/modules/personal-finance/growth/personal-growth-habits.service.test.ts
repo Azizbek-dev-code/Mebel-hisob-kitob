@@ -23,6 +23,7 @@ const { prismaMock, recordAuditMock } = vi.hoisted(() => ({
       create: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
+      deleteMany: vi.fn(),
     },
     growthHabitChecklistItem: {
       findMany: vi.fn(),
@@ -64,10 +65,12 @@ vi.mock('./personal-growth-premium.service.js', () => ({
 
 const {
   checkInGrowthHabit,
+  clearHabitDay,
   createGrowthHabit,
   createHabitLog,
   getGrowthHabit,
   getTodayProgress,
+  listGrowthHabits,
   skipHabitDay,
   updateGrowthHabit,
   upsertDailyGoals,
@@ -549,5 +552,75 @@ describe('getTodayProgress', () => {
     expect(progress.focusTodosDone).toBe(1);
     expect(progress.focusTodosTotal).toBe(2);
     expect(progress.percent).toBeGreaterThan(0);
+  });
+});
+
+describe('clearHabitDay', () => {
+  it('deletes day logs and resets rollup without writing ERP tables', async () => {
+    prismaMock.growthHabit.findFirst.mockResolvedValue(HABIT);
+    prismaMock.growthHabitLog.deleteMany.mockResolvedValue({ count: 1 });
+    prismaMock.growthHabitCheckIn.upsert.mockResolvedValue({
+      id: 'ci_1',
+      workspaceId: 'ws_1',
+      habitId: 'habit_1',
+      dayKey: '2026-09-17',
+      value: 0,
+      note: null,
+      status: 'NONE',
+      skipped: false,
+      goalValueSnapshot: 20,
+      goalUnitSnapshot: 'words',
+      goalPeriodSnapshot: 'DAY',
+      checklistDone: 0,
+      checklistTotal: 0,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    prismaMock.growthHabit.update.mockResolvedValue({ ...HABIT, currentStreak: 0 });
+    prismaMock.growthHabitCheckIn.findMany.mockResolvedValue([]);
+
+    const habit = await clearHabitDay(
+      'ws_1',
+      'habit_1',
+      'idn_1',
+      { dayKey: '2026-09-17' },
+      prismaMock as never,
+      NOW,
+    );
+    expect(prismaMock.growthHabitLog.deleteMany).toHaveBeenCalledWith({
+      where: { workspaceId: 'ws_1', habitId: 'habit_1', dayKey: '2026-09-17' },
+    });
+    expect(habit.todayStatus).toBe('NONE');
+    expect(prismaMock.expense.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.sale.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('listGrowthHabits', () => {
+  it('returns viewDayKey status for selected day', async () => {
+    prismaMock.growthHabit.findMany.mockResolvedValue([HABIT]);
+    prismaMock.growthHabitCheckIn.findMany.mockResolvedValue([
+      {
+        id: 'ci_y',
+        habitId: 'habit_1',
+        dayKey: '2026-09-16',
+        value: 20,
+        skipped: false,
+        status: 'COMPLETED',
+        createdAt: NOW,
+        updatedAt: NOW,
+      },
+    ]);
+
+    const list = await listGrowthHabits(
+      'ws_1',
+      { dayKey: '2026-09-16' },
+      prismaMock as never,
+      NOW,
+    );
+    expect(list.todayKey).toBe('2026-09-17');
+    expect(list.viewDayKey).toBe('2026-09-16');
+    expect(list.items[0]?.todayStatus).toBe('COMPLETED');
+    expect(list.items[0]?.todayValue).toBe(20);
   });
 });

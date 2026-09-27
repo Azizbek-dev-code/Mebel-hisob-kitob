@@ -1028,6 +1028,10 @@ model OnboardingSubmission {
   experimentKey  String?
   status         OnboardingSubmissionStatus @default(IN_PROGRESS)
   answers        Json                       @default("{}")
+  /// Normalized email pending Personal registration verification (pre-account).
+  registerEmail    String?
+  /// Set only after REGISTRATION_VERIFY code is consumed for registerEmail.
+  emailVerifiedAt  DateTime?
   identityId     String?
   workspaceId    String?
   completedAt    DateTime?
@@ -1042,6 +1046,7 @@ model OnboardingSubmission {
   @@index([status, createdAt])
   @@index([flowKey, flowVersion])
   @@index([identityId])
+  @@index([registerEmail])
   @@map("onboarding_submissions")
 }
 
@@ -1157,6 +1162,10 @@ model PersonalProfile {
   discoverySource    String?
   monthlyIncomeBand  String?
   helpWith           Json   @default("[]")
+  /// Optional age collected during Personal registration (13–120). Not used for discrimination.
+  age                Int?
+  /// Growth interest keys from Personal registration (multi-select).
+  growthInterests    Json   @default("[]")
   notifyBudget       Boolean @default(true)
   notifyGoals        Boolean @default(true)
   notifyRecurring    Boolean @default(true)

@@ -26,6 +26,7 @@ import { cn } from '@/lib/cn';
 import { ROUTES } from '@/routes/paths';
 import { onboardingService } from '@/services/onboarding.service';
 
+import { PersonalRegistrationWizard } from '../PersonalRegistrationWizard';
 import {
   useCompleteBusinessOnboarding,
   useCompletePersonalAuthenticated,
@@ -103,7 +104,7 @@ export function OnboardingPage() {
   hasPersonalAccountRef.current = hasPersonalAccount;
 
   const [token, setToken] = useState<string | null>(() => sessionStorage.getItem(TOKEN_KEY));
-  const [screen, setScreen] = useState<'purpose' | 'flow' | 'account'>('purpose');
+  const [screen, setScreen] = useState<'purpose' | 'flow' | 'personal' | 'account'>('purpose');
   const [flowIndex, setFlowIndex] = useState(0);
   const [answers, setAnswers] = useState<OnboardingAnswers>({});
   const [customIncome, setCustomIncome] = useState('');
@@ -117,6 +118,10 @@ export function OnboardingPage() {
     passwordConfirmation: '',
   });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [submissionMeta, setSubmissionMeta] = useState<{
+    registerEmail: string | null;
+    emailVerifiedAt: string | null;
+  } | null>(null);
 
   const save = useSaveOnboarding(token);
   const completeRegister = useCompletePersonalRegister(token);
@@ -131,9 +136,7 @@ export function OnboardingPage() {
   const catalogQuestions = catalogQuery.data?.questions ?? [];
   const purpose = answers.purpose;
   const flowQuestions = useMemo(() => {
-    if (purpose === AccountPurpose.PERSONAL) {
-      return catalogQuestions.filter((question) => question.audience === 'PERSONAL');
-    }
+    // Personal uses PersonalRegistrationWizard — Business keeps catalog Q&A here.
     if (purpose === AccountPurpose.BUSINESS) {
       return catalogQuestions.filter((question) => {
         if (question.audience !== 'BUSINESS') return false;
@@ -178,6 +181,10 @@ export function OnboardingPage() {
           } else {
             persistToken(submission.publicToken);
             setAnswers(submission.answers);
+            setSubmissionMeta({
+              registerEmail: submission.registerEmail ?? null,
+              emailVerifiedAt: submission.emailVerifiedAt ?? null,
+            });
             if (
               submission.customMonthlyIncomeSom != null &&
               submission.customMonthlyIncomeSom > 0
@@ -188,7 +195,7 @@ export function OnboardingPage() {
               submission.answers.purpose === AccountPurpose.PERSONAL &&
               !hasPersonalAccountRef.current
             ) {
-              setScreen('flow');
+              setScreen('personal');
             } else if (submission.answers.purpose === AccountPurpose.BUSINESS) {
               setScreen('flow');
             }
@@ -267,7 +274,7 @@ export function OnboardingPage() {
       const next = { ...answers, purpose: nextPurpose } as OnboardingAnswers;
       await persistAnswers(next);
       setFlowIndex(0);
-      setScreen('flow');
+      setScreen(nextPurpose === AccountPurpose.PERSONAL ? 'personal' : 'flow');
     } catch (error) {
       setFieldErrors({
         form: error instanceof Error ? error.message : t('onboarding.submitFailed'),
@@ -483,8 +490,12 @@ export function OnboardingPage() {
           <LanguageSwitcher />
         </div>
         <div className="mt-4 text-center">
-          <h1 className="text-xl font-semibold tracking-tight text-ink">{t('onboarding.title')}</h1>
-          <p className="mt-1 text-sm text-ink-muted">{t('onboarding.subtitle')}</p>
+          <h1 className="text-xl font-semibold tracking-tight text-ink">
+            {screen === 'personal' ? 'Balancy' : t('onboarding.title')}
+          </h1>
+          {screen === 'purpose' || screen === 'flow' || screen === 'account' ? (
+            <p className="mt-1 text-sm text-ink-muted">{t('onboarding.subtitle')}</p>
+          ) : null}
         </div>
 
         {showProgress && progressTotal > 0 ? (
@@ -527,6 +538,22 @@ export function OnboardingPage() {
                 onClick={() => void choosePurpose(AccountPurpose.BUSINESS)}
               />
             </div>
+          ) : screen === 'personal' && token ? (
+            <PersonalRegistrationWizard
+              token={token}
+              answers={answers}
+              onAnswersChange={setAnswers}
+              catalogQuestions={catalogQuestions}
+              isSignedIn={isSignedIn}
+              submissionMeta={submissionMeta}
+              onSubmissionMeta={(meta) =>
+                setSubmissionMeta({
+                  registerEmail: meta.registerEmail ?? null,
+                  emailVerifiedAt: meta.emailVerifiedAt ?? null,
+                })
+              }
+              onBackToPurpose={() => setScreen('purpose')}
+            />
           ) : screen === 'flow' && flowQuestions.length === 0 ? (
             <p className="text-sm text-danger-700">{t('onboarding.loadFailed')}</p>
           ) : screen === 'flow' && currentQuestion ? (

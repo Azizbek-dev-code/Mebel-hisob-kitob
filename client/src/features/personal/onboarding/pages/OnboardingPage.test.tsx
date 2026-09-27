@@ -239,8 +239,8 @@ describe('OnboardingPage', () => {
     mockApi({ '/auth/me': SIGNED_OUT_RESPONSE, ...onboardingApis() });
     renderOnboarding();
 
-    expect(await screen.findByRole('button', { name: /Shaxsiy moliya/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Biznes/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Personal Finance/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Business/ })).toBeInTheDocument();
   });
 
   it('returns a personal session to the personal dashboard', async () => {
@@ -255,7 +255,7 @@ describe('OnboardingPage', () => {
     const user = userEvent.setup();
     renderOnboarding();
 
-    await user.click(await screen.findByRole('button', { name: /Shaxsiy moliya/ }));
+    await user.click(await screen.findByRole('button', { name: /Personal Finance/ }));
     expect(await screen.findByText('personal home')).toBeInTheDocument();
   });
 
@@ -275,7 +275,7 @@ describe('OnboardingPage', () => {
     const user = userEvent.setup();
     renderOnboarding();
 
-    await user.click(await screen.findByRole('button', { name: /Shaxsiy moliya/ }));
+    await user.click(await screen.findByRole('button', { name: /Personal Finance/ }));
     expect(await screen.findByText('personal home')).toBeInTheDocument();
     expect(
       fetchMock.mock.calls.some(([called]) => String(called).includes('/accounts/switch')),
@@ -294,7 +294,7 @@ describe('OnboardingPage', () => {
     const user = userEvent.setup();
     renderOnboarding();
 
-    await user.click(await screen.findByRole('button', { name: /Biznes/ }));
+    await user.click(await screen.findByRole('button', { name: /Business/ }));
     expect(await screen.findByText('Biznes turi')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mebel' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Gilam' })).toBeInTheDocument();
@@ -309,23 +309,17 @@ describe('OnboardingPage', () => {
     expect(await screen.findByText('register store FURNITURE')).toBeInTheDocument();
   });
 
-  it('renders personal catalog questions and allows skip only when optional', async () => {
+  it('opens Personal registration wizard with name step', async () => {
     mockApi({ '/auth/me': SIGNED_OUT_RESPONSE, ...onboardingApis() });
     const user = userEvent.setup();
     renderOnboarding();
 
-    await user.click(await screen.findByRole('button', { name: /Shaxsiy moliya/ }));
-    expect(await screen.findByText('Moliyaviy maqsadingiz nima?')).toBeInTheDocument();
-    expect(screen.getByTestId('onboarding-progress')).toHaveTextContent('1/3');
-    expect(screen.queryByRole('button', { name: /O‘tkazib yuborish/ })).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'Xarajatlarni nazorat qilish' }));
-    await user.click(screen.getByRole('button', { name: /Davom etish/ }));
-    expect(await screen.findByText('Birinchi moliyaviy maqsadingiz nima?')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /O‘tkazib yuborish/ })).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: /Personal Finance/ }));
+    expect(await screen.findByText('Avval tanishib olaylik')).toBeInTheDocument();
+    expect(screen.getByTestId('onboarding-progress')).toBeInTheDocument();
   });
 
-  it('restores an in-progress personal flow after refresh', async () => {
+  it('restores an in-progress personal flow after refresh to a safe step', async () => {
     sessionStorage.setItem('furniture-erp.onboardingToken', 'tok');
     mockApi({
       '/auth/me': SIGNED_OUT_RESPONSE,
@@ -341,7 +335,14 @@ describe('OnboardingPage', () => {
                 flowVersion: 1,
                 experimentKey: null,
                 status: 'IN_PROGRESS',
-                answers: { purpose: 'PERSONAL', goals: ['CONTROL_EXPENSES'] },
+                answers: {
+                  purpose: 'PERSONAL',
+                  firstName: 'Aziz',
+                  lastName: 'Karimov',
+                  age: '25',
+                },
+                registerEmail: 'aziz@example.com',
+                emailVerifiedAt: null,
                 hasCustomIncome: false,
                 identityId: null,
                 workspaceId: null,
@@ -354,8 +355,7 @@ describe('OnboardingPage', () => {
       }),
     });
     renderOnboarding();
-    expect(await screen.findByText('Birinchi moliyaviy maqsadingiz nima?')).toBeInTheDocument();
-    expect(screen.getByTestId('onboarding-progress')).toHaveTextContent('2/3');
+    expect(await screen.findByText('Emailingizni tasdiqlang')).toBeInTheDocument();
   });
 
   it('does not keep a platform admin on onboarding', async () => {

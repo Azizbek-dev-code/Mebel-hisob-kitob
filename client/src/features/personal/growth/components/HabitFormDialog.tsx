@@ -376,6 +376,16 @@ export function HabitFormDialog({
           />
         ) : null}
 
+        <label className="block space-y-1 text-sm">
+          <span className="text-ink-muted">{t('personal.habitStartDate')}</span>
+          <input
+            type="date"
+            className={fieldClass}
+            value={state.startDayKey}
+            onChange={(e) => patch({ startDayKey: e.target.value })}
+          />
+        </label>
+
         <button
           type="button"
           className="text-xs font-medium text-brand-700 hover:underline"
@@ -415,27 +425,18 @@ export function HabitFormDialog({
                 ))}
               </select>
             </label>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <label className="block min-w-0 space-y-1 text-sm">
-                <span className="text-ink-muted">{t('personal.habitStartDate')}</span>
-                <input
-                  type="date"
+            <label className="block min-w-0 space-y-1 text-sm">
+              <span className="text-ink-muted">{t('personal.habitEndDate')}</span>
+              {state.endUnlimited ? (
+                <button
+                  type="button"
                   className={fieldClass}
-                  value={state.startDayKey}
-                  onChange={(e) => patch({ startDayKey: e.target.value })}
-                />
-              </label>
-              <label className="block min-w-0 space-y-1 text-sm">
-                <span className="text-ink-muted">{t('personal.habitEndDate')}</span>
-                {state.endUnlimited ? (
-                  <button
-                    type="button"
-                    className={fieldClass}
-                    onClick={() => patch({ endUnlimited: false })}
-                  >
-                    {t('personal.habitEndUnlimited')}
-                  </button>
-                ) : (
+                  onClick={() => patch({ endUnlimited: false })}
+                >
+                  {t('personal.habitEndUnlimited')}
+                </button>
+              ) : (
+                <div className="space-y-1">
                   <input
                     type="date"
                     className={fieldClass}
@@ -445,9 +446,16 @@ export function HabitFormDialog({
                       patch({ endDayKey: value, endUnlimited: !value });
                     }}
                   />
-                )}
-              </label>
-            </div>
+                  <button
+                    type="button"
+                    className="text-xs text-brand-700 hover:underline"
+                    onClick={() => patch({ endUnlimited: true, endDayKey: '' })}
+                  >
+                    {t('personal.habitEndUnlimited')}
+                  </button>
+                </div>
+              )}
+            </label>
             <label className="block space-y-1 text-sm">
               <span className="text-ink-muted">{t('personal.habitStackAfter')}</span>
               <select

@@ -91,7 +91,15 @@ export interface GrowthHabitListResponse {
   /** Longest current streak among active habits. */
   bestCurrentStreak: number;
   timezone: string;
+  /** Real "today" in workspace timezone. */
   todayKey: string;
+  /** Day used for todayStatus / dueToday fields (defaults to todayKey). */
+  viewDayKey: string;
+}
+
+export interface ClearGrowthHabitDayRequest {
+  /** Defaults to today (workspace timezone). */
+  dayKey?: string;
 }
 
 export interface CreateGrowthHabitChecklistItem {

@@ -2,12 +2,15 @@ import {
   AccountPurpose,
   AuditEntityType,
   AuditEventType,
+  AuthEmailCodePurpose,
   MonthlyIncomeBand,
   ONBOARDING_FLOW_KEY,
   ONBOARDING_FLOW_VERSION,
   OnboardingSubmissionStatus,
   isCustomIncomeBand,
   mergeOnboardingAnswers,
+  normalizeEmail,
+  parsePersonalAge,
   readOnboardingAnswers,
   sanitizeAnswersForPersistence,
   sanitizeOnboardingAnswers,
@@ -15,11 +18,14 @@ import {
   validateRegisterPersonalAccountDraft,
   type CompletePersonalOnboardingRequest,
   type CompletePersonalOnboardingResponse,
+  type ConfirmRegistrationEmailResponse,
   type OnboardingAnswerRowDto,
   type OnboardingAnswers,
   type OnboardingCatalogResponse,
+  type OnboardingPublicMetricsResponse,
   type OnboardingStatsResponse,
   type OnboardingSubmissionDto,
+  type RequestRegistrationEmailResponse,
   type SaveOnboardingAnswersRequest,
 } from '@furniture-erp/shared';
 import type { Prisma, PrismaClient } from '@prisma/client';
@@ -27,6 +33,7 @@ import { randomBytes } from 'node:crypto';
 
 import { prisma as defaultPrisma } from '../../../lib/prisma.js';
 import { recordAudit } from '../../../services/audit.service.js';
+import { consumeEmailCode, issueEmailCode } from '../../../services/auth-email-code.service.js';
 import { ApiError } from '../../../utils/api-error.js';
 import {
   createPersonalAccountForUser,
@@ -46,6 +53,8 @@ function toSubmissionDto(
     experimentKey: string | null;
     status: string;
     answers: Prisma.JsonValue;
+    registerEmail?: string | null;
+    emailVerifiedAt?: Date | null;
     identityId: string | null;
     workspaceId: string | null;
     createdAt: Date;
@@ -64,6 +73,8 @@ function toSubmissionDto(
     customMonthlyIncomeSom: row.sensitive?.customMonthlyIncomeSom
       ? Number(row.sensitive.customMonthlyIncomeSom)
       : null,
+    registerEmail: row.registerEmail ?? null,
+    emailVerifiedAt: row.emailVerifiedAt?.toISOString() ?? null,
     identityId: row.identityId,
     workspaceId: row.workspaceId,
     createdAt: row.createdAt.toISOString(),
@@ -213,12 +224,16 @@ async function finishPersonalSubmission(
       discoverySource: answers.discoverySource ?? null,
       monthlyIncomeBand: answers.monthlyIncomeBand ?? null,
       helpWith: answers.helpWith ?? [],
+      age: parsePersonalAge(answers.age),
+      growthInterests: answers.growthInterests ?? [],
     },
     update: {
       goals: answers.goals ?? [],
       discoverySource: answers.discoverySource ?? null,
       monthlyIncomeBand: answers.monthlyIncomeBand ?? null,
       helpWith: answers.helpWith ?? [],
+      age: parsePersonalAge(answers.age),
+      growthInterests: answers.growthInterests ?? [],
     },
   });
 
@@ -317,6 +332,14 @@ export async function completePersonalOnboardingRegister(
     throw ApiError.validation('Hisob ma’lumotlarini to‘ldiring', registerErrors);
   }
 
+  const email = normalizeEmail(registerDraft.email);
+  const verifiedEmail = row.registerEmail ? normalizeEmail(row.registerEmail) : '';
+  if (!row.emailVerifiedAt || !verifiedEmail || verifiedEmail !== email) {
+    throw ApiError.validation('Emailni tasdiqlang', [
+      { field: 'email', message: 'Email tasdiqlanmagan. Kodni kiriting.' },
+    ]);
+  }
+
   const created = await registerPersonalAccount(
     {
       ...registerDraft,
@@ -325,6 +348,10 @@ export async function completePersonalOnboardingRegister(
     },
     db,
   );
+  await db.identity.update({
+    where: { id: created.identity.id },
+    data: { emailVerifiedAt: new Date() },
+  });
   const submission = await finishPersonalSubmission(
     token,
     created.workspace.id,
@@ -469,6 +496,12 @@ export async function getOnboardingStats(
     businessType: countBy(answers.map((item) => item.businessType)),
     discoverySource: countBy(answers.map((item) => item.discoverySource)),
     goals: countMulti(answers.map((item) => item.goals)),
+    growthInterests: countMulti(answers.map((item) => item.growthInterests)),
+    biggestProblem: countBy(
+      answers.map((item) =>
+        typeof item.biggestProblem === 'string' ? item.biggestProblem : undefined,
+      ),
+    ),
     helpWith: countMulti(answers.map((item) => item.helpWith)),
     monthlyIncomeBand: countBy(answers.map((item) => item.monthlyIncomeBand)),
     firstSavingGoal: countBy(answers.map((item) => item.firstSavingGoal)),
@@ -506,4 +539,106 @@ export async function listOnboardingAnswers(
       completedAt: row.completedAt?.toISOString() ?? null,
     };
   });
+}
+
+function maskEmail(email: string): string {
+  const [local, domain] = email.split('@');
+  if (!local || !domain) return '***';
+  const visible = local.slice(0, 1);
+  return `${visible}***@${domain}`;
+}
+
+export async function requestRegistrationEmail(
+  token: string,
+  rawEmail: string,
+  db: PrismaClient = defaultPrisma,
+): Promise<RequestRegistrationEmailResponse> {
+  const row = await loadOpenSubmission(token, db);
+  const email = normalizeEmail(rawEmail);
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 160) {
+    throw ApiError.validation('Email noto‘g‘ri', [
+      { field: 'email', message: "To'g'ri email kiriting" },
+    ]);
+  }
+
+  const [identity, user, pendingRequest] = await Promise.all([
+    db.identity.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+      select: { id: true },
+    }),
+    db.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+      select: { id: true },
+    }),
+    db.storeCreationRequest.findFirst({
+      where: {
+        email: { equals: email, mode: 'insensitive' },
+        status: 'PENDING',
+      },
+      select: { id: true },
+    }),
+  ]);
+  if (identity || user || pendingRequest) {
+    // Safe registration UX: nudge to login without leaking via other endpoints.
+    return { next: 'login' };
+  }
+
+  await db.onboardingSubmission.update({
+    where: { id: row.id },
+    data: { registerEmail: email, emailVerifiedAt: null },
+  });
+
+  await issueEmailCode({
+    email,
+    purpose: AuthEmailCodePurpose.REGISTRATION_VERIFY,
+    identityId: null,
+  });
+
+  return {
+    next: 'verify',
+    emailMasked: maskEmail(email),
+    resendAfterSec: 60,
+  };
+}
+
+export async function confirmRegistrationEmail(
+  token: string,
+  rawEmail: string,
+  code: string,
+  db: PrismaClient = defaultPrisma,
+): Promise<ConfirmRegistrationEmailResponse> {
+  const row = await loadOpenSubmission(token, db);
+  const email = normalizeEmail(rawEmail);
+  if (!email) {
+    throw ApiError.validation('Email noto‘g‘ri', [
+      { field: 'email', message: "To'g'ri email kiriting" },
+    ]);
+  }
+
+  await consumeEmailCode({
+    email,
+    purpose: AuthEmailCodePurpose.REGISTRATION_VERIFY,
+    code,
+  });
+
+  const updated = await db.onboardingSubmission.update({
+    where: { id: row.id },
+    data: {
+      registerEmail: email,
+      emailVerifiedAt: new Date(),
+    },
+    include: { sensitive: { select: { customMonthlyIncomeSom: true } } },
+  });
+
+  return { submission: toSubmissionDto(updated) };
+}
+
+/** Real PERSONAL workspace count for value screen — never a marketing fake. */
+export async function getOnboardingPublicMetrics(
+  db: PrismaClient = defaultPrisma,
+): Promise<OnboardingPublicMetricsResponse> {
+  const personalAccounts = await db.workspace.count({
+    where: { type: 'PERSONAL', status: 'ACTIVE' },
+  });
+  return { personalAccounts };
 }

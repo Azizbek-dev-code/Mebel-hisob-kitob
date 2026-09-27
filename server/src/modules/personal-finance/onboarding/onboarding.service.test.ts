@@ -27,9 +27,15 @@ const { prismaMock, recordAuditMock, registerPersonalAccount, createPersonalAcco
       onboardingQuestion: {
         count: vi.fn(),
         findMany: vi.fn(),
+        findUnique: vi.fn(),
         create: vi.fn(),
         update: vi.fn(),
+        updateMany: vi.fn(),
         aggregate: vi.fn(),
+      },
+      onboardingOption: {
+        upsert: vi.fn(),
+        updateMany: vi.fn(),
       },
       onboardingNeed: {
         upsert: vi.fn(),
@@ -50,6 +56,8 @@ const { prismaMock, recordAuditMock, registerPersonalAccount, createPersonalAcco
         delete: vi.fn(),
       },
       personalProfile: { upsert: vi.fn() },
+      identity: { update: vi.fn() },
+      workspace: { count: vi.fn() },
     },
     recordAuditMock: vi.fn(),
     registerPersonalAccount: vi.fn(),
@@ -72,6 +80,14 @@ const {
   startOnboarding,
 } = await import('./onboarding.service.js');
 
+const PERSONAL_ANSWERS = {
+  purpose: AccountPurpose.PERSONAL,
+  goals: ['CONTROL_MONEY'],
+  growthInterests: ['FINANCE_ONLY'],
+  biggestProblem: 'DONT_KNOW_WHERE_MONEY_GOES',
+  age: '25',
+};
+
 const OPEN = {
   id: 'ob_1',
   publicToken: 'aa'.repeat(24),
@@ -80,19 +96,13 @@ const OPEN = {
   experimentKey: null,
   status: OnboardingSubmissionStatus.IN_PROGRESS,
   answers: { purpose: AccountPurpose.PERSONAL },
+  registerEmail: null,
+  emailVerifiedAt: null,
   identityId: null,
   workspaceId: null,
   createdAt: new Date('2026-09-13T00:00:00.000Z'),
   completedAt: null,
   sensitive: null,
-};
-
-const PERSONAL_ANSWERS = {
-  purpose: AccountPurpose.PERSONAL,
-  goals: ['CONTROL_EXPENSES'],
-  discoverySource: 'INSTAGRAM',
-  monthlyIncomeBand: MonthlyIncomeBand.UNDER_1M,
-  helpWith: ['TRACK_EXPENSES'],
 };
 
 beforeEach(() => {
@@ -103,6 +113,11 @@ beforeEach(() => {
   );
   prismaMock.onboardingQuestion.count.mockResolvedValue(1);
   prismaMock.onboardingQuestion.findMany.mockResolvedValue([]);
+  prismaMock.onboardingQuestion.findUnique.mockResolvedValue(null);
+  prismaMock.onboardingQuestion.updateMany.mockResolvedValue({ count: 0 });
+  prismaMock.onboardingQuestion.create.mockResolvedValue({});
+  prismaMock.onboardingOption.upsert.mockResolvedValue({});
+  prismaMock.onboardingOption.updateMany.mockResolvedValue({ count: 0 });
   prismaMock.onboardingNeed.findMany.mockResolvedValue([]);
   prismaMock.onboardingSolution.findMany.mockResolvedValue([]);
   prismaMock.onboardingNeedMapping.findMany.mockResolvedValue([]);
@@ -279,6 +294,8 @@ describe('completePersonalOnboardingRegister', () => {
     prismaMock.onboardingSubmission.findUnique.mockResolvedValue({
       ...OPEN,
       answers: PERSONAL_ANSWERS,
+      registerEmail: 'aziz@example.com',
+      emailVerifiedAt: new Date('2026-09-13T00:30:00.000Z'),
     });
     registerPersonalAccount.mockResolvedValue({
       identity: {
@@ -296,12 +313,15 @@ describe('completePersonalOnboardingRegister', () => {
         createdAt: '2026-09-13T00:00:00.000Z',
       },
     });
+    prismaMock.identity.update.mockResolvedValue({});
     prismaMock.onboardingSubmission.update.mockResolvedValue({
       ...OPEN,
       status: OnboardingSubmissionStatus.COMPLETED,
       identityId: 'idn_1',
       workspaceId: 'ws_1',
       answers: PERSONAL_ANSWERS,
+      registerEmail: 'aziz@example.com',
+      emailVerifiedAt: new Date('2026-09-13T00:30:00.000Z'),
       completedAt: new Date('2026-09-13T01:00:00.000Z'),
       sensitive: null,
     });
@@ -316,12 +336,32 @@ describe('completePersonalOnboardingRegister', () => {
     });
 
     expect(registerPersonalAccount).toHaveBeenCalled();
+    expect(prismaMock.identity.update).toHaveBeenCalled();
     expect(result.workspace.storeId).toBeNull();
     expect(result.workspace.type).toBe(WorkspaceType.PERSONAL);
     expect(prismaMock.personalProfile.upsert).toHaveBeenCalled();
     // Token-holder DTO may include customMonthlyIncomeSom (null here); never leak raw sensitive bigint.
     expect(result.submission.customMonthlyIncomeSom ?? null).toBeNull();
     expect(result.submission.hasCustomIncome).toBe(false);
+  });
+
+  it('refuses complete-register without verified email', async () => {
+    prismaMock.onboardingSubmission.findUnique.mockResolvedValue({
+      ...OPEN,
+      answers: PERSONAL_ANSWERS,
+      registerEmail: 'aziz@example.com',
+      emailVerifiedAt: null,
+    });
+    await expect(
+      completePersonalOnboardingRegister(OPEN.publicToken, {
+        firstName: 'Aziz',
+        lastName: 'Karimov',
+        email: 'aziz@example.com',
+        password: 'Secret123',
+        passwordConfirmation: 'Secret123',
+      }),
+    ).rejects.toMatchObject({ statusCode: 422 });
+    expect(registerPersonalAccount).not.toHaveBeenCalled();
   });
 });
 

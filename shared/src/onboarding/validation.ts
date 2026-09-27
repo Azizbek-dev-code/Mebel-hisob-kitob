@@ -6,17 +6,21 @@ import {
   DiscoverySource,
   FIRST_SAVING_GOALS,
   FirstSavingGoal,
+  GROWTH_INTERESTS,
   HELP_WITH_OPTIONS,
   MONTHLY_INCOME_BANDS,
   MonthlyIncomeBand,
   PERSONAL_GOALS,
   type OnboardingQuestionCatalogEntry,
 } from './catalog.js';
+import { parsePersonalAge, readDraftPersonName, validatePersonalAge } from './age.js';
 
 export interface OnboardingAnswers {
   purpose?: AccountPurpose;
   businessType?: string;
   goals?: string[];
+  growthInterests?: string[];
+  biggestProblem?: string;
   discoverySource?: string;
   discoveryOther?: string;
   monthlyIncomeBand?: string;
@@ -24,6 +28,11 @@ export interface OnboardingAnswers {
   /** Optional. Not required to complete personal onboarding. */
   firstSavingGoal?: string;
   firstSavingGoalOther?: string;
+  /** Draft recovery — not catalog questions. */
+  firstName?: string;
+  lastName?: string;
+  /** Stored as decimal string for JSON answer compatibility. */
+  age?: string;
   [key: string]: string | string[] | undefined;
 }
 
@@ -55,6 +64,11 @@ export function sanitizeOnboardingAnswers(input: unknown): OnboardingAnswers {
   }
   const goals = asStringArray(raw.goals).filter((key) => isOneOf(key, PERSONAL_GOALS));
   if (goals.length > 0) answers.goals = [...new Set(goals)];
+  const growth = asStringArray(raw.growthInterests).filter((key) => isOneOf(key, GROWTH_INTERESTS));
+  if (growth.length > 0) answers.growthInterests = [...new Set(growth)];
+  if (typeof raw.biggestProblem === 'string') {
+    answers.biggestProblem = raw.biggestProblem.trim().slice(0, 80);
+  }
   if (typeof raw.discoverySource === 'string' && isOneOf(raw.discoverySource, DISCOVERY_SOURCES)) {
     answers.discoverySource = raw.discoverySource;
   }
@@ -83,6 +97,16 @@ export function sanitizeOnboardingAnswers(input: unknown): OnboardingAnswers {
   if (answers.firstSavingGoal !== FirstSavingGoal.OTHER) {
     delete answers.firstSavingGoalOther;
   }
+
+  const firstName = readDraftPersonName(raw.firstName);
+  if (firstName) answers.firstName = firstName;
+  const lastName = readDraftPersonName(raw.lastName);
+  if (lastName) answers.lastName = lastName;
+  const age = parsePersonalAge(raw.age);
+  if (age != null && validatePersonalAge(age).length === 0) {
+    answers.age = String(age);
+  }
+
   return answers;
 }
 
@@ -112,6 +136,11 @@ export function mergeOnboardingAnswers(
   return { ...current, ...patch };
 }
 
+/**
+ * Legacy fallback when DB catalog is empty.
+ * Registration v2 requires goals + growthInterests + biggestProblem (+ age).
+ * Older drafts that still have discovery/income/help remain valid.
+ */
 export function validatePersonalOnboardingComplete(
   answers: OnboardingAnswers,
   customMonthlyIncomeSom?: number | null,
@@ -123,6 +152,23 @@ export function validatePersonalOnboardingComplete(
   if (!answers.goals?.length) {
     errors.push({ field: 'goals', message: 'Kamida bitta maqsadni tanlang' });
   }
+
+  const isV2 =
+    Boolean(answers.growthInterests?.length) ||
+    Boolean(answers.biggestProblem) ||
+    Boolean(answers.age);
+
+  if (isV2) {
+    errors.push(...validatePersonalAge(answers.age));
+    if (!answers.growthInterests?.length) {
+      errors.push({ field: 'growthInterests', message: 'Kamida bitta variantni tanlang' });
+    }
+    if (!answers.biggestProblem) {
+      errors.push({ field: 'biggestProblem', message: 'Asosiy muammoni tanlang' });
+    }
+    return errors;
+  }
+
   if (!answers.discoverySource) {
     errors.push({ field: 'discoverySource', message: 'Qayerdan bilganingizni tanlang' });
   }
@@ -133,7 +179,11 @@ export function validatePersonalOnboardingComplete(
     errors.push({ field: 'monthlyIncomeBand', message: 'Daromad oralig‘ini tanlang' });
   }
   if (answers.monthlyIncomeBand === MonthlyIncomeBand.CUSTOM) {
-    if (customMonthlyIncomeSom == null || !Number.isInteger(customMonthlyIncomeSom) || customMonthlyIncomeSom <= 0) {
+    if (
+      customMonthlyIncomeSom == null ||
+      !Number.isInteger(customMonthlyIncomeSom) ||
+      customMonthlyIncomeSom <= 0
+    ) {
       errors.push({ field: 'customMonthlyIncomeSom', message: 'Oylik daromadni so‘mda kiriting' });
     }
   }

@@ -96,3 +96,12 @@ export const upsertMappingBodySchema = z.object({
   needId: z.string().min(1),
   solutionId: z.string().min(1),
 });
+
+export const requestRegistrationEmailBodySchema = z.object({
+  email: z.string().trim().min(1).max(160),
+});
+
+export const confirmRegistrationEmailBodySchema = z.object({
+  email: z.string().trim().min(1).max(160),
+  code: z.string().regex(/^\d{6}$/, '6 xonali kod kiriting'),
+});

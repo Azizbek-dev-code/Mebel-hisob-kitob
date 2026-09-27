@@ -40,10 +40,13 @@ import {
   completeBusinessOnboarding,
   completePersonalOnboardingForUser,
   completePersonalOnboardingRegister,
+  confirmRegistrationEmail,
   getOnboarding,
   getOnboardingCatalog,
+  getOnboardingPublicMetrics,
   getOnboardingStats,
   listOnboardingAnswers,
+  requestRegistrationEmail,
   saveOnboardingAnswers,
   startOnboarding,
 } from './onboarding.service.js';
@@ -144,6 +147,22 @@ export const postCompleteBusiness = asyncHandler(async (req: Request, res: Respo
   const identityId = await optionalIdentityId(req);
   const submission = await completeBusinessOnboarding(tokenParam(req), identityId);
   sendSuccess(res, { submission });
+});
+
+export const postRequestRegistrationEmail = asyncHandler(async (req: Request, res: Response) => {
+  const body = req.body as { email: string };
+  const result = await requestRegistrationEmail(tokenParam(req), body.email);
+  sendSuccess(res, result);
+});
+
+export const postConfirmRegistrationEmail = asyncHandler(async (req: Request, res: Response) => {
+  const body = req.body as { email: string; code: string };
+  const result = await confirmRegistrationEmail(tokenParam(req), body.email, body.code);
+  sendSuccess(res, result);
+});
+
+export const getPublicMetrics = asyncHandler(async (_req: Request, res: Response) => {
+  sendSuccess(res, await getOnboardingPublicMetrics());
 });
 
 export const getStats = asyncHandler(async (_req: Request, res: Response) => {

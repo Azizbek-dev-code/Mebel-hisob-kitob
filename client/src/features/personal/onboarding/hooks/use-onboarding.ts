@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   CompletePersonalOnboardingRequest,
+  ConfirmRegistrationEmailBody,
+  RequestRegistrationEmailBody,
   SaveOnboardingAnswersRequest,
   UpsertOnboardingMappingRequest,
   UpsertOnboardingNeedRequest,
@@ -12,6 +14,7 @@ import { onboardingService } from '@/services/onboarding.service';
 export const onboardingQueryKeys = {
   catalog: ['onboarding', 'catalog'] as const,
   submission: (token: string) => ['onboarding', 'submission', token] as const,
+  metrics: ['onboarding', 'metrics'] as const,
   stats: ['platform', 'onboarding-stats'] as const,
   adminQuestions: ['platform', 'onboarding-questions'] as const,
   adminAnswers: ['platform', 'onboarding-answers'] as const,
@@ -67,6 +70,34 @@ export function useCompleteBusinessOnboarding(token: string | null) {
       if (!token) throw new Error('Onboarding token missing');
       return onboardingService.completeBusiness(token);
     },
+  });
+}
+
+export function useRequestRegisterEmail(token: string | null) {
+  return useMutation({
+    mutationFn: (body: RequestRegistrationEmailBody) => {
+      if (!token) throw new Error('Onboarding token missing');
+      return onboardingService.requestRegisterEmail(token, body);
+    },
+  });
+}
+
+export function useConfirmRegisterEmail(token: string | null) {
+  return useMutation({
+    mutationFn: (body: ConfirmRegistrationEmailBody) => {
+      if (!token) throw new Error('Onboarding token missing');
+      return onboardingService.confirmRegisterEmail(token, body);
+    },
+  });
+}
+
+export function useOnboardingMetrics(enabled = true) {
+  return useQuery({
+    queryKey: onboardingQueryKeys.metrics,
+    queryFn: ({ signal }) => onboardingService.metrics(signal),
+    enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
   });
 }
 

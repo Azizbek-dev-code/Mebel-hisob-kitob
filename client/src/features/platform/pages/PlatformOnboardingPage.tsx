@@ -58,6 +58,16 @@ export function PlatformOnboardingPage() {
               tKey="onboarding.discovery"
             />
             <BucketCard title={t('onboarding.questions.goals')} items={data?.goals ?? []} tKey="onboarding.goals" />
+            <BucketCard
+              title={t('onboarding.questions.growth', { defaultValue: 'O‘sish qiziqishlari' })}
+              items={data?.growthInterests ?? []}
+              tKey="onboarding.growth"
+            />
+            <BucketCard
+              title={t('onboarding.questions.problem', { defaultValue: 'Asosiy muammo' })}
+              items={data?.biggestProblem ?? []}
+              tKey="onboarding.problem"
+            />
             <BucketCard title={t('onboarding.questions.help')} items={data?.helpWith ?? []} tKey="onboarding.help" />
             <BucketCard
               title={t('onboarding.questions.income')}

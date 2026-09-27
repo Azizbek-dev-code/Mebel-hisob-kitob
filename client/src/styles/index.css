@@ -440,6 +440,21 @@
   transform: translateX(-50%);
 }
 
+.pf-reg-step {
+  animation: pf-reg-fade 200ms ease-out;
+}
+
+@keyframes pf-reg-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .pf-focus-ring {
   position: relative;
   display: grid;

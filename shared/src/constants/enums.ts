@@ -952,6 +952,8 @@ export const AuthEmailCodePurpose = {
   PASSWORD_RESET: 'PASSWORD_RESET',
   EMAIL_CHANGE: 'EMAIL_CHANGE',
   EMAIL_VERIFY: 'EMAIL_VERIFY',
+  /** Pre-account Personal registration email proof. identityId stays null. */
+  REGISTRATION_VERIFY: 'REGISTRATION_VERIFY',
 } as const;
 export type AuthEmailCodePurpose = (typeof AuthEmailCodePurpose)[keyof typeof AuthEmailCodePurpose];
 
