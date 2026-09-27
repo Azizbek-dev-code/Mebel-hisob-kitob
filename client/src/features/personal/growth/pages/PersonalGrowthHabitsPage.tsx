@@ -81,7 +81,10 @@ export function PersonalGrowthHabitsPage() {
 
   const create = useCreateGrowthHabit();
   const update = useUpdateGrowthHabit();
-  const items = useMemo(() => habits.data?.items ?? [], [habits.data?.items]);
+  const items = useMemo(
+    () => (habits.data?.items ?? []).filter((habit) => habit.scheduled),
+    [habits.data?.items],
+  );
   const writable = Boolean(canWrite && viewDayKey && todayKey && canWriteDay(viewDayKey, todayKey));
 
   useEffect(() => {

@@ -670,5 +670,38 @@ describe('listGrowthHabits', () => {
     expect(list.viewDayKey).toBe('2026-09-16');
     expect(list.items[0]?.todayStatus).toBe('COMPLETED');
     expect(list.items[0]?.todayValue).toBe(20);
+    expect(list.items[0]?.scheduled).toBe(true);
+  });
+
+  it('omits habits not scheduled for the selected dayKey', async () => {
+    const mondayOnly = {
+      ...HABIT,
+      id: 'habit_mon',
+      title: 'Monday only',
+      scheduleKind: 'WEEKDAYS',
+      weekdays: [1],
+      startDayKey: '2026-09-01',
+    };
+    const futureDaily = {
+      ...HABIT,
+      id: 'habit_future',
+      title: 'Starts Sep 18',
+      scheduleKind: 'EVERY_DAY',
+      weekdays: [] as number[],
+      startDayKey: '2026-09-18',
+    };
+    prismaMock.growthHabit.findMany.mockResolvedValue([mondayOnly, futureDaily, HABIT]);
+    prismaMock.growthHabitCheckIn.findMany.mockResolvedValue([]);
+
+    // 2026-09-17 is Thursday — Monday-only and future start must be hidden
+    const list = await listGrowthHabits(
+      'ws_1',
+      { dayKey: '2026-09-17' },
+      prismaMock as never,
+      NOW,
+    );
+    expect(list.viewDayKey).toBe('2026-09-17');
+    expect(list.items.map((item) => item.id)).toEqual(['habit_1']);
+    expect(list.activeCount).toBe(3);
   });
 });

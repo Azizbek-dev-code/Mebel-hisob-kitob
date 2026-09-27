@@ -281,6 +281,14 @@ export function isHabitScheduledOn(config: HabitConfigSlice, dayKey: string): bo
   }
 }
 
+/**
+ * Canonical: is this habit scheduled/active on the selected calendar day (YYYY-MM-DD)?
+ * Alias of {@link isHabitScheduledOn} — use for list visibility (not completion).
+ */
+export function isHabitScheduledForDate(config: HabitConfigSlice, selectedDayKey: string): boolean {
+  return isHabitScheduledOn(config, selectedDayKey);
+}
+
 export function isCheckInComplete(value: number, targetValue: number): boolean {
   return value + 1e-9 >= Math.max(0, targetValue);
 }

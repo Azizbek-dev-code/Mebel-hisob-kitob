@@ -18,6 +18,7 @@ import {
   evaluateDayStatus,
   hourInTimeZone,
   isHabitDueToday,
+  isHabitScheduledForDate,
   isHabitScheduledOn,
   pairCorrelation,
   resolveProgressRange,
@@ -81,6 +82,41 @@ describe('schedule', () => {
     expect(isHabitScheduledOn(config, '2026-09-14')).toBe(true); // Mon
     expect(isHabitScheduledOn(config, '2026-09-15')).toBe(false); // Tue
     expect(isHabitScheduledOn(config, '2026-09-16')).toBe(true); // Wed
+  });
+
+  it('hides before startDayKey (selectedDate, not today)', () => {
+    const config = goodDaily({ startDayKey: '2026-09-15' });
+    expect(isHabitScheduledForDate(config, '2026-09-14')).toBe(false);
+    expect(isHabitScheduledForDate(config, '2026-09-15')).toBe(true);
+    expect(isHabitScheduledForDate(config, '2026-09-16')).toBe(true);
+  });
+
+  it('hides after endDayKey', () => {
+    const config = goodDaily({ startDayKey: '2026-09-10', endDayKey: '2026-09-20' });
+    expect(isHabitScheduledForDate(config, '2026-09-20')).toBe(true);
+    expect(isHabitScheduledForDate(config, '2026-09-21')).toBe(false);
+  });
+
+  it('startDayKey + Monday weekday: first valid Monday on/after start', () => {
+    // 2026-09-15 is Tuesday; first Monday on/after is 2026-09-21
+    const config = goodDaily({
+      scheduleKind: GrowthHabitScheduleKind.WEEKDAYS,
+      weekdays: [1],
+      startDayKey: '2026-09-15',
+    });
+    expect(isHabitScheduledForDate(config, '2026-09-14')).toBe(false);
+    expect(isHabitScheduledForDate(config, '2026-09-15')).toBe(false); // Tue
+    expect(isHabitScheduledForDate(config, '2026-09-21')).toBe(true); // Mon
+  });
+
+  it('Monday-only: Sunday hidden, Monday visible', () => {
+    const config = goodDaily({
+      scheduleKind: GrowthHabitScheduleKind.WEEKDAYS,
+      weekdays: [1],
+      startDayKey: '2026-09-01',
+    });
+    expect(isHabitScheduledForDate(config, '2026-09-20')).toBe(false); // Sun
+    expect(isHabitScheduledForDate(config, '2026-09-21')).toBe(true); // Mon
   });
 
   it('interval uses the anchor, not consecutive calendar days', () => {

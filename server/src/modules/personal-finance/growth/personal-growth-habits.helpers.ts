@@ -216,6 +216,7 @@ export function toHabitDto(input: {
   todayKey: string;
   todayCheckIn: GrowthHabitCheckIn | null;
   dueToday: boolean;
+  scheduled: boolean;
   todayValue: number;
   todayProgress: number;
   todayStatus: GrowthHabitDto['todayStatus'];
@@ -262,6 +263,7 @@ export function toHabitDto(input: {
     todayValue: input.todayValue,
     todayProgress: input.todayProgress,
     todayStatus: input.todayStatus,
+    scheduled: input.scheduled,
     dueToday: input.dueToday,
     checklist: input.checklist,
     createdAt: row.createdAt.toISOString(),

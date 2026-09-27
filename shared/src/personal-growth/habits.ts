@@ -39,6 +39,7 @@ export {
   isDayKey,
   isHabitDueOnConfig,
   isHabitDueToday,
+  isHabitScheduledForDate,
   isHabitScheduledOn,
   isoWeekday,
   mergeCalendars,

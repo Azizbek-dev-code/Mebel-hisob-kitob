@@ -71,6 +71,7 @@ describe('PersonalGrowthHabitsPage', () => {
                 todayProgress: 0,
                 todayStatus: 'NONE',
                 dueToday: true,
+                scheduled: true,
                 kind: 'GOOD',
                 badMode: null,
                 icon: 'flame',

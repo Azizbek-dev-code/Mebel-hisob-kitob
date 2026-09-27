@@ -15,6 +15,7 @@ import {
   isCheckInComplete,
   isDurationUnit,
   isHabitDueOnConfig,
+  isHabitScheduledForDate,
   occurrenceGrain,
   progressRatio,
   toDayKey,
@@ -202,6 +203,7 @@ function mapHabitRow(
       : todayCheckIn?.status === GrowthHabitDayStatus.FAILED
         ? GrowthHabitDayStatus.FAILED
         : evaluated;
+  const scheduled = isHabitScheduledForDate(slice, viewDayKey);
   const dueToday = isHabitDueOnConfig({
     config: slice,
     todayKey: viewDayKey,
@@ -214,6 +216,7 @@ function mapHabitRow(
     todayKey: viewDayKey,
     todayCheckIn,
     dueToday,
+    scheduled,
     todayValue,
     todayProgress: progressRatio(todayValue, habit.targetValue),
     todayStatus,
@@ -476,19 +479,21 @@ export async function listGrowthHabits(
   }
   const tickSet = new Set(ticks.map((tick) => `${tick.habitId}:${tick.itemId}`));
 
-  const items = habits.map((habit) => {
+  const mapped = habits.map((habit) => {
     const checklist = checklistItems
       .filter((item) => item.habitId === habit.id)
       .map((item) => toChecklistDto(item, tickSet.has(`${habit.id}:${item.id}`)));
     return mapHabitRow(habit, viewDayKey, checkInByHabit.get(habit.id) ?? [], checklist, todayKey);
   });
 
-  const active = items.filter((item) => !item.isArchived);
+  // List visibility = scheduled for viewDayKey (completion is a separate state).
+  const items = mapped.filter((item) => item.scheduled);
+  const activeAll = mapped.filter((item) => !item.isArchived);
   return {
     items,
-    activeCount: active.length,
-    dueTodayCount: active.filter((item) => item.dueToday).length,
-    bestCurrentStreak: active.reduce((max, item) => Math.max(max, item.currentStreak), 0),
+    activeCount: activeAll.length,
+    dueTodayCount: activeAll.filter((item) => item.dueToday).length,
+    bestCurrentStreak: activeAll.reduce((max, item) => Math.max(max, item.currentStreak), 0),
     timezone,
     todayKey,
     viewDayKey,

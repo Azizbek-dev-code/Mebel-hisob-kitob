@@ -78,6 +78,8 @@ export interface GrowthHabitDto {
   todayValue: number;
   todayProgress: number;
   todayStatus: GrowthHabitDayStatus;
+  /** True when this habit is scheduled/active on the view day (viewDayKey / today fields). */
+  scheduled: boolean;
   dueToday: boolean;
   checklist: GrowthHabitChecklistItemDto[];
   createdAt: IsoDateString;
