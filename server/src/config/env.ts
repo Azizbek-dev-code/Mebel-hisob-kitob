@@ -95,11 +95,16 @@ const envSchema = z.object({
   /** Protects cron routes (`Authorization: Bearer …` or `x-cron-secret`). */
   CRON_SECRET: optionalSecret,
   /**
-   * Resend API key (server-side only). Empty/missing skips real delivery in
-   * development and test without crashing the process. Never expose to the client.
+   * Resend API key (server-side only). Required for real delivery in production.
+   * Empty/missing is allowed in development/test (OTP logged to console).
+   * Never expose to the client.
    */
   RESEND_API_KEY: optionalSecret,
-  /** Verified Resend from-address, e.g. `Balancy <noreply@example.com>`. */
+  /**
+   * Verified Resend from-address, e.g. `Balancy <noreply@balancy.space>`.
+   * Must match a domain verified in the Resend dashboard. Required in production
+   * together with RESEND_API_KEY — otherwise transactional email throws.
+   */
   EMAIL_FROM: optionalSecret,
   PRESENCE_OFFLINE_AFTER_SECONDS: z.coerce.number().int().positive().max(3600).default(300),
   PRESENCE_HEARTBEAT_SECONDS: z.coerce.number().int().positive().max(300).default(45),

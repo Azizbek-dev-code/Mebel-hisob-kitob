@@ -60,6 +60,8 @@ skips `.env` loading when `VERCEL` is set, so everything must come from here.
 | `PUBLIC_APP_URL` | Public app origin (e.g. `https://balancy.space`). Used for `/app` links and the default webhook URL. |
 | `TELEGRAM_WEBHOOK_URL` | Optional override. Defaults to `${PUBLIC_APP_URL}/api/telegram/webhook`. |
 | `CRON_SECRET` | Protects cron routes (`POST /api/telegram/cron/*` and `POST /api/presence/cron/maintenance`). Send as `Authorization: Bearer <secret>` or `x-cron-secret`. |
+| `RESEND_API_KEY` | **Required in production** for registration / password-reset / email-verify codes. Server-only. |
+| `EMAIL_FROM` | **Required in production.** Resend-verified from address, e.g. `Balancy <noreply@balancy.space>`. |
 
 ### Telegram webhook setup
 

@@ -210,6 +210,7 @@ export const getHabitsProgressHandler = asyncHandler(async (req: Request, res: R
     to?: string;
     period?: GrowthHabitProgressPeriod;
     includeArchived?: string;
+    category?: string;
   };
   sendSuccess(
     res,
@@ -218,6 +219,7 @@ export const getHabitsProgressHandler = asyncHandler(async (req: Request, res: R
       to: query.to,
       period: query.period,
       includeArchived: query.includeArchived !== 'false',
+      category: query.category,
     }),
   );
 });

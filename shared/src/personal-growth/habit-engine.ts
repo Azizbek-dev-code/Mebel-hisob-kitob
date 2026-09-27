@@ -754,6 +754,202 @@ export function mergeCalendars(calendars: readonly HabitCalendarCell[][]): Habit
   return [...map.values()].sort((a, b) => a.dayKey.localeCompare(b.dayKey));
 }
 
+/** Per-day scheduled habit instance counts. Unscheduled days → rate null (not 0%). */
+export type HabitDayPerformance = {
+  dayKey: string;
+  scheduledCount: number;
+  completedCount: number;
+  /** Habits with COMPLETED or PARTIAL progress that day. */
+  progressedCount: number;
+  /** null when no habits were scheduled that day. */
+  rate: number | null;
+};
+
+export type HabitPerformanceBreakdown = {
+  full: number;
+  partial: number;
+  missed: number;
+  noPlan: number;
+};
+
+export type HabitWeeklyRhythmDay = {
+  weekday: number;
+  /** null when sampleSize === 0 (no scheduled instances). */
+  completion: number | null;
+  sampleSize: number;
+};
+
+export type HabitAreaStat = {
+  category: string;
+  habitCount: number;
+  completed: number;
+  scheduled: number;
+  /** null when scheduled === 0. */
+  consistency: number | null;
+};
+
+export type HabitAttentionItem = {
+  habitId: string;
+  title: string;
+  missed: number;
+};
+
+export type HabitFocusZone = {
+  bucket: (typeof GrowthHabitTimeOfDay)[keyof typeof GrowthHabitTimeOfDay];
+  count: number;
+  share: number;
+};
+
+export function summarizeDayPerformance(
+  calendars: readonly (readonly HabitCalendarCell[])[],
+): HabitDayPerformance[] {
+  const map = new Map<string, { scheduled: number; completed: number; progressed: number }>();
+  for (const calendar of calendars) {
+    for (const cell of calendar) {
+      const bucket = map.get(cell.dayKey) ?? { scheduled: 0, completed: 0, progressed: 0 };
+      if (cell.scheduled && cell.status !== GrowthHabitDayStatus.UNSCHEDULED) {
+        bucket.scheduled += 1;
+        if (cell.status === GrowthHabitDayStatus.COMPLETED) {
+          bucket.completed += 1;
+          bucket.progressed += 1;
+        } else if (cell.status === GrowthHabitDayStatus.PARTIAL) {
+          bucket.progressed += 1;
+        }
+      }
+      map.set(cell.dayKey, bucket);
+    }
+  }
+  return [...map.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([dayKey, bucket]) => ({
+      dayKey,
+      scheduledCount: bucket.scheduled,
+      completedCount: bucket.completed,
+      progressedCount: bucket.progressed,
+      rate: bucket.scheduled === 0 ? null : bucket.completed / bucket.scheduled,
+    }));
+}
+
+export function buildPerformanceBreakdown(
+  days: readonly HabitDayPerformance[],
+): HabitPerformanceBreakdown {
+  let full = 0;
+  let partial = 0;
+  let missed = 0;
+  let noPlan = 0;
+  for (const day of days) {
+    if (day.scheduledCount === 0) {
+      noPlan += 1;
+    } else if (day.completedCount === day.scheduledCount) {
+      full += 1;
+    } else if (day.progressedCount > 0) {
+      partial += 1;
+    } else {
+      missed += 1;
+    }
+  }
+  return { full, partial, missed, noPlan };
+}
+
+/** Weekday → scheduled-instance completion. Null completion when no samples (not 0%). */
+export function buildWeeklyRhythm(
+  calendars: readonly (readonly HabitCalendarCell[])[],
+): HabitWeeklyRhythmDay[] {
+  const buckets = new Map<number, { completed: number; total: number }>();
+  for (let weekday = 1; weekday <= 7; weekday += 1) {
+    buckets.set(weekday, { completed: 0, total: 0 });
+  }
+  for (const calendar of calendars) {
+    for (const cell of calendar) {
+      if (!cell.scheduled) continue;
+      if (
+        cell.status === GrowthHabitDayStatus.NONE ||
+        cell.status === GrowthHabitDayStatus.UNSCHEDULED ||
+        cell.status === GrowthHabitDayStatus.SKIPPED
+      ) {
+        continue;
+      }
+      const day = isoWeekday(cell.dayKey);
+      const bucket = buckets.get(day) ?? { completed: 0, total: 0 };
+      bucket.total += 1;
+      if (cell.status === GrowthHabitDayStatus.COMPLETED) bucket.completed += 1;
+      buckets.set(day, bucket);
+    }
+  }
+  return [1, 2, 3, 4, 5, 6, 7].map((weekday) => {
+    const bucket = buckets.get(weekday) ?? { completed: 0, total: 0 };
+    return {
+      weekday,
+      sampleSize: bucket.total,
+      completion: bucket.total === 0 ? null : bucket.completed / bucket.total,
+    };
+  });
+}
+
+export function summarizeAreaStats(
+  habits: readonly {
+    category: string | null | undefined;
+    kpi: Pick<HabitStatsKpi, 'completed' | 'scheduled'>;
+  }[],
+): HabitAreaStat[] {
+  const map = new Map<string, { habitCount: number; completed: number; scheduled: number }>();
+  for (const habit of habits) {
+    const category = (habit.category ?? '').trim() || 'other';
+    const bucket = map.get(category) ?? { habitCount: 0, completed: 0, scheduled: 0 };
+    bucket.habitCount += 1;
+    bucket.completed += habit.kpi.completed;
+    bucket.scheduled += habit.kpi.scheduled;
+    map.set(category, bucket);
+  }
+  return [...map.entries()]
+    .map(([category, bucket]) => ({
+      category,
+      habitCount: bucket.habitCount,
+      completed: bucket.completed,
+      scheduled: bucket.scheduled,
+      consistency: bucket.scheduled === 0 ? null : bucket.completed / bucket.scheduled,
+    }))
+    .sort(
+      (a, b) =>
+        (b.consistency ?? -1) - (a.consistency ?? -1) ||
+        b.habitCount - a.habitCount ||
+        a.category.localeCompare(b.category),
+    );
+}
+
+export function buildAttentionHabits(
+  habits: readonly { habitId: string; title: string; kpi: Pick<HabitStatsKpi, 'failed'> }[],
+  limit = 5,
+): HabitAttentionItem[] {
+  return habits
+    .filter((row) => row.kpi.failed > 0)
+    .map((row) => ({ habitId: row.habitId, title: row.title, missed: row.kpi.failed }))
+    .sort((a, b) => b.missed - a.missed || a.title.localeCompare(b.title))
+    .slice(0, limit);
+}
+
+/** Share of completion logs by time-of-day. null when sample size is insufficient. */
+export function focusZonesFromHours(hours: readonly number[]): HabitFocusZone[] | null {
+  if (hours.length < MIN_TIME_SAMPLE) return null;
+  const counts = new Map<string, number>();
+  for (const hour of hours) {
+    const bucket = timeBucketFromHour(hour);
+    counts.set(bucket, (counts.get(bucket) ?? 0) + 1);
+  }
+  const order = [
+    GrowthHabitTimeOfDay.MORNING,
+    GrowthHabitTimeOfDay.AFTERNOON,
+    GrowthHabitTimeOfDay.EVENING,
+    GrowthHabitTimeOfDay.NIGHT,
+  ] as const;
+  return order
+    .map((bucket) => {
+      const count = counts.get(bucket) ?? 0;
+      return { bucket, count, share: count / hours.length };
+    })
+    .filter((zone) => zone.count > 0);
+}
+
 export function weekdayCompletion(
   calendar: readonly HabitCalendarCell[],
 ): Array<{ weekday: number; completion: number; sampleSize: number }> {

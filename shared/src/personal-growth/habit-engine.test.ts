@@ -10,18 +10,24 @@ import {
   GrowthHabitScheduleKind,
 } from '../constants/enums.js';
 import {
+  buildAttentionHabits,
   buildHabitStatistics,
   buildInsights,
+  buildPerformanceBreakdown,
   buildRecommendations,
+  buildWeeklyRhythm,
   computeHabitStreak,
   configNeedsVersion,
   evaluateDayStatus,
+  focusZonesFromHours,
   hourInTimeZone,
   isHabitDueToday,
   isHabitScheduledForDate,
   isHabitScheduledOn,
   pairCorrelation,
   resolveProgressRange,
+  summarizeAreaStats,
+  summarizeDayPerformance,
   timeBucketFromHour,
   toZonedDayKey,
   weekdayCompletion,
@@ -389,6 +395,81 @@ describe('analytics helpers', () => {
     expect(timeBucketFromHour(13)).toBe('AFTERNOON');
     expect(timeBucketFromHour(19)).toBe('EVENING');
     expect(timeBucketFromHour(23)).toBe('NIGHT');
+  });
+
+  it('day performance treats unscheduled days as null rate, not 0%', () => {
+    const calendars = [
+      [
+        { dayKey: '2026-09-15', status: GrowthHabitDayStatus.COMPLETED, value: 1, progress: 1, scheduled: true },
+        { dayKey: '2026-09-16', status: GrowthHabitDayStatus.UNSCHEDULED, value: 0, progress: 0, scheduled: false },
+        { dayKey: '2026-09-17', status: GrowthHabitDayStatus.FAILED, value: 0, progress: 0, scheduled: true },
+      ],
+      [
+        { dayKey: '2026-09-15', status: GrowthHabitDayStatus.COMPLETED, value: 1, progress: 1, scheduled: true },
+        { dayKey: '2026-09-16', status: GrowthHabitDayStatus.UNSCHEDULED, value: 0, progress: 0, scheduled: false },
+        { dayKey: '2026-09-17', status: GrowthHabitDayStatus.COMPLETED, value: 1, progress: 1, scheduled: true },
+      ],
+    ];
+    const days = summarizeDayPerformance(calendars);
+    expect(days.find((d) => d.dayKey === '2026-09-15')).toMatchObject({
+      scheduledCount: 2,
+      completedCount: 2,
+      rate: 1,
+    });
+    expect(days.find((d) => d.dayKey === '2026-09-16')).toMatchObject({
+      scheduledCount: 0,
+      rate: null,
+    });
+    expect(days.find((d) => d.dayKey === '2026-09-17')).toMatchObject({
+      scheduledCount: 2,
+      completedCount: 1,
+      rate: 0.5,
+    });
+
+    const breakdown = buildPerformanceBreakdown(days);
+    expect(breakdown).toEqual({ full: 1, partial: 1, missed: 0, noPlan: 1 });
+  });
+
+  it('weekly rhythm returns null completion when a weekday has no scheduled instances', () => {
+    const rhythm = buildWeeklyRhythm([
+      [
+        { dayKey: '2026-09-14', status: GrowthHabitDayStatus.COMPLETED, value: 1, progress: 1, scheduled: true }, // Mon
+        { dayKey: '2026-09-15', status: GrowthHabitDayStatus.UNSCHEDULED, value: 0, progress: 0, scheduled: false },
+      ],
+    ]);
+    expect(rhythm.find((d) => d.weekday === 1)?.completion).toBe(1);
+    expect(rhythm.find((d) => d.weekday === 2)?.completion).toBeNull();
+    expect(rhythm.find((d) => d.weekday === 2)?.sampleSize).toBe(0);
+  });
+
+  it('area stats and attention habits use scheduled/failed counts only', () => {
+    const areas = summarizeAreaStats([
+      { category: 'reading', kpi: { completed: 9, scheduled: 10 } },
+      { category: 'reading', kpi: { completed: 5, scheduled: 10 } },
+      { category: null, kpi: { completed: 0, scheduled: 0 } },
+    ]);
+    expect(areas[0]).toMatchObject({
+      category: 'reading',
+      habitCount: 2,
+      completed: 14,
+      scheduled: 20,
+      consistency: 0.7,
+    });
+    expect(areas.find((a) => a.category === 'other')?.consistency).toBeNull();
+
+    const attention = buildAttentionHabits([
+      { habitId: 'a', title: 'Read', kpi: { failed: 4 } },
+      { habitId: 'b', title: 'Run', kpi: { failed: 0 } },
+      { habitId: 'c', title: 'Gym', kpi: { failed: 2 } },
+    ]);
+    expect(attention.map((row) => row.habitId)).toEqual(['a', 'c']);
+  });
+
+  it('focus zones stay null without enough log samples', () => {
+    expect(focusZonesFromHours([7, 8, 9])).toBeNull();
+    const zones = focusZonesFromHours([7, 7, 7, 13, 13, 19]);
+    expect(zones).not.toBeNull();
+    expect(zones!.find((z) => z.bucket === 'MORNING')?.share).toBeCloseTo(0.5);
   });
 
   it('correlation requires a minimum overlap and is not causation', () => {

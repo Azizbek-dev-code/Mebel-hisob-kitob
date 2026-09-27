@@ -29,6 +29,7 @@ function rangeQs(query?: {
   period?: GrowthHabitProgressPeriod;
   includeArchived?: boolean;
   dayKey?: string;
+  category?: string;
 }) {
   if (!query) return '';
   const params = new URLSearchParams();
@@ -37,6 +38,7 @@ function rangeQs(query?: {
   if (query.period) params.set('period', query.period);
   if (query.includeArchived) params.set('includeArchived', 'true');
   if (query.dayKey) params.set('dayKey', query.dayKey);
+  if (query.category) params.set('category', query.category);
   const qs = params.toString();
   return qs ? `?${qs}` : '';
 }
@@ -117,6 +119,7 @@ export const personalGrowthHabitsService = {
       to?: string;
       period?: GrowthHabitProgressPeriod;
       includeArchived?: boolean;
+      category?: string;
     },
     signal?: AbortSignal,
   ) {

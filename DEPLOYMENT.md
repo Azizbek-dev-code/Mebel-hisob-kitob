@@ -78,6 +78,8 @@ See `.env.example` and `docs/PRODUCTION.md`. Required production names:
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`
 - `PUBLIC_APP_URL=https://balancy.space`
 - `CRON_SECRET`
+- `RESEND_API_KEY` (Resend; required for verification emails)
+- `EMAIL_FROM` (verified sender, e.g. `Balancy <noreply@balancy.space>`)
 
 Optional: `TELEGRAM_WEBHOOK_URL`, `PRESENCE_OFFLINE_AFTER_SECONDS` (default 300),
 `ANALYTICS_IDLE_TIMEOUT` (default 300), `ANALYTICS_EVENT_RETENTION_DAYS` (default 90).

@@ -1,10 +1,13 @@
 import {
   isDurationUnit,
   type HabitCalendarCellDto,
+  type HabitDayPerformanceDto,
   type HabitStatsKpiDto,
   type HabitTrendPointDto,
+  type HabitWeeklyRhythmDayDto,
 } from '@furniture-erp/shared';
 import { Flame } from 'lucide-react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { cn } from '@/lib/cn';
@@ -111,6 +114,124 @@ export function HabitStreakHero({
   );
 }
 
+function intensityClass(rate: number | null): string {
+  if (rate == null) return 'bg-surface-muted ring-1 ring-inset ring-line';
+  if (rate >= 1) return 'bg-brand-700';
+  if (rate >= 0.8) return 'bg-brand-500';
+  if (rate >= 0.5) return 'bg-brand-300';
+  if (rate > 0) return 'bg-brand-100';
+  return 'bg-danger-100';
+}
+
+export function ConsistencyHeatmap({ days }: { days: HabitDayPerformanceDto[] }) {
+  const { t } = useTranslation();
+  const [active, setActive] = useState<HabitDayPerformanceDto | null>(null);
+
+  if (days.length === 0) {
+    return <p className="text-sm text-ink-muted">{t('personal.habitNoData')}</p>;
+  }
+
+  const detail = active;
+  return (
+    <div>
+      <div className="mb-3 flex items-end justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-ink">{t('personal.habitConsistencyHeatmap')}</p>
+          <p className="mt-0.5 text-xs text-ink-muted">{t('personal.habitConsistencyHeatmapHint')}</p>
+        </div>
+        <div className="flex items-center gap-1 text-[10px] text-ink-soft" aria-hidden="true">
+          <span className="size-2.5 rounded-sm bg-surface-muted ring-1 ring-inset ring-line" />
+          <span className="size-2.5 rounded-sm bg-brand-100" />
+          <span className="size-2.5 rounded-sm bg-brand-300" />
+          <span className="size-2.5 rounded-sm bg-brand-500" />
+          <span className="size-2.5 rounded-sm bg-brand-700" />
+        </div>
+      </div>
+      <div className="min-w-0 overflow-hidden">
+        <div className="grid grid-cols-7 gap-1">
+          {days.map((day) => {
+            const label =
+              day.rate == null
+                ? t('personal.habitHeatmapNoPlanDay', { day: day.dayKey })
+                : t('personal.habitHeatmapDayDetail', {
+                    day: day.dayKey,
+                    done: day.completedCount,
+                    total: day.scheduledCount,
+                    rate: formatPct(day.rate),
+                  });
+            return (
+              <button
+                key={day.dayKey}
+                type="button"
+                title={label}
+                aria-label={label}
+                onClick={() => setActive(day)}
+                className={cn(
+                  'aspect-square min-w-0 rounded-sm transition-opacity',
+                  intensityClass(day.rate),
+                  active?.dayKey === day.dayKey && 'ring-2 ring-brand-600 ring-offset-1',
+                )}
+              />
+            );
+          })}
+        </div>
+      </div>
+      {detail ? (
+        <p className="mt-3 text-sm text-ink">
+          {detail.rate == null
+            ? t('personal.habitHeatmapNoPlanDay', { day: detail.dayKey })
+            : t('personal.habitHeatmapDayDetail', {
+                day: detail.dayKey,
+                done: detail.completedCount,
+                total: detail.scheduledCount,
+                rate: formatPct(detail.rate),
+              })}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+export function WeeklyRhythmChart({ days }: { days: HabitWeeklyRhythmDayDto[] }) {
+  const { t } = useTranslation();
+  const hasAny = days.some((day) => day.sampleSize > 0);
+  if (!hasAny) {
+    return <p className="text-sm text-ink-muted">{t('personal.habitWeeklyRhythmEmpty')}</p>;
+  }
+  return (
+    <div>
+      <p className="mb-3 text-sm font-semibold text-ink">{t('personal.habitWeeklyRhythm')}</p>
+      <div className="flex h-28 items-end gap-1.5">
+        {days.map((day) => {
+          const height = day.completion == null ? 0 : Math.max(6, day.completion * 100);
+          return (
+            <div key={day.weekday} className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
+              <span className="text-[10px] tabular-nums text-ink-muted">
+                {day.completion == null ? t('personal.habitNa') : formatPct(day.completion)}
+              </span>
+              <div className="flex h-16 w-full items-end justify-center">
+                {day.completion == null ? (
+                  <div className="h-1 w-full max-w-8 rounded-full bg-line" />
+                ) : (
+                  <div
+                    className="w-full max-w-8 rounded-t bg-brand-500"
+                    style={{ height: `${height}%` }}
+                    title={`${t(`personal.habitWeekday.${day.weekday}`)}: ${formatPct(day.completion)}`}
+                  />
+                )}
+              </div>
+              <span className="text-[10px] font-medium text-ink-soft">
+                {t(`personal.habitWeekday.${day.weekday}`)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Legacy status heatmap — kept for detail views that still pass calendar cells. */
 export function HabitHeatmap({ cells }: { cells: HabitCalendarCellDto[] }) {
   const { t } = useTranslation();
   if (cells.length === 0) {

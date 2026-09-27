@@ -7,14 +7,20 @@ import {
   WorkspaceType,
   addDayKey,
   bestTimeFromHours,
+  buildAttentionHabits,
   buildHabitStatistics,
   buildInsights,
+  buildPerformanceBreakdown,
   buildRecommendations,
+  buildWeeklyRhythm,
+  focusZonesFromHours,
   hourInTimeZone,
   mergeCalendars,
   mergeOverallKpi,
   pairCorrelation,
   resolveProgressRange,
+  summarizeAreaStats,
+  summarizeDayPerformance,
   weekdayCompletion,
   type HabitAnalyticsDto,
   type GrowthHabitProgressPeriod as HabitProgressPeriod,
@@ -133,6 +139,8 @@ export async function getHabitsProgress(
     from?: string;
     to?: string;
     includeArchived?: boolean;
+    /** Filter analytics to habits in this category (`other` = null/empty). */
+    category?: string;
   } = {},
   db: DbClient = defaultPrisma,
   now = new Date(),
@@ -151,13 +159,28 @@ export async function getHabitsProgress(
   const to = period === GrowthHabitProgressPeriod.CUSTOM && query.to ? query.to : range.to;
 
   const includeArchived = query.includeArchived !== false;
-  const habits = await db.growthHabit.findMany({
+  const allHabits = await db.growthHabit.findMany({
     where: {
       workspaceId,
       ...(includeArchived ? {} : { isArchived: false }),
     },
     orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
   });
+  const availableCategories = [
+    ...new Set(
+      allHabits.map((habit) => {
+        const value = (habit.category ?? '').trim();
+        return value || 'other';
+      }),
+    ),
+  ].sort((a, b) => a.localeCompare(b));
+  const categoryFilter = query.category?.trim();
+  const habits = categoryFilter
+    ? allHabits.filter((habit) => {
+        const value = (habit.category ?? '').trim() || 'other';
+        return value === categoryFilter;
+      })
+    : allHabits;
   const ids = habits.map((habit) => habit.id);
   const lookbackFrom = range.previousFrom < from ? range.previousFrom : from;
 
@@ -228,7 +251,25 @@ export async function getHabitsProgress(
 
   const overall = mergeOverallKpi(currentStats.map((row) => row.current.kpi));
   const previousOverall = mergeOverallKpi(currentStats.map((row) => row.previous.kpi));
-  const calendar = mergeCalendars(currentStats.map((row) => row.current.calendar));
+  const habitCalendars = currentStats.map((row) => row.current.calendar);
+  const calendar = mergeCalendars(habitCalendars);
+  const dayPerformance = summarizeDayPerformance(habitCalendars);
+  const performanceBreakdown = buildPerformanceBreakdown(dayPerformance);
+  const weeklyRhythm = buildWeeklyRhythm(habitCalendars);
+  const habitRows = currentStats.map((row) => ({
+    habitId: row.habit.id,
+    title: row.habit.title,
+    kind: (row.habit.kind === 'BAD' ? 'BAD' : 'GOOD') as 'BAD' | 'GOOD',
+    icon: row.habit.icon,
+    color: row.habit.color,
+    category: row.habit.category ?? null,
+    targetUnit: row.habit.targetUnit,
+    kpi: row.current.kpi,
+  }));
+  const areas = summarizeAreaStats(
+    habitRows.map((row) => ({ category: row.category, kpi: row.kpi })),
+  );
+  const attentionHabits = buildAttentionHabits(habitRows);
   const trendMap = new Map<string, { completion: number; value: number; n: number }>();
   for (const row of currentStats) {
     for (const point of row.current.trend) {
@@ -250,6 +291,7 @@ export async function getHabitsProgress(
 
   const hours = logs.map((log) => hourInTimeZone(log.loggedAt, timezone));
   const bestTime = bestTimeFromHours(hours);
+  const focusZones = focusZonesFromHours(hours);
   const weekday = weekdayCompletion(calendar).find((row) => row.sampleSize >= MIN_WEEKDAY_SAMPLE) ?? null;
 
   const broken = currentStats
@@ -328,16 +370,15 @@ export async function getHabitsProgress(
     timezone,
     overall,
     calendar,
+    dayPerformance,
+    performanceBreakdown,
+    weeklyRhythm,
+    areas,
+    attentionHabits,
+    focusZones,
+    availableCategories,
     trend,
-    habits: currentStats.map((row) => ({
-      habitId: row.habit.id,
-      title: row.habit.title,
-      kind: row.habit.kind === 'BAD' ? 'BAD' : 'GOOD',
-      icon: row.habit.icon,
-      color: row.habit.color,
-      targetUnit: row.habit.targetUnit,
-      kpi: row.current.kpi,
-    })),
+    habits: habitRows,
     analytics,
   };
 }

@@ -291,8 +291,51 @@ export interface HabitProgressHabitRowDto {
   kind: GrowthHabitKind;
   icon: string | null;
   color: string | null;
+  category: string | null;
   targetUnit: string;
   kpi: HabitStatsKpiDto;
+}
+
+/** Per-day scheduled-instance intensity. rate is null when nothing was scheduled. */
+export interface HabitDayPerformanceDto {
+  dayKey: string;
+  scheduledCount: number;
+  completedCount: number;
+  progressedCount: number;
+  rate: number | null;
+}
+
+export interface HabitPerformanceBreakdownDto {
+  full: number;
+  partial: number;
+  missed: number;
+  noPlan: number;
+}
+
+export interface HabitWeeklyRhythmDayDto {
+  weekday: number;
+  completion: number | null;
+  sampleSize: number;
+}
+
+export interface HabitAreaStatDto {
+  category: string;
+  habitCount: number;
+  completed: number;
+  scheduled: number;
+  consistency: number | null;
+}
+
+export interface HabitAttentionItemDto {
+  habitId: string;
+  title: string;
+  missed: number;
+}
+
+export interface HabitFocusZoneDto {
+  bucket: GrowthHabitTimeOfDay;
+  count: number;
+  share: number;
 }
 
 export interface HabitInsightDto {
@@ -356,6 +399,16 @@ export interface HabitProgressResponse {
   timezone: string;
   overall: HabitStatsKpiDto;
   calendar: HabitCalendarCellDto[];
+  /** Day-level scheduled completion intensity (preferred for heatmap). */
+  dayPerformance: HabitDayPerformanceDto[];
+  performanceBreakdown: HabitPerformanceBreakdownDto;
+  weeklyRhythm: HabitWeeklyRhythmDayDto[];
+  areas: HabitAreaStatDto[];
+  attentionHabits: HabitAttentionItemDto[];
+  /** null when log timestamps are insufficient. */
+  focusZones: HabitFocusZoneDto[] | null;
+  /** Distinct habit categories in the workspace (for filter UI). */
+  availableCategories: string[];
   trend: HabitTrendPointDto[];
   habits: HabitProgressHabitRowDto[];
   analytics: HabitAnalyticsDto;

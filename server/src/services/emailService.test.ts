@@ -23,7 +23,7 @@ vi.mock('../config/env.js', () => ({
   env: envState,
 }));
 
-const { sendVerificationEmail, sendPasswordResetEmail, resetEmailServiceClient } =
+const { sendVerificationEmail, sendPasswordResetEmail, resetEmailServiceClient, maskEmailForLog } =
   await import('./emailService.js');
 const { logger } = await import('../utils/logger.js');
 
@@ -37,7 +37,7 @@ describe('emailService', () => {
     sendMock.mockResolvedValue({ data: { id: 'email_1' }, error: null });
   });
 
-  it('does not crash or call Resend when the API key is missing', async () => {
+  it('does not crash or call Resend when the API key is missing in development', async () => {
     await expect(sendVerificationEmail('aziz@example.com', '123456')).resolves.toBeUndefined();
     expect(sendMock).not.toHaveBeenCalled();
     expect(logger.info).toHaveBeenCalled();
@@ -78,12 +78,36 @@ describe('emailService', () => {
     );
   });
 
-  it('does not log the one-time code in production when Resend is unconfigured', async () => {
+  it('fails loudly in production when Resend is unconfigured (no false success)', async () => {
     envState.isProduction = true;
-    await sendPasswordResetEmail('aziz@example.com', '999888');
+    await expect(sendPasswordResetEmail('aziz@example.com', '999888')).rejects.toMatchObject({
+      statusCode: 500,
+    });
     expect(sendMock).not.toHaveBeenCalled();
     expect(logger.error).toHaveBeenCalled();
-    const logged = vi.mocked(logger.error).mock.calls[0];
-    expect(JSON.stringify(logged)).not.toContain('999888');
+    const logged = JSON.stringify(vi.mocked(logger.error).mock.calls[0]);
+    expect(logged).not.toContain('999888');
+    expect(logged).toContain('EMAIL_DELIVERY_SKIPPED');
+    expect(logged).toContain('az***@example.com');
+  });
+
+  it('fails loudly when Resend returns an error', async () => {
+    envState.RESEND_API_KEY = 're_test_key';
+    envState.EMAIL_FROM = 'Balancy <noreply@balancy.space>';
+    envState.isProduction = true;
+    resetEmailServiceClient();
+    sendMock.mockResolvedValue({ data: null, error: { message: 'domain not verified', name: 'validation_error' } });
+
+    await expect(sendVerificationEmail('user@gmail.com', '424242')).rejects.toMatchObject({
+      statusCode: 500,
+    });
+    const logged = JSON.stringify(vi.mocked(logger.error).mock.calls[0]);
+    expect(logged).toContain('EMAIL_DELIVERY_FAILED');
+    expect(logged).not.toContain('424242');
+    expect(logged).not.toContain('re_test_key');
+  });
+
+  it('masks emails for logs', () => {
+    expect(maskEmailForLog('aziz@gmail.com')).toBe('az***@gmail.com');
   });
 });

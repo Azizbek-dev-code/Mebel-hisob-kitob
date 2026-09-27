@@ -105,6 +105,17 @@ describe('taraqqiyot progress', () => {
     expect(progress.analytics.monthOverMonth).toBeDefined();
     expect(progress.analytics.monthOverMonth.currentScheduled).toBeGreaterThanOrEqual(0);
     expect(progress.habits[0]?.title).toBe('Read');
+    expect(progress.dayPerformance.length).toBeGreaterThan(0);
+    expect(progress.performanceBreakdown).toEqual(
+      expect.objectContaining({
+        full: expect.any(Number),
+        partial: expect.any(Number),
+        missed: expect.any(Number),
+        noPlan: expect.any(Number),
+      }),
+    );
+    expect(progress.weeklyRhythm).toHaveLength(7);
+    expect(progress.habits[0]?.category).toBeNull();
   });
 
   it('keeps archived habits in historical taraqqiyot', async () => {

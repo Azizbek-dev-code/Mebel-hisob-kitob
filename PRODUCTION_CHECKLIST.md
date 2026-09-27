@@ -34,6 +34,8 @@ Production domain: `https://balancy.space`
 - [ ] `PUBLIC_APP_URL=https://balancy.space` (not localhost, not ngrok)
 - [ ] `TELEGRAM_WEBHOOK_URL` optional; default `${PUBLIC_APP_URL}/api/telegram/webhook`
 - [ ] `CRON_SECRET`
+- [ ] `RESEND_API_KEY` (Resend dashboard → API Keys; required for verification emails)
+- [ ] `EMAIL_FROM` (verified sender, e.g. `Balancy <noreply@balancy.space>`)
 - [ ] Optional: `PRESENCE_OFFLINE_AFTER_SECONDS=300`, `ANALYTICS_IDLE_TIMEOUT=300`
 
 ## Database
@@ -47,6 +49,8 @@ Production domain: `https://balancy.space`
 
 - [ ] `GET /api/health` → `status: ok`, `database: up`, no tokens in body
 - [ ] Register / login / logout
+- [ ] Registration verification email arrives in inbox (not only “verify” UI)
+- [ ] Resend verification code works
 - [ ] Personal finance + growth (habits, todo, focus, goals, budgets)
 - [ ] Business ERP (sale, purchase, product, inventory, customer, delivery, assembly, reports)
 - [ ] Subscription gates still work

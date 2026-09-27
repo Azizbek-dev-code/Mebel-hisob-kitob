@@ -22,8 +22,8 @@ export const personalGrowthHabitsKeys = {
   detail: (id: string) => [...personalGrowthHabitsKeys.all, 'detail', id] as const,
   statistics: (id: string, period?: string, from?: string, to?: string) =>
     [...personalGrowthHabitsKeys.all, 'statistics', id, period ?? 'MONTH', from ?? '', to ?? ''] as const,
-  progress: (period?: string, from?: string, to?: string) =>
-    [...personalGrowthHabitsKeys.all, 'progress', period ?? 'MONTH', from ?? '', to ?? ''] as const,
+  progress: (period?: string, from?: string, to?: string, category?: string) =>
+    [...personalGrowthHabitsKeys.all, 'progress', period ?? 'MONTH', from ?? '', to ?? '', category ?? ''] as const,
   dailyGoals: (dayKey?: string) =>
     [...personalGrowthHabitsKeys.all, 'daily-goals', dayKey ?? 'today'] as const,
   today: () => [...personalGrowthHabitsKeys.all, 'today-progress'] as const,
@@ -66,9 +66,10 @@ export function useGrowthHabitsProgress(query: {
   from?: string;
   to?: string;
   includeArchived?: boolean;
+  category?: string;
 }) {
   return useQuery({
-    queryKey: personalGrowthHabitsKeys.progress(query.period, query.from, query.to),
+    queryKey: personalGrowthHabitsKeys.progress(query.period, query.from, query.to, query.category),
     queryFn: ({ signal }) => personalGrowthHabitsService.progress(query, signal),
     placeholderData: (previous) => previous,
   });
