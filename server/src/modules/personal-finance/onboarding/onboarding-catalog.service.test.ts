@@ -85,6 +85,8 @@ describe('onboarding catalog admin', () => {
           key: 'ADS',
           labelUz: 'Reklama',
           labelRu: 'Реклама',
+          descriptionUz: null,
+          descriptionRu: null,
           allowsOther: false,
           isActive: true,
           sortOrder: 10,

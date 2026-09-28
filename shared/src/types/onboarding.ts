@@ -11,6 +11,8 @@ export interface OnboardingOptionDto {
   key: string;
   labelUz: string;
   labelRu: string;
+  descriptionUz: string | null;
+  descriptionRu: string | null;
   allowsOther: boolean;
   isActive: boolean;
   sortOrder: number;
@@ -216,6 +218,8 @@ export interface UpsertOnboardingQuestionRequest {
     key: string;
     labelUz: string;
     labelRu: string;
+    descriptionUz?: string | null;
+    descriptionRu?: string | null;
     allowsOther?: boolean;
     isActive?: boolean;
     sortOrder?: number;

@@ -1,4 +1,4 @@
-import { BusinessType, OnboardingAnswerType, OnboardingAudience } from '../constants/enums.js';
+import { BusinessType, OnboardingAnswerType, OnboardingAudience, BUSINESS_TYPE_DESCRIPTIONS, ONBOARDING_LAUNCH_BUSINESS_TYPES } from '../constants/enums.js';
 
 import {
   ACCOUNT_PURPOSES,
@@ -16,7 +16,11 @@ export interface OnboardingSeedOption {
   key: string;
   labelUz: string;
   labelRu: string;
+  descriptionUz?: string | null;
+  descriptionRu?: string | null;
   allowsOther?: boolean;
+  /** When false, option is seeded inactive (admin can enable later). Default true. */
+  isActive?: boolean;
   sortOrder?: number;
 }
 
@@ -134,6 +138,7 @@ const BUSINESS_TYPE_LABELS: Record<string, { uz: string; ru: string }> = {
   CARPET: { uz: 'Gilam', ru: 'Ковры' },
   CLOTHING: { uz: 'Kiyim', ru: 'Одежда' },
   ELECTRONICS: { uz: 'Telefon/Elektronika', ru: 'Электроника' },
+  SMM: { uz: 'SMM Agentlik', ru: 'SMM Агентство' },
   OTHER: { uz: 'Boshqa', ru: 'Другое' },
 };
 
@@ -149,6 +154,20 @@ function labeled(
     allowsOther: otherKeys.includes(key),
     sortOrder: (index + 1) * 10,
   })) as OnboardingSeedOption[];
+}
+
+function businessTypeOptions(): OnboardingSeedOption[] {
+  const launch = new Set<string>(ONBOARDING_LAUNCH_BUSINESS_TYPES);
+  return Object.values(BusinessType).map((key, index) => ({
+    key,
+    labelUz: BUSINESS_TYPE_LABELS[key]?.uz ?? key,
+    labelRu: BUSINESS_TYPE_LABELS[key]?.ru ?? key,
+    descriptionUz: BUSINESS_TYPE_DESCRIPTIONS[key as BusinessType]?.uz ?? null,
+    descriptionRu: BUSINESS_TYPE_DESCRIPTIONS[key as BusinessType]?.ru ?? null,
+    allowsOther: false,
+    isActive: launch.has(key),
+    sortOrder: (index + 1) * 10,
+  }));
 }
 
 /**
@@ -236,6 +255,170 @@ export const PERSONAL_LEGACY_SEED_QUESTIONS: readonly OnboardingSeedQuestion[] =
   },
 ];
 
+const SMM_SERVICE_LABELS: Record<string, { uz: string; ru: string }> = {
+  SMM: { uz: 'SMM', ru: 'SMM' },
+  CONTENT_CREATION: { uz: 'Kontent yaratish', ru: 'Создание контента' },
+  REELS: { uz: 'Reels', ru: 'Reels' },
+  VIDEO_EDITING: { uz: 'Video montaj', ru: 'Видеомонтаж' },
+  GRAPHIC_DESIGN: { uz: 'Grafik dizayn', ru: 'Графический дизайн' },
+  TARGET_ADS: { uz: 'Target reklama', ru: 'Таргет-реклама' },
+  STRATEGY: { uz: 'Strategiya', ru: 'Стратегия' },
+  BRANDING: { uz: 'Brending', ru: 'Брендинг' },
+  COPYWRITING: { uz: 'Kopirayting', ru: 'Копирайтинг' },
+  OTHER: { uz: 'Boshqa', ru: 'Другое' },
+};
+
+const SMM_PLATFORM_LABELS: Record<string, { uz: string; ru: string }> = {
+  INSTAGRAM: { uz: 'Instagram', ru: 'Instagram' },
+  TIKTOK: { uz: 'TikTok', ru: 'TikTok' },
+  TELEGRAM: { uz: 'Telegram', ru: 'Telegram' },
+  YOUTUBE: { uz: 'YouTube', ru: 'YouTube' },
+  FACEBOOK: { uz: 'Facebook', ru: 'Facebook' },
+  LINKEDIN: { uz: 'LinkedIn', ru: 'LinkedIn' },
+  OTHER: { uz: 'Boshqa', ru: 'Другое' },
+};
+
+const SMM_GOAL_LABELS: Record<string, { uz: string; ru: string }> = {
+  GROW_CLIENTS: { uz: 'Mijozlar sonini oshirish', ru: 'Увеличить число клиентов' },
+  GROW_SALES: { uz: 'Sotuvni oshirish', ru: 'Рост продаж' },
+  SYSTEMIZE: { uz: 'Jarayonlarni tizimlashtirish', ru: 'Систематизировать процессы' },
+  MANAGE_TEAM: { uz: 'Jamoani boshqarish', ru: 'Управлять командой' },
+  SPEED_CONTENT: { uz: 'Kontentni tezroq chiqarish', ru: 'Ускорить выпуск контента' },
+  ANALYTICS: { uz: 'Analitika va hisobotlar', ru: 'Аналитика и отчёты' },
+  OTHER: { uz: 'Boshqa', ru: 'Другое' },
+};
+
+const SMM_TOOLS_LABELS: Record<string, { uz: string; ru: string }> = {
+  EXCEL_SHEETS: { uz: 'Excel / Google Sheets', ru: 'Excel / Google Sheets' },
+  TELEGRAM: { uz: 'Telegram', ru: 'Telegram' },
+  NOTION: { uz: 'Notion', ru: 'Notion' },
+  TRELLO_ASANA: { uz: 'Trello / Asana', ru: 'Trello / Asana' },
+  OTHER_CRM: { uz: 'Boshqa CRM', ru: 'Другая CRM' },
+  NO_SYSTEM: { uz: 'Tizim yo‘q', ru: 'Нет системы' },
+};
+
+/** Furniture-scoped BUSINESS follow-up questions (not shared across verticals). */
+export const FURNITURE_ONBOARDING_QUESTION_KEYS = [
+  'businessSize',
+  'staffCount',
+  'monthlyTurnover',
+  'currentBookkeeping',
+  'businessBiggestProblem',
+  'platformNeed',
+] as const;
+
+export const SMM_ONBOARDING_SEED_QUESTIONS: readonly OnboardingSeedQuestion[] = [
+  {
+    key: 'smmAgencyName',
+    audience: OnboardingAudience.BUSINESS,
+    businessType: BusinessType.SMM,
+    promptUz: 'Agentligingiz nomi nima?',
+    promptRu: 'Как называется ваше агентство?',
+    answerType: OnboardingAnswerType.TEXT,
+    required: true,
+    sortOrder: 20,
+    options: [],
+  },
+  {
+    key: 'smmClientCount',
+    audience: OnboardingAudience.BUSINESS,
+    businessType: BusinessType.SMM,
+    promptUz: 'Hozir nechta mijoz bilan ishlaysiz?',
+    promptRu: 'С сколькими клиентами вы сейчас работаете?',
+    answerType: OnboardingAnswerType.NUMBER,
+    required: true,
+    sortOrder: 30,
+    options: [],
+  },
+  {
+    key: 'smmServices',
+    audience: OnboardingAudience.BUSINESS,
+    businessType: BusinessType.SMM,
+    promptUz: 'Qaysi xizmatlarni ko‘rsatasiz?',
+    promptRu: 'Какие услуги вы оказываете?',
+    answerType: OnboardingAnswerType.MULTI,
+    required: true,
+    sortOrder: 40,
+    options: labeled(
+      [
+        'SMM',
+        'CONTENT_CREATION',
+        'REELS',
+        'VIDEO_EDITING',
+        'GRAPHIC_DESIGN',
+        'TARGET_ADS',
+        'STRATEGY',
+        'BRANDING',
+        'COPYWRITING',
+        'OTHER',
+      ],
+      SMM_SERVICE_LABELS,
+    ),
+  },
+  {
+    key: 'smmPlatforms',
+    audience: OnboardingAudience.BUSINESS,
+    businessType: BusinessType.SMM,
+    promptUz: 'Qaysi platformalarda ishlaysiz?',
+    promptRu: 'На каких платформах вы работаете?',
+    answerType: OnboardingAnswerType.MULTI,
+    required: true,
+    sortOrder: 50,
+    options: labeled(
+      ['INSTAGRAM', 'TIKTOK', 'TELEGRAM', 'YOUTUBE', 'FACEBOOK', 'LINKEDIN', 'OTHER'],
+      SMM_PLATFORM_LABELS,
+    ),
+  },
+  {
+    key: 'smmTeamSize',
+    audience: OnboardingAudience.BUSINESS,
+    businessType: BusinessType.SMM,
+    promptUz: 'Jamoangiz nechta kishidan iborat?',
+    promptRu: 'Из скольких человек состоит ваша команда?',
+    answerType: OnboardingAnswerType.NUMBER,
+    required: true,
+    sortOrder: 60,
+    options: [],
+  },
+  {
+    key: 'smmMainGoal',
+    audience: OnboardingAudience.BUSINESS,
+    businessType: BusinessType.SMM,
+    promptUz: 'Agentlikning asosiy maqsadi nima?',
+    promptRu: 'Какова главная цель агентства?',
+    answerType: OnboardingAnswerType.SINGLE,
+    required: true,
+    sortOrder: 70,
+    options: labeled(
+      [
+        'GROW_CLIENTS',
+        'GROW_SALES',
+        'SYSTEMIZE',
+        'MANAGE_TEAM',
+        'SPEED_CONTENT',
+        'ANALYTICS',
+        'OTHER',
+      ],
+      SMM_GOAL_LABELS,
+    ),
+  },
+  {
+    key: 'smmCurrentTools',
+    audience: OnboardingAudience.BUSINESS,
+    businessType: BusinessType.SMM,
+    promptUz: 'Siz hozir agentlikni qanday boshqarasiz?',
+    promptRu: 'Как вы сейчас управляете агентством?',
+    answerType: OnboardingAnswerType.SINGLE,
+    required: true,
+    sortOrder: 80,
+    options: labeled(
+      ['EXCEL_SHEETS', 'TELEGRAM', 'NOTION', 'TRELLO_ASANA', 'OTHER_CRM', 'NO_SYSTEM'],
+      SMM_TOOLS_LABELS,
+      [],
+    ),
+  },
+];
+
 export const ONBOARDING_SEED_QUESTIONS: readonly OnboardingSeedQuestion[] = [
   ...PERSONAL_REGISTRATION_SEED_QUESTIONS,
   ...PERSONAL_LEGACY_SEED_QUESTIONS,
@@ -248,11 +431,12 @@ export const ONBOARDING_SEED_QUESTIONS: readonly OnboardingSeedQuestion[] = [
     required: true,
     isSystem: true,
     sortOrder: 10,
-    options: labeled(Object.values(BusinessType), BUSINESS_TYPE_LABELS, []),
+    options: businessTypeOptions(),
   },
   {
     key: 'businessSize',
     audience: OnboardingAudience.BUSINESS,
+    businessType: BusinessType.FURNITURE,
     promptUz: 'Biznes hajmi',
     promptRu: 'Масштаб бизнеса',
     answerType: OnboardingAnswerType.SINGLE,
@@ -269,6 +453,7 @@ export const ONBOARDING_SEED_QUESTIONS: readonly OnboardingSeedQuestion[] = [
   {
     key: 'staffCount',
     audience: OnboardingAudience.BUSINESS,
+    businessType: BusinessType.FURNITURE,
     promptUz: 'Xodimlar soni',
     promptRu: 'Количество сотрудников',
     answerType: OnboardingAnswerType.SINGLE,
@@ -285,6 +470,7 @@ export const ONBOARDING_SEED_QUESTIONS: readonly OnboardingSeedQuestion[] = [
   {
     key: 'monthlyTurnover',
     audience: OnboardingAudience.BUSINESS,
+    businessType: BusinessType.FURNITURE,
     promptUz: 'Oylik aylanma diapazoni',
     promptRu: 'Диапазон месячного оборота',
     answerType: OnboardingAnswerType.SINGLE,
@@ -301,6 +487,7 @@ export const ONBOARDING_SEED_QUESTIONS: readonly OnboardingSeedQuestion[] = [
   {
     key: 'currentBookkeeping',
     audience: OnboardingAudience.BUSINESS,
+    businessType: BusinessType.FURNITURE,
     promptUz: 'Hozirgi hisob-kitob usuli',
     promptRu: 'Текущий способ учёта',
     answerType: OnboardingAnswerType.SINGLE,
@@ -317,6 +504,7 @@ export const ONBOARDING_SEED_QUESTIONS: readonly OnboardingSeedQuestion[] = [
   {
     key: 'businessBiggestProblem',
     audience: OnboardingAudience.BUSINESS,
+    businessType: BusinessType.FURNITURE,
     promptUz: 'Eng katta muammo',
     promptRu: 'Самая большая проблема',
     answerType: OnboardingAnswerType.SINGLE,
@@ -334,6 +522,7 @@ export const ONBOARDING_SEED_QUESTIONS: readonly OnboardingSeedQuestion[] = [
   {
     key: 'platformNeed',
     audience: OnboardingAudience.BUSINESS,
+    businessType: BusinessType.FURNITURE,
     promptUz: 'Platformadan nimaga ehtiyoj bor',
     promptRu: 'Что нужно от платформы',
     answerType: OnboardingAnswerType.MULTI,
@@ -348,6 +537,7 @@ export const ONBOARDING_SEED_QUESTIONS: readonly OnboardingSeedQuestion[] = [
       { key: 'REPORTS', labelUz: 'Hisobotlar', labelRu: 'Отчёты' },
     ],
   },
+  ...SMM_ONBOARDING_SEED_QUESTIONS,
 ];
 
 export const ONBOARDING_SEED_NEEDS: readonly OnboardingSeedNeed[] = [

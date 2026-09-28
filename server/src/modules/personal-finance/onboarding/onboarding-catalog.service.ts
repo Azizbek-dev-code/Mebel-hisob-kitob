@@ -1,4 +1,5 @@
 import {
+  FURNITURE_ONBOARDING_QUESTION_KEYS,
   ONBOARDING_FLOW_KEY,
   ONBOARDING_FLOW_VERSION,
   ONBOARDING_SEED_MAPPINGS,
@@ -7,6 +8,7 @@ import {
   ONBOARDING_SEED_SOLUTIONS,
   PERSONAL_CATALOG_DEPRECATED_KEYS,
   PERSONAL_REGISTRATION_SEED_QUESTIONS,
+  SMM_ONBOARDING_SEED_QUESTIONS,
   isBusinessType,
   type CatalogQuestionForSanitize,
   type OnboardingAudience,
@@ -59,6 +61,8 @@ function toQuestionDto(row: QuestionRow): OnboardingQuestionDto {
       key: option.key,
       labelUz: option.labelUz,
       labelRu: option.labelRu,
+      descriptionUz: option.descriptionUz ?? null,
+      descriptionRu: option.descriptionRu ?? null,
       allowsOther: option.allowsOther,
       isActive: option.isActive,
       sortOrder: option.sortOrder,
@@ -80,7 +84,23 @@ export function toSanitizeCatalog(rows: OnboardingQuestionDto[]): CatalogQuestio
   }));
 }
 
+let defaultCatalogEnsure: Promise<void> | null = null;
+
 export async function ensureOnboardingCatalog(db: PrismaClient = defaultPrisma): Promise<void> {
+  if (db === defaultPrisma) {
+    if (!defaultCatalogEnsure) {
+      defaultCatalogEnsure = ensureOnboardingCatalogOnce(db).catch((error) => {
+        defaultCatalogEnsure = null;
+        throw error;
+      });
+    }
+    await defaultCatalogEnsure;
+    return;
+  }
+  await ensureOnboardingCatalogOnce(db);
+}
+
+async function ensureOnboardingCatalogOnce(db: PrismaClient): Promise<void> {
   const existing = await db.onboardingQuestion.count();
   if (existing === 0) {
     for (const question of ONBOARDING_SEED_QUESTIONS) {
@@ -102,7 +122,10 @@ export async function ensureOnboardingCatalog(db: PrismaClient = defaultPrisma):
               key: option.key,
               labelUz: option.labelUz,
               labelRu: option.labelRu,
+              descriptionUz: option.descriptionUz ?? null,
+              descriptionRu: option.descriptionRu ?? null,
               allowsOther: option.allowsOther ?? false,
+              isActive: option.isActive ?? true,
               sortOrder: option.sortOrder ?? (index + 1) * 10,
             })),
           },
@@ -110,10 +133,141 @@ export async function ensureOnboardingCatalog(db: PrismaClient = defaultPrisma):
       });
     }
   } else {
+    // Existing catalogs: keep Personal sync and add any new BusinessType options
+    // (e.g. SMM) without resetting admin-edited prompts.
     await syncPersonalRegistrationCatalog(db);
+    await syncBusinessTypeCatalogOptions(db);
+    await syncVerticalBusinessQuestions(db);
   }
 
   await ensureNeedsAndSolutions(db);
+}
+
+/**
+ * Additive sync: ensure every BusinessType enum value exists as an option on the
+ * system `businessType` question (labels from ONBOARDING_SEED_QUESTIONS).
+ * Existing admin edits to other BUSINESS questions are left alone.
+ * Updates sync labels/descriptions/sortOrder but never force `isActive` (admin owns that).
+ */
+async function syncBusinessTypeCatalogOptions(db: PrismaClient): Promise<void> {
+  const seedQuestion = ONBOARDING_SEED_QUESTIONS.find((question) => question.key === 'businessType');
+  if (!seedQuestion) return;
+
+  const existing = await db.onboardingQuestion.findUnique({
+    where: { key: 'businessType' },
+    include: { options: true },
+  });
+  if (!existing) {
+    await db.onboardingQuestion.create({
+      data: {
+        key: seedQuestion.key,
+        audience: seedQuestion.audience,
+        businessType: seedQuestion.businessType ?? null,
+        promptUz: seedQuestion.promptUz,
+        promptRu: seedQuestion.promptRu,
+        hintUz: seedQuestion.hintUz ?? null,
+        hintRu: seedQuestion.hintRu ?? null,
+        answerType: seedQuestion.answerType,
+        required: seedQuestion.required,
+        isActive: true,
+        isSystem: true,
+        sortOrder: seedQuestion.sortOrder,
+        options: {
+          create: seedQuestion.options.map((option, index) => ({
+            key: option.key,
+            labelUz: option.labelUz,
+            labelRu: option.labelRu,
+            descriptionUz: option.descriptionUz ?? null,
+            descriptionRu: option.descriptionRu ?? null,
+            allowsOther: option.allowsOther ?? false,
+            isActive: option.isActive ?? true,
+            sortOrder: option.sortOrder ?? (index + 1) * 10,
+          })),
+        },
+      },
+    });
+    return;
+  }
+
+  for (const [index, option] of seedQuestion.options.entries()) {
+    await db.onboardingOption.upsert({
+      where: {
+        questionId_key: { questionId: existing.id, key: option.key },
+      },
+      create: {
+        questionId: existing.id,
+        key: option.key,
+        labelUz: option.labelUz,
+        labelRu: option.labelRu,
+        descriptionUz: option.descriptionUz ?? null,
+        descriptionRu: option.descriptionRu ?? null,
+        allowsOther: option.allowsOther ?? false,
+        isActive: option.isActive ?? true,
+        sortOrder: option.sortOrder ?? (index + 1) * 10,
+      },
+      update: {
+        labelUz: option.labelUz,
+        labelRu: option.labelRu,
+        descriptionUz: option.descriptionUz ?? null,
+        descriptionRu: option.descriptionRu ?? null,
+        allowsOther: option.allowsOther ?? false,
+        sortOrder: option.sortOrder ?? (index + 1) * 10,
+      },
+    });
+  }
+}
+
+/**
+ * Scope furniture follow-ups and ensure SMM vertical questions exist (create-only for prompts).
+ */
+async function syncVerticalBusinessQuestions(db: PrismaClient): Promise<void> {
+  await db.onboardingQuestion.updateMany({
+    where: {
+      audience: 'BUSINESS',
+      key: { in: [...FURNITURE_ONBOARDING_QUESTION_KEYS] },
+    },
+    data: { businessType: 'FURNITURE' },
+  });
+
+  for (const question of SMM_ONBOARDING_SEED_QUESTIONS) {
+    const existing = await db.onboardingQuestion.findUnique({ where: { key: question.key } });
+    if (!existing) {
+      await db.onboardingQuestion.create({
+        data: {
+          key: question.key,
+          audience: question.audience,
+          businessType: question.businessType ?? null,
+          promptUz: question.promptUz,
+          promptRu: question.promptRu,
+          hintUz: question.hintUz ?? null,
+          hintRu: question.hintRu ?? null,
+          answerType: question.answerType,
+          required: question.required,
+          isActive: true,
+          isSystem: question.isSystem ?? false,
+          sortOrder: question.sortOrder,
+          options: {
+            create: question.options.map((option, index) => ({
+              key: option.key,
+              labelUz: option.labelUz,
+              labelRu: option.labelRu,
+              descriptionUz: option.descriptionUz ?? null,
+              descriptionRu: option.descriptionRu ?? null,
+              allowsOther: option.allowsOther ?? false,
+              isActive: option.isActive ?? true,
+              sortOrder: option.sortOrder ?? (index + 1) * 10,
+            })),
+          },
+        },
+      });
+      continue;
+    }
+
+    await db.onboardingQuestion.update({
+      where: { id: existing.id },
+      data: { businessType: 'SMM' },
+    });
+  }
 }
 
 /**
@@ -345,6 +499,8 @@ export async function createOnboardingQuestion(
               key: option.key.trim(),
               labelUz: option.labelUz.trim(),
               labelRu: option.labelRu.trim(),
+              descriptionUz: option.descriptionUz?.trim() || null,
+              descriptionRu: option.descriptionRu?.trim() || null,
               allowsOther: option.allowsOther ?? false,
               isActive: option.isActive ?? true,
               sortOrder: option.sortOrder ?? (index + 1) * 10,
@@ -403,6 +559,8 @@ export async function updateOnboardingQuestion(
             key: option.key.trim(),
             labelUz: option.labelUz.trim(),
             labelRu: option.labelRu.trim(),
+            descriptionUz: option.descriptionUz?.trim() || null,
+            descriptionRu: option.descriptionRu?.trim() || null,
             allowsOther: option.allowsOther ?? false,
             isActive: option.isActive ?? true,
             sortOrder: option.sortOrder ?? (index + 1) * 10,
@@ -410,6 +568,8 @@ export async function updateOnboardingQuestion(
           update: {
             labelUz: option.labelUz.trim(),
             labelRu: option.labelRu.trim(),
+            descriptionUz: option.descriptionUz?.trim() || null,
+            descriptionRu: option.descriptionRu?.trim() || null,
             allowsOther: option.allowsOther ?? false,
             isActive: option.isActive ?? true,
             sortOrder: option.sortOrder ?? (index + 1) * 10,

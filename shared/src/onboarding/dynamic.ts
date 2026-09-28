@@ -13,7 +13,7 @@ export interface CatalogQuestionForSanitize {
   key: string;
   audience: 'PERSONAL' | 'BUSINESS';
   businessType?: string | null;
-  answerType: 'SINGLE' | 'MULTI' | 'TEXT';
+  answerType: 'SINGLE' | 'MULTI' | 'TEXT' | 'TEXTAREA' | 'NUMBER' | 'BOOLEAN';
   required: boolean;
   optionKeys: readonly string[];
   allowsOtherKeys: readonly string[];
@@ -32,10 +32,26 @@ function asStringArray(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === 'string');
 }
 
-function readText(value: unknown): string | undefined {
+function readText(value: unknown, maxLength = 200): string | undefined {
   if (typeof value !== 'string') return undefined;
-  const trimmed = value.trim().slice(0, 200);
+  const trimmed = value.trim().slice(0, maxLength);
   return trimmed || undefined;
+}
+
+function readNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+}
+
+function readBoolean(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') return value;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return undefined;
 }
 
 /** Drops unknown keys. Never keeps a custom income amount in the JSON blob. */
@@ -62,13 +78,22 @@ export function sanitizeOnboardingAnswersWithCatalog(
     } else if (question.answerType === 'TEXT') {
       const text = readText(value);
       if (text) answers[question.key] = text;
+    } else if (question.answerType === 'TEXTAREA') {
+      const text = readText(value, 2000);
+      if (text) answers[question.key] = text;
+    } else if (question.answerType === 'NUMBER') {
+      const num = readNumber(value);
+      if (num !== undefined) answers[question.key] = num;
+    } else if (question.answerType === 'BOOLEAN') {
+      const bool = readBoolean(value);
+      if (bool !== undefined) answers[question.key] = bool;
     } else if (typeof value === 'string' && isOneOf(value, question.optionKeys)) {
       answers[question.key] = value;
     }
 
     const other = readText(raw[otherTextKey(question.key)]);
     const selected = answers[question.key];
-    const selectedKeys = Array.isArray(selected) ? selected : selected ? [selected] : [];
+    const selectedKeys = Array.isArray(selected) ? selected : typeof selected === 'string' && selected ? [selected] : [];
     const wantsOther = selectedKeys.some((key) => question.allowsOtherKeys.includes(key));
     if (other && wantsOther) answers[otherTextKey(question.key)] = other;
   }
@@ -167,10 +192,22 @@ export function validateOnboardingComplete(
       if (!Array.isArray(value) || value.length === 0) {
         errors.push({ field: question.key, message: 'Kamida bitta variantni tanlang' });
       }
+    } else if (question.answerType === 'NUMBER') {
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        errors.push({ field: question.key, message: 'Javobni tanlang' });
+      }
+    } else if (question.answerType === 'BOOLEAN') {
+      if (typeof value !== 'boolean') {
+        errors.push({ field: question.key, message: 'Javobni tanlang' });
+      }
+    } else if (question.answerType === 'TEXT' || question.answerType === 'TEXTAREA') {
+      if (typeof value !== 'string' || !value.trim()) {
+        errors.push({ field: question.key, message: 'Javobni tanlang' });
+      }
     } else if (!value || (typeof value === 'string' && !value.trim())) {
       errors.push({ field: question.key, message: 'Javobni tanlang' });
     } else {
-      const selected = Array.isArray(value) ? value : [value];
+      const selected = Array.isArray(value) ? value : [String(value)];
       const needsOther = selected.some((key) => question.allowsOtherKeys.includes(key));
       const other =
         readText(answers[otherTextKey(question.key)]) ??

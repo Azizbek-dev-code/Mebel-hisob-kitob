@@ -1,15 +1,18 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
+  BUSINESS_TYPE_LABELS,
   UZBEKISTAN_REGIONS,
   isPlatformAdminAuth,
   parseBusinessType,
   validateAuthenticatedBusinessRequestDraft,
   validateStoreCreationDraft,
+  type BusinessType,
   type CreateAuthenticatedBusinessRequestBody,
   type CreateStoreRequestBody,
 } from '@furniture-erp/shared';
 import { AlertCircle, Loader2, Store } from 'lucide-react';
 import { useForm, type FieldErrors, type UseFormRegister } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
 
@@ -96,7 +99,7 @@ export function RegisterStorePage() {
   );
 }
 
-function GuestForm({ businessType }: { businessType: CreateStoreRequestBody['businessType'] }) {
+function GuestForm({ businessType }: { businessType: BusinessType }) {
   const navigate = useNavigate();
   const createRequest = useCreateStoreRequest();
 
@@ -146,6 +149,7 @@ function GuestForm({ businessType }: { businessType: CreateStoreRequestBody['bus
 
   return (
     <Shell
+      businessType={businessType}
       subtitle="Ariza Platform Admin tomonidan ko'rib chiqiladi. Do'kon darhol ochilmaydi."
       submitError={submitError}
       footer
@@ -200,6 +204,7 @@ function GuestForm({ businessType }: { businessType: CreateStoreRequestBody['bus
           register={register as unknown as UseFormRegister<ExistingIdentityValues>}
           errors={errors as FieldErrors<ExistingIdentityValues>}
           isSubmitting={isSubmitting}
+          businessType={businessType}
         />
 
         <fieldset className="space-y-4">
@@ -250,7 +255,7 @@ function GuestForm({ businessType }: { businessType: CreateStoreRequestBody['bus
 function ExistingIdentityForm({
   businessType,
 }: {
-  businessType: CreateAuthenticatedBusinessRequestBody['businessType'];
+  businessType: BusinessType;
 }) {
   const navigate = useNavigate();
   const createRequest = useCreateAuthenticatedBusinessRequest();
@@ -295,6 +300,7 @@ function ExistingIdentityForm({
 
   return (
     <Shell
+      businessType={businessType}
       subtitle="Shaxsiy ma’lumotlaringiz qayta so‘ralmaydi. Faqat yangi biznes uchun maydonlarni to‘ldiring. Ariza Platform Admin tomonidan ko‘rib chiqiladi."
       submitError={submitError}
     >
@@ -310,7 +316,12 @@ function ExistingIdentityForm({
             className={fieldClass(Boolean(errors.phone))}
           />
         </Field>
-        <StoreFields register={register} errors={errors} isSubmitting={isSubmitting} />
+        <StoreFields
+          register={register}
+          errors={errors}
+          isSubmitting={isSubmitting}
+          businessType={businessType}
+        />
         <SubmitButton isSubmitting={isSubmitting} />
       </form>
     </Shell>
@@ -321,15 +332,25 @@ function StoreFields({
   register,
   errors,
   isSubmitting,
+  businessType,
 }: {
   register: UseFormRegister<ExistingIdentityValues>;
   errors: FieldErrors<ExistingIdentityValues>;
   isSubmitting: boolean;
+  businessType: BusinessType;
 }) {
+  const { t } = useTranslation();
+  const isSmm = businessType === 'SMM';
   return (
     <fieldset className="space-y-4">
-      <legend className="text-sm font-semibold text-ink">Do&apos;kon</legend>
-      <Field id="storeName" label="Do'kon nomi" error={errors.storeName?.message}>
+      <legend className="text-sm font-semibold text-ink">
+        {isSmm ? t('onboarding.smmBusinessType') : "Do'kon"}
+      </legend>
+      <Field
+        id="storeName"
+        label={isSmm ? t('onboarding.agencyName') : "Do'kon nomi"}
+        error={errors.storeName?.message}
+      >
         <input
           {...register('storeName')}
           id="storeName"
@@ -379,13 +400,21 @@ function Shell({
   subtitle,
   submitError,
   footer = false,
+  businessType,
   children,
 }: {
   subtitle: string;
   submitError: string | null;
   footer?: boolean;
+  businessType: BusinessType;
   children: React.ReactNode;
 }) {
+  const { t } = useTranslation();
+  const typeLabel = t(`onboarding.businessTypes.${businessType}`, {
+    defaultValue: BUSINESS_TYPE_LABELS[businessType],
+  });
+  const isSmm = businessType === 'SMM';
+
   return (
     <main className="min-h-screen overflow-x-hidden bg-canvas px-4 py-10 sm:px-6">
       <div className="mx-auto w-full max-w-2xl">
@@ -394,8 +423,16 @@ function Shell({
             <Store className="size-6" aria-hidden="true" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-ink">Yangi do&apos;kon ochish</h1>
+            <h1 className="text-xl font-semibold tracking-tight text-ink">
+              {isSmm ? t('onboarding.createAgency') : "Yangi do'kon ochish"}
+            </h1>
             <p className="mt-1 text-sm text-ink-muted">{subtitle}</p>
+            <p
+              className="mt-2 inline-flex rounded-input border border-line bg-surface-muted px-2.5 py-1 text-xs font-medium text-ink-soft"
+              data-testid="register-business-type"
+            >
+              {typeLabel}
+            </p>
           </div>
         </div>
 

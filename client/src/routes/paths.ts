@@ -73,6 +73,7 @@ export const ROUTES = {
   platformReferralSettings: '/platform/referral/settings',
   platformOnboarding: '/platform/onboarding',
   platformOnboardingQuestions: '/platform/onboarding/questions',
+  platformOnboardingBusinessTypes: '/platform/onboarding/business-types',
   platformOnboardingAnswers: '/platform/onboarding/answers',
   platformOnboardingNeeds: '/platform/onboarding/needs',
   platformOnboardingSolutions: '/platform/onboarding/solutions',
@@ -176,4 +177,10 @@ export const ROUTES = {
   settingsBackup: '/settings/backup',
   /** Unlisted foundation diagnostics screen; reachable by URL, not from the sidebar. */
   systemCheck: '/system',
+  /** SMM Agency project CMS */
+  smmProjects: '/smm/projects',
+  smmProjectDetail: (id: string) => `/smm/projects/${id}`,
+  smmProjectTab: (id: string, tab: string) => `/smm/projects/${id}/${tab}`,
+  smmContentDetail: (projectId: string, contentId: string) =>
+    `/smm/projects/${projectId}/content/${contentId}`,
 } as const;

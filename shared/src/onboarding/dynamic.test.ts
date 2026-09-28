@@ -28,6 +28,7 @@ const CATALOG: CatalogQuestionForSanitize[] = [
   {
     key: 'businessSize',
     audience: 'BUSINESS',
+    businessType: 'FURNITURE',
     answerType: 'SINGLE',
     required: true,
     optionKeys: ['SOLO', 'SMALL'],
@@ -86,5 +87,71 @@ describe('dynamic onboarding answers', () => {
         CATALOG,
       ),
     ).toEqual([]);
+  });
+
+  it('sanitizes and validates NUMBER, TEXTAREA, and BOOLEAN answers', () => {
+    const extended: CatalogQuestionForSanitize[] = [
+      ...CATALOG,
+      {
+        key: 'smmClientCount',
+        audience: 'BUSINESS',
+        businessType: 'SMM',
+        answerType: 'NUMBER',
+        required: true,
+        optionKeys: [],
+        allowsOtherKeys: [],
+      },
+      {
+        key: 'notes',
+        audience: 'BUSINESS',
+        businessType: 'SMM',
+        answerType: 'TEXTAREA',
+        required: false,
+        optionKeys: [],
+        allowsOtherKeys: [],
+      },
+      {
+        key: 'hasTeam',
+        audience: 'BUSINESS',
+        businessType: 'SMM',
+        answerType: 'BOOLEAN',
+        required: true,
+        optionKeys: [],
+        allowsOtherKeys: [],
+      },
+    ];
+
+    const sanitized = sanitizeOnboardingAnswersWithCatalog(
+      {
+        purpose: AccountPurpose.BUSINESS,
+        businessType: 'SMM',
+        smmClientCount: '12',
+        notes: '  long note  ',
+        hasTeam: 'true',
+      },
+      extended,
+    );
+    expect(sanitized.smmClientCount).toBe(12);
+    expect(sanitized.notes).toBe('long note');
+    expect(sanitized.hasTeam).toBe(true);
+
+    expect(
+      validateOnboardingComplete(
+        {
+          purpose: AccountPurpose.BUSINESS,
+          businessType: 'SMM',
+          smmClientCount: 12,
+          hasTeam: false,
+        },
+        extended,
+      ),
+    ).toEqual([]);
+
+    expect(
+      validateOnboardingComplete(
+        { purpose: AccountPurpose.BUSINESS, businessType: 'SMM', hasTeam: true },
+        extended,
+      ).some((error) => error.field === 'smmClientCount'),
+    ).toBe(true);
   });
 });

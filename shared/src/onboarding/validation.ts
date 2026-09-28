@@ -33,7 +33,7 @@ export interface OnboardingAnswers {
   lastName?: string;
   /** Stored as decimal string for JSON answer compatibility. */
   age?: string;
-  [key: string]: string | string[] | undefined;
+  [key: string]: string | string[] | number | boolean | undefined;
 }
 
 export interface OnboardingFieldError {

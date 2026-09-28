@@ -68,21 +68,53 @@ function selectedKeys(answers: OnboardingAnswers, key: string): string[] {
   return [];
 }
 
+function hasQuestionAnswer(answers: OnboardingAnswers, question: OnboardingQuestionDto): boolean {
+  const value = answers[question.key];
+  if (question.answerType === 'MULTI') {
+    return Array.isArray(value) && value.length > 0;
+  }
+  if (question.answerType === 'NUMBER') {
+    return typeof value === 'number' && Number.isFinite(value);
+  }
+  if (question.answerType === 'BOOLEAN') {
+    return typeof value === 'boolean';
+  }
+  if (question.answerType === 'TEXT' || question.answerType === 'TEXTAREA') {
+    return typeof value === 'string' && value.trim().length > 0;
+  }
+  return typeof value === 'string' && value.length > 0;
+}
+
 function firstUnansweredIndex(
   questions: OnboardingQuestionDto[],
   answers: OnboardingAnswers,
 ): number {
   const index = questions.findIndex((question) => {
     if (!question.required) return false;
-    const keys = selectedKeys(answers, question.key);
-    return keys.length === 0;
+    return !hasQuestionAnswer(answers, question);
   });
   if (index >= 0) return index;
   const optionalOpen = questions.findIndex((question) => {
     if (question.required) return false;
-    return selectedKeys(answers, question.key).length === 0;
+    return !hasQuestionAnswer(answers, question);
   });
   return optionalOpen >= 0 ? optionalOpen : Math.max(0, questions.length - 1);
+}
+
+function optionDescription(
+  option: OnboardingQuestionDto['options'][number],
+  language: string,
+  questionKey: string,
+  t: (key: string, options?: { defaultValue?: string }) => string,
+): string | undefined {
+  const fromCatalog = language.startsWith('ru') ? option.descriptionRu : option.descriptionUz;
+  if (fromCatalog) return fromCatalog;
+  if (questionKey === 'businessType') {
+    return (
+      t(`onboarding.businessTypeDescriptions.${option.key}`, { defaultValue: '' }) || undefined
+    );
+  }
+  return undefined;
 }
 
 export function OnboardingPage() {
@@ -163,67 +195,88 @@ export function OnboardingPage() {
     if (hasPersonalAccount) setScreen('purpose');
   }, [hasPersonalAccount]);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function boot() {
-      try {
-        const existing = sessionStorage.getItem(TOKEN_KEY);
-        if (existing) {
-          const { submission } = await onboardingService.get(existing);
-          if (cancelled) return;
-          if (submission.status === 'COMPLETED') {
-            sessionStorage.removeItem(TOKEN_KEY);
-            const started = await onboardingService.start();
-            if (cancelled) return;
-            persistToken(started.submission.publicToken);
-            setAnswers({});
-            setScreen('purpose');
-          } else {
-            persistToken(submission.publicToken);
-            setAnswers(submission.answers);
-            setSubmissionMeta({
-              registerEmail: submission.registerEmail ?? null,
-              emailVerifiedAt: submission.emailVerifiedAt ?? null,
-            });
-            if (
-              submission.customMonthlyIncomeSom != null &&
-              submission.customMonthlyIncomeSom > 0
-            ) {
-              setCustomIncome(String(submission.customMonthlyIncomeSom));
-            }
-            if (
-              submission.answers.purpose === AccountPurpose.PERSONAL &&
-              !hasPersonalAccountRef.current
-            ) {
-              setScreen('personal');
-            } else if (submission.answers.purpose === AccountPurpose.BUSINESS) {
-              setScreen('flow');
-            }
-          }
-        } else {
-          const started = await onboardingService.start();
-          if (cancelled) return;
-          persistToken(started.submission.publicToken);
-        }
-      } catch {
-        if (cancelled) return;
-        try {
+  const bootOnboarding = useCallback(async (lifecycle?: { cancelled: boolean }) => {
+    const isCancelled = () => lifecycle?.cancelled === true;
+    setBootError(null);
+    setIsBooting(true);
+    try {
+      const existing = sessionStorage.getItem(TOKEN_KEY);
+      if (existing) {
+        const { submission } = await onboardingService.get(existing);
+        if (isCancelled()) return;
+        if (submission.status === 'COMPLETED') {
           sessionStorage.removeItem(TOKEN_KEY);
           const started = await onboardingService.start();
-          if (cancelled) return;
+          if (isCancelled()) return;
           persistToken(started.submission.publicToken);
-        } catch {
-          if (!cancelled) setBootError(t('onboarding.loadFailed'));
+          setAnswers({});
+          setScreen('purpose');
+        } else {
+          persistToken(submission.publicToken);
+          setAnswers(submission.answers);
+          setSubmissionMeta({
+            registerEmail: submission.registerEmail ?? null,
+            emailVerifiedAt: submission.emailVerifiedAt ?? null,
+          });
+          if (
+            submission.customMonthlyIncomeSom != null &&
+            submission.customMonthlyIncomeSom > 0
+          ) {
+            setCustomIncome(String(submission.customMonthlyIncomeSom));
+          }
+          if (
+            submission.answers.purpose === AccountPurpose.PERSONAL &&
+            !hasPersonalAccountRef.current
+          ) {
+            setScreen('personal');
+          } else if (submission.answers.purpose === AccountPurpose.BUSINESS) {
+            setScreen('flow');
+          } else {
+            setScreen('purpose');
+          }
         }
-      } finally {
-        if (!cancelled) setIsBooting(false);
+      } else {
+        const started = await onboardingService.start();
+        if (isCancelled()) return;
+        persistToken(started.submission.publicToken);
       }
+      if (!isCancelled()) setBootError(null);
+    } catch (error) {
+      if (isCancelled()) return;
+      try {
+        sessionStorage.removeItem(TOKEN_KEY);
+        const started = await onboardingService.start();
+        if (isCancelled()) return;
+        persistToken(started.submission.publicToken);
+        setAnswers({});
+        setScreen('purpose');
+        setBootError(null);
+      } catch (retryError) {
+        if (isCancelled()) return;
+        const detail =
+          import.meta.env.DEV && retryError instanceof Error ? ` (${retryError.message})` : '';
+        setBootError(`${t('onboarding.loadFailed')}${detail}`);
+        if (import.meta.env.DEV && error instanceof Error) {
+          console.warn('[onboarding] boot failed', error);
+        }
+      }
+    } finally {
+      if (!isCancelled()) setIsBooting(false);
     }
-    void boot();
-    return () => {
-      cancelled = true;
-    };
   }, [persistToken, t]);
+
+  useEffect(() => {
+    const lifecycle = { cancelled: false };
+    void bootOnboarding(lifecycle);
+    return () => {
+      lifecycle.cancelled = true;
+    };
+  }, [bootOnboarding]);
+
+  async function retryOnboardingLoad() {
+    setBootError(null);
+    await Promise.all([bootOnboarding(), catalogQuery.refetch()]);
+  }
 
   useEffect(() => {
     if (screen !== 'flow' || flowQuestions.length === 0) return;
@@ -303,10 +356,10 @@ export function OnboardingPage() {
 
   function questionErrors(question: OnboardingQuestionDto): Record<string, string> {
     const errors: Record<string, string> = {};
-    const keys = selectedKeys(answers, question.key);
-    if (question.required && keys.length === 0) {
+    if (question.required && !hasQuestionAnswer(answers, question)) {
       errors[question.key] = t('onboarding.errors.required');
     }
+    const keys = selectedKeys(answers, question.key);
     const needsOther = keys.some((key) =>
       question.options.some((option) => option.key === key && option.allowsOther),
     );
@@ -511,7 +564,24 @@ export function OnboardingPage() {
               {t('app.loading')}
             </p>
           ) : bootError || catalogQuery.isError ? (
-            <p className="text-sm text-danger-700">{bootError ?? t('onboarding.loadFailed')}</p>
+            <div className="space-y-3 text-center">
+              <p className="text-sm text-danger-700">
+                {bootError ?? t('onboarding.loadFailed')}
+              </p>
+              {import.meta.env.DEV && catalogQuery.error instanceof Error ? (
+                <p className="font-mono text-xs text-ink-muted" data-testid="onboarding-dev-error">
+                  {catalogQuery.error.message}
+                </p>
+              ) : null}
+              <button
+                type="button"
+                className="text-sm font-medium text-brand-700 underline-offset-2 hover:underline"
+                disabled={isBooting || catalogQuery.isFetching}
+                onClick={() => void retryOnboardingLoad()}
+              >
+                {t('common.retry')}
+              </button>
+            </div>
           ) : screen === 'purpose' ? (
             <div className="grid gap-3 sm:grid-cols-2">
               {fieldErrors.form ? (
@@ -555,7 +625,22 @@ export function OnboardingPage() {
               onBackToPurpose={() => setScreen('purpose')}
             />
           ) : screen === 'flow' && flowQuestions.length === 0 ? (
-            <p className="text-sm text-danger-700">{t('onboarding.loadFailed')}</p>
+            <div className="space-y-3 text-center">
+              <p className="text-sm text-danger-700">{t('onboarding.flowEmpty')}</p>
+              {import.meta.env.DEV ? (
+                <p className="font-mono text-xs text-ink-muted" data-testid="onboarding-dev-error">
+                  BUSINESS catalog questions empty (purpose={String(purpose ?? 'none')})
+                </p>
+              ) : null}
+              <button
+                type="button"
+                className="text-sm font-medium text-brand-700 underline-offset-2 hover:underline"
+                disabled={catalogQuery.isFetching}
+                onClick={() => void catalogQuery.refetch()}
+              >
+                {t('common.retry')}
+              </button>
+            </div>
           ) : screen === 'flow' && currentQuestion ? (
             <QuestionBlock
               title={promptFor(currentQuestion, language)}
@@ -571,19 +656,89 @@ export function OnboardingPage() {
               onSkip={currentQuestion.required ? undefined : () => void skipOptional()}
               busy={isBusy}
             >
-              {currentQuestion.answerType === 'TEXT' ? (
+              {currentQuestion.answerType === 'TEXT' || currentQuestion.answerType === 'TEXTAREA' ? (
+                currentQuestion.answerType === 'TEXTAREA' ? (
+                  <textarea
+                    rows={4}
+                    value={
+                      typeof answers[currentQuestion.key] === 'string'
+                        ? String(answers[currentQuestion.key])
+                        : ''
+                    }
+                    onChange={(event) =>
+                      setAnswers({ ...answers, [currentQuestion.key]: event.target.value })
+                    }
+                    className={fieldClass(Boolean(fieldErrors[currentQuestion.key]))}
+                  />
+                ) : (
+                  <input
+                    value={
+                      typeof answers[currentQuestion.key] === 'string'
+                        ? String(answers[currentQuestion.key])
+                        : ''
+                    }
+                    onChange={(event) =>
+                      setAnswers({ ...answers, [currentQuestion.key]: event.target.value })
+                    }
+                    className={fieldClass(Boolean(fieldErrors[currentQuestion.key]))}
+                  />
+                )
+              ) : currentQuestion.answerType === 'NUMBER' ? (
                 <input
-                  value={typeof answers[currentQuestion.key] === 'string' ? String(answers[currentQuestion.key]) : ''}
-                  onChange={(event) =>
-                    setAnswers({ ...answers, [currentQuestion.key]: event.target.value })
+                  type="number"
+                  inputMode="decimal"
+                  value={
+                    typeof answers[currentQuestion.key] === 'number'
+                      ? String(answers[currentQuestion.key])
+                      : ''
                   }
+                  onChange={(event) => {
+                    const raw = event.target.value;
+                    if (raw.trim() === '') {
+                      const next = { ...answers };
+                      delete next[currentQuestion.key];
+                      setAnswers(next);
+                      return;
+                    }
+                    const parsed = Number(raw);
+                    if (!Number.isFinite(parsed)) return;
+                    setAnswers({ ...answers, [currentQuestion.key]: parsed });
+                  }}
                   className={fieldClass(Boolean(fieldErrors[currentQuestion.key]))}
                 />
+              ) : currentQuestion.answerType === 'BOOLEAN' ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {[
+                    { key: true, label: t('common.yes') },
+                    { key: false, label: t('common.no') },
+                  ].map((option) => {
+                    const isOn = answers[currentQuestion.key] === option.key;
+                    return (
+                      <button
+                        key={String(option.key)}
+                        type="button"
+                        aria-pressed={isOn}
+                        onClick={() =>
+                          setAnswers({ ...answers, [currentQuestion.key]: option.key })
+                        }
+                        className={cn(
+                          'rounded-input border px-3 py-2.5 text-left text-sm transition-colors',
+                          isOn
+                            ? 'border-brand-500 bg-brand-50 text-brand-800'
+                            : 'border-line-strong text-ink hover:border-ink-subtle',
+                        )}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
               ) : (
                 <ChipGrid
                   options={currentQuestion.options.map((option) => ({
                     key: option.key,
                     label: optionLabel(option, language),
+                    description: optionDescription(option, language, currentQuestion.key, t),
                   }))}
                   selected={selected}
                   onToggle={(key) =>
@@ -783,7 +938,7 @@ function ChipGrid({
   onToggle,
   multiple = false,
 }: {
-  options: { key: string; label: string }[];
+  options: { key: string; label: string; description?: string }[];
   selected: string[];
   onToggle: (key: string) => void;
   multiple?: boolean;
@@ -805,7 +960,19 @@ function ChipGrid({
                 : 'border-line-strong text-ink hover:border-ink-subtle',
             )}
           >
-            {multiple && isOn ? `✓ ${option.label}` : option.label}
+            <span className="block font-medium">
+              {multiple && isOn ? `✓ ${option.label}` : option.label}
+            </span>
+            {option.description ? (
+              <span
+                className={cn(
+                  'mt-1 block text-xs leading-snug',
+                  isOn ? 'text-brand-700/80' : 'text-ink-muted',
+                )}
+              >
+                {option.description}
+              </span>
+            ) : null}
           </button>
         );
       })}

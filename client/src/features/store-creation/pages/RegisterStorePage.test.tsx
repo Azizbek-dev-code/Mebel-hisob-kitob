@@ -156,4 +156,32 @@ describe('RegisterStorePage', () => {
     expect(body.password).toBeUndefined();
     expect(body.email).toBeUndefined();
   });
+
+  it('registers an SMM Agency request with businessType SMM', async () => {
+    const fetchMock = mockApi({
+      '/auth/me': { status: 200, body: { success: true, data: { user: TEST_PERSONAL } } },
+      '/accounts/business-requests': {
+        status: 201,
+        body: { success: true, data: { request: CREATED } },
+      },
+    });
+    const user = userEvent.setup({ delay: null });
+    renderForm('/register-store?businessType=SMM');
+
+    expect(await screen.findByRole('heading', { name: /Agentlik yaratish|Create agency/i })).toBeInTheDocument();
+    expect(screen.getByTestId('register-business-type')).toHaveTextContent(/SMM/);
+
+    await user.type(screen.getByLabelText(/Agentlik nomi|Agency name|Do'kon nomi/i), 'Balancy SMM');
+    await user.type(screen.getByLabelText('Telefon raqami'), '901112233');
+    await user.selectOptions(screen.getByLabelText('Viloyat'), 'Samarqand');
+    await user.type(screen.getByLabelText('Tuman/shahar'), 'Urgut');
+    await user.type(screen.getByLabelText('Manzil'), "Bog' ko'chasi 1");
+    await user.click(screen.getByRole('button', { name: /ariza yuborish/i }));
+
+    expect(await screen.findByText('Pending screen')).toBeInTheDocument();
+    const call = fetchMock.mock.calls.find(([url]) => String(url).includes('/accounts/business-requests'));
+    const body = JSON.parse((call?.[1] as RequestInit).body as string) as Record<string, string>;
+    expect(body.businessType).toBe('SMM');
+    expect(body.storeName).toBe('Balancy SMM');
+  });
 });

@@ -24,6 +24,7 @@ export * from './worker-profile-modules.js';
 export * from './delivery-ops.js';
 export * from './business-notifications.js';
 export * from './seller-ops.js';
+export * from './smm.js';
 export * from './workers.js';
 export * from './workspace.js';
 export * from './onboarding.js';

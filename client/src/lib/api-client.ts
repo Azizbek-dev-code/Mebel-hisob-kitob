@@ -99,7 +99,17 @@ async function request<TData>(
       },
       body: isFormData ? body : body === undefined ? undefined : JSON.stringify(body),
     });
-  } catch {
+  } catch (error) {
+    // React Query cancels in-flight requests via AbortSignal (Strict Mode remounts,
+    // route changes). Re-throw so the query is treated as cancelled — not a NETWORK_ERROR
+    // that sticks `isError` and surfaces false "Onboarding yuklanmadi" fallbacks.
+    if (
+      (error instanceof DOMException && error.name === 'AbortError') ||
+      (error instanceof Error && error.name === 'AbortError') ||
+      options.signal?.aborted
+    ) {
+      throw error;
+    }
     throw new ApiClientError(
       0,
       'NETWORK_ERROR',

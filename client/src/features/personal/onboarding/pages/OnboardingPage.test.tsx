@@ -46,6 +46,8 @@ const CATALOG = {
               key: 'CONTROL_EXPENSES',
               labelUz: 'Xarajatlarni nazorat qilish',
               labelRu: 'Контроль',
+              descriptionUz: null,
+              descriptionRu: null,
               allowsOther: false,
               isActive: true,
               sortOrder: 10,
@@ -72,6 +74,8 @@ const CATALOG = {
               key: 'PHONE',
               labelUz: 'Telefon',
               labelRu: 'Телефон',
+              descriptionUz: null,
+              descriptionRu: null,
               allowsOther: false,
               isActive: true,
               sortOrder: 10,
@@ -98,42 +102,19 @@ const CATALOG = {
               key: 'FURNITURE',
               labelUz: 'Mebel',
               labelRu: 'Мебель',
+              descriptionUz: 'Sotuv, ombor, mijozlar va hisob-kitob.',
+              descriptionRu: 'Продажи, склад, клиенты и учёт.',
               allowsOther: false,
               isActive: true,
               sortOrder: 10,
             },
             {
-              id: 'ob2',
-              key: 'CARPET',
-              labelUz: 'Gilam',
-              labelRu: 'Ковры',
-              allowsOther: false,
-              isActive: true,
-              sortOrder: 20,
-            },
-            {
-              id: 'ob3',
-              key: 'CLOTHING',
-              labelUz: 'Kiyim',
-              labelRu: 'Одежда',
-              allowsOther: false,
-              isActive: true,
-              sortOrder: 30,
-            },
-            {
-              id: 'ob4',
-              key: 'ELECTRONICS',
-              labelUz: 'Telefon/Elektronika',
-              labelRu: 'Электроника',
-              allowsOther: false,
-              isActive: true,
-              sortOrder: 40,
-            },
-            {
               id: 'ob5',
-              key: 'OTHER',
-              labelUz: 'Boshqa',
-              labelRu: 'Другое',
+              key: 'SMM',
+              labelUz: 'SMM Agentlik',
+              labelRu: 'SMM Агентство',
+              descriptionUz: 'Clientlar, projectlar, content rejalari.',
+              descriptionRu: 'Клиенты, проекты, контент-планы.',
               allowsOther: false,
               isActive: true,
               sortOrder: 50,
@@ -144,7 +125,7 @@ const CATALOG = {
           id: 'q_size',
           key: 'businessSize',
           audience: 'BUSINESS',
-          businessType: null,
+          businessType: 'FURNITURE',
           promptUz: 'Biznes hajmi',
           promptRu: 'Масштаб',
           hintUz: null,
@@ -160,11 +141,29 @@ const CATALOG = {
               key: 'SOLO',
               labelUz: 'Yakka tadbirkor',
               labelRu: 'ИП',
+              descriptionUz: null,
+              descriptionRu: null,
               allowsOther: false,
               isActive: true,
               sortOrder: 10,
             },
           ],
+        },
+        {
+          id: 'q_smm_name',
+          key: 'smmAgencyName',
+          audience: 'BUSINESS',
+          businessType: 'SMM',
+          promptUz: 'Agentligingiz nomi nima?',
+          promptRu: 'Как называется ваше агентство?',
+          hintUz: null,
+          hintRu: null,
+          answerType: 'TEXT',
+          required: true,
+          isActive: true,
+          isSystem: false,
+          sortOrder: 20,
+          options: [],
         },
       ],
     },
@@ -296,17 +295,93 @@ describe('OnboardingPage', () => {
 
     await user.click(await screen.findByRole('button', { name: /Business/ }));
     expect(await screen.findByText('Biznes turi')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Mebel' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Gilam' })).toBeInTheDocument();
-    expect(screen.getByTestId('onboarding-progress')).toHaveTextContent('1/2');
+    expect(screen.getByRole('button', { name: /Mebel/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Gilam/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /SMM Agentlik/ })).toBeInTheDocument();
+    expect(screen.getByTestId('onboarding-progress')).toHaveTextContent('1/1');
     expect(screen.queryByRole('button', { name: /O‘tkazib yuborish/ })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Mebel' }));
+    await user.click(screen.getByRole('button', { name: /Mebel/ }));
     await user.click(screen.getByRole('button', { name: /Davom etish/ }));
     expect(await screen.findByText('Biznes hajmi')).toBeInTheDocument();
+    expect(screen.getByTestId('onboarding-progress')).toHaveTextContent('2/2');
     await user.click(screen.getByRole('button', { name: 'Yakka tadbirkor' }));
     await user.click(screen.getByRole('button', { name: /Davom etish/ }));
     expect(await screen.findByText('register store FURNITURE')).toBeInTheDocument();
+  });
+
+  it('sends SMM businessType and shows SMM prompts instead of furniture size', async () => {
+    mockApi({
+      '/auth/me': { status: 200, body: { success: true, data: { user: TEST_PERSONAL } } },
+      '/accounts': {
+        status: 200,
+        body: { success: true, data: { items: [PERSONAL_ITEM] } },
+      },
+      ...onboardingApis(),
+    });
+    const user = userEvent.setup();
+    renderOnboarding();
+
+    await user.click(await screen.findByRole('button', { name: /Business/ }));
+    await user.click(screen.getByRole('button', { name: /SMM Agentlik/ }));
+    await user.click(screen.getByRole('button', { name: /Davom etish/ }));
+    expect(await screen.findByText('Agentligingiz nomi nima?')).toBeInTheDocument();
+    expect(screen.queryByText('Biznes hajmi')).not.toBeInTheDocument();
+    await user.type(screen.getByRole('textbox'), 'Nova Agency');
+    await user.click(screen.getByRole('button', { name: /Davom etish/ }));
+    expect(await screen.findByText('register store SMM')).toBeInTheDocument();
+  });
+
+  it('recovers from a transient onboarding boot/catalog failure via retry', async () => {
+    let catalogCalls = 0;
+    let startCalls = 0;
+    const okCatalog = CATALOG;
+    const okStart = START;
+    const fail = {
+      status: 500,
+      body: { success: false, error: { code: 'INTERNAL_ERROR', message: 'down' } },
+    };
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      let route = SIGNED_OUT_RESPONSE;
+      if (url.includes('/onboarding/catalog')) {
+        catalogCalls += 1;
+        route = catalogCalls === 1 ? fail : okCatalog;
+      } else if (url.match(/\/onboarding\/[a-f0-9]+/i)) {
+        route = { status: 200, body: { success: true, data: { submission: okStart.body.data.submission } } };
+      } else if (url.includes('/onboarding') && !url.includes('complete')) {
+        startCalls += 1;
+        // boot tries start, then catch retries start again before surfacing bootError
+        route = startCalls <= 2 ? fail : okStart;
+      } else if (url.includes('/auth/me')) {
+        route = SIGNED_OUT_RESPONSE;
+      } else if (url.includes('/notifications') && !url.includes('/personal/')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            data: { items: [], prefs: {}, unreadCount: 0 },
+          }),
+        } as Response;
+      } else {
+        throw new Error(`Unhandled request in test: ${url}`);
+      }
+      return {
+        ok: route.status >= 200 && route.status < 300,
+        status: route.status,
+        json: async () => route.body,
+      } as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const user = userEvent.setup();
+    renderOnboarding();
+
+    expect(await screen.findByText(/Onboarding yuklanmadi/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Qayta urinib ko‘ring/ }));
+    expect(await screen.findByRole('button', { name: /Personal Finance/ })).toBeInTheDocument();
   });
 
   it('opens Personal registration wizard with name step', async () => {

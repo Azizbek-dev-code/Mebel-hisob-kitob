@@ -1,3 +1,4 @@
+import { BusinessType } from '@furniture-erp/shared';
 import {
   validateRegisterPersonalAccountDraft,
   type CompletePersonalOnboardingRequest,
@@ -55,12 +56,12 @@ export const idParamsSchema = z.object({
 export const upsertQuestionBodySchema = z.object({
   key: z.string().trim().max(80).optional(),
   audience: z.enum(['PERSONAL', 'BUSINESS']),
-  businessType: z.enum(['FURNITURE', 'CARPET', 'CLOTHING', 'ELECTRONICS', 'OTHER']).nullable().optional(),
+  businessType: z.nativeEnum(BusinessType).nullable().optional(),
   promptUz: z.string().trim().min(1).max(240),
   promptRu: z.string().trim().min(1).max(240),
   hintUz: z.string().trim().max(400).nullable().optional(),
   hintRu: z.string().trim().max(400).nullable().optional(),
-  answerType: z.enum(['SINGLE', 'MULTI', 'TEXT']),
+  answerType: z.enum(['SINGLE', 'MULTI', 'TEXT', 'TEXTAREA', 'NUMBER', 'BOOLEAN']),
   required: z.boolean().optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
@@ -70,6 +71,8 @@ export const upsertQuestionBodySchema = z.object({
         key: z.string().trim().min(1).max(80),
         labelUz: z.string().trim().min(1).max(160),
         labelRu: z.string().trim().min(1).max(160),
+        descriptionUz: z.string().trim().max(400).nullable().optional(),
+        descriptionRu: z.string().trim().max(400).nullable().optional(),
         allowsOther: z.boolean().optional(),
         isActive: z.boolean().optional(),
         sortOrder: z.number().int().optional(),
@@ -77,7 +80,6 @@ export const upsertQuestionBodySchema = z.object({
     )
     .optional(),
 });
-
 export const reorderBodySchema = z.object({
   ids: z.array(z.string().min(1)).min(1),
 });

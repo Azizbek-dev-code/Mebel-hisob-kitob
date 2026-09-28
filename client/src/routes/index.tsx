@@ -283,6 +283,10 @@ const PlatformOnboardingQuestionsPage = lazyPage(
   () => import('@/features/platform/pages/PlatformOnboardingAdminPages'),
   'PlatformOnboardingQuestionsPage',
 );
+const PlatformOnboardingBusinessTypesPage = lazyPage(
+  () => import('@/features/platform/pages/PlatformOnboardingAdminPages'),
+  'PlatformOnboardingBusinessTypesPage',
+);
 const PlatformOnboardingSolutionsPage = lazyPage(
   () => import('@/features/platform/pages/PlatformOnboardingAdminPages'),
   'PlatformOnboardingSolutionsPage',
@@ -418,6 +422,56 @@ const ProductsPage = lazyPage(() => import('@/features/products/pages/ProductsPa
 const ProductDetailPage = lazyPage(
   () => import('@/features/products/pages/ProductDetailPage'),
   'ProductDetailPage',
+);
+const SmmProjectsPage = lazyPage(
+  () => import('@/features/smm/pages/SmmProjectsPage'),
+  'SmmProjectsPage',
+);
+const SmmProjectDetailPage = lazyPage(
+  () => import('@/features/smm/pages/SmmProjectDetailPage'),
+  'SmmProjectDetailPage',
+);
+const SmmOverviewTab = lazyPage(
+  () => import('@/features/smm/pages/tabs/OverviewTab'),
+  'OverviewTab',
+);
+const SmmAudienceTab = lazyPage(
+  () => import('@/features/smm/pages/tabs/AudienceTab'),
+  'AudienceTab',
+);
+const SmmCompetitorsTab = lazyPage(
+  () => import('@/features/smm/pages/tabs/CompetitorsTab'),
+  'CompetitorsTab',
+);
+const SmmSimilarContentTab = lazyPage(
+  () => import('@/features/smm/pages/tabs/SimilarContentTab'),
+  'SimilarContentTab',
+);
+const SmmCalendarTab = lazyPage(
+  () => import('@/features/smm/pages/tabs/CalendarTab'),
+  'CalendarTab',
+);
+const SmmPlanTab = lazyPage(() => import('@/features/smm/pages/tabs/PlanTab'), 'PlanTab');
+const SmmContentTab = lazyPage(
+  () => import('@/features/smm/pages/tabs/ContentTab'),
+  'ContentTab',
+);
+const SmmContentDetailPage = lazyPage(
+  () => import('@/features/smm/pages/tabs/ContentDetailPage'),
+  'ContentDetailPage',
+);
+const SmmTasksTab = lazyPage(() => import('@/features/smm/pages/tabs/TasksTab'), 'TasksTab');
+const SmmTeamTab = lazyPage(() => import('@/features/smm/pages/tabs/TeamTab'), 'TeamTab');
+const SmmBudgetTab = lazyPage(() => import('@/features/smm/pages/tabs/BudgetTab'), 'BudgetTab');
+const SmmAnalyticsTab = lazyPage(
+  () => import('@/features/smm/pages/tabs/AnalyticsTab'),
+  'AnalyticsTab',
+);
+const SmmReportsTab = lazyPage(() => import('@/features/smm/pages/tabs/ReportsTab'), 'ReportsTab');
+const SmmFilesTab = lazyPage(() => import('@/features/smm/pages/tabs/FilesTab'), 'FilesTab');
+const SmmActivityTab = lazyPage(
+  () => import('@/features/smm/pages/tabs/ActivityTab'),
+  'ActivityTab',
 );
 const ReportsPage = lazyPage(() => import('@/features/reports/pages/ReportsPage'), 'ReportsPage');
 const AssemblyTasksPage = lazyPage(
@@ -826,6 +880,10 @@ export const routes: RouteObject[] = [
             element: platformOnly(<PlatformOnboardingQuestionsPage />),
           },
           {
+            path: ROUTES.platformOnboardingBusinessTypes,
+            element: platformOnly(<PlatformOnboardingBusinessTypesPage />),
+          },
+          {
             path: ROUTES.platformOnboardingAnswers,
             element: platformOnly(<PlatformOnboardingAnswersPage />),
           },
@@ -904,6 +962,32 @@ export const routes: RouteObject[] = [
                 <ProductDetailPage />
               </RequireInventoryManager>
             ),
+          },
+          { path: ROUTES.smmProjects, element: <SmmProjectsPage /> },
+          {
+            path: '/smm/projects/:projectId/content/:contentId',
+            element: <SmmContentDetailPage />,
+          },
+          {
+            path: '/smm/projects/:projectId',
+            element: <SmmProjectDetailPage />,
+            children: [
+              { index: true, element: <Navigate to="overview" replace /> },
+              { path: 'overview', element: <SmmOverviewTab /> },
+              { path: 'audience', element: <SmmAudienceTab /> },
+              { path: 'competitors', element: <SmmCompetitorsTab /> },
+              { path: 'similar', element: <SmmSimilarContentTab /> },
+              { path: 'calendar', element: <SmmCalendarTab /> },
+              { path: 'plan', element: <SmmPlanTab /> },
+              { path: 'content', element: <SmmContentTab /> },
+              { path: 'tasks', element: <SmmTasksTab /> },
+              { path: 'team', element: <SmmTeamTab /> },
+              { path: 'budget', element: <SmmBudgetTab /> },
+              { path: 'analytics', element: <SmmAnalyticsTab /> },
+              { path: 'reports', element: <SmmReportsTab /> },
+              { path: 'files', element: <SmmFilesTab /> },
+              { path: 'activity', element: <SmmActivityTab /> },
+            ],
           },
           {
             path: ROUTES.inventory,

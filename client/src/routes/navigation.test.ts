@@ -14,6 +14,7 @@ describe('NAV_ITEMS', () => {
       'my-sales',
       'my-reports',
       'products',
+      'smm-projects',
       'inventory',
       'delivery',
       'assembly',
@@ -88,6 +89,7 @@ describe('navItemsForUser', () => {
       'dashboard',
       'sales',
       'products',
+      'smm-projects',
       'inventory',
       'delivery',
       'assembly',
@@ -96,6 +98,37 @@ describe('navItemsForUser', () => {
       'reports',
       'settings',
     ]);
+  });
+
+  it('shows smm-projects for employees with SMM responsibility', () => {
+    const smmWorker = {
+      ...TEST_EMPLOYEE,
+      responsibilities: [WorkerResponsibility.SMM],
+    };
+    expect(navItemsForUser(smmWorker).map((item) => item.key)).toEqual(
+      expect.arrayContaining(['dashboard', 'smm-projects', 'profile']),
+    );
+  });
+
+  it('returns SMM-focused nav for SMM business type', () => {
+    expect(businessNavItems(BusinessType.SMM).map((item) => item.key)).toEqual([
+      'dashboard',
+      'smm-projects',
+      'workers',
+      'expenses',
+      'settings',
+    ]);
+  });
+
+  it('keeps expenses visible for SMM store admins despite furniture sidebar exclusions', () => {
+    const smmAdmin = {
+      ...TEST_ADMIN,
+      businessType: BusinessType.SMM,
+    };
+    expect(navItemsForUser(smmAdmin).map((item) => item.key)).toEqual(
+      expect.arrayContaining(['dashboard', 'smm-projects', 'workers', 'expenses', 'settings']),
+    );
+    expect(navItemsForUser(smmAdmin).map((item) => item.key)).not.toContain('sales');
   });
 
   it('adapts employee nav to responsibilities', () => {
@@ -221,6 +254,7 @@ describe('navItemsForUser', () => {
       'platform-subscriptions',
       'platform-onboarding',
       'platform-finance',
+      'platform-global-ranking',
       'platform-referral',
       'platform-usage',
       'platform-telegram',

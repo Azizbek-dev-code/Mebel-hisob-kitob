@@ -74,6 +74,11 @@ export const PLATFORM_ONBOARDING_HUB: PlatformHub = {
   tabs: [
     { to: ROUTES.platformOnboarding, labelKey: 'platformAdmin.hub.analytics', end: true },
     { to: ROUTES.platformOnboardingQuestions, labelKey: 'platformAdmin.hub.questions', end: true },
+    {
+      to: ROUTES.platformOnboardingBusinessTypes,
+      labelKey: 'platformAdmin.hub.businessTypes',
+      end: true,
+    },
     { to: ROUTES.platformOnboardingAnswers, labelKey: 'platformAdmin.hub.answers', end: true },
     { to: ROUTES.platformOnboardingNeeds, labelKey: 'platformAdmin.hub.needs', end: true },
     { to: ROUTES.platformOnboardingSolutions, labelKey: 'platformAdmin.hub.solutions', end: true },

@@ -264,6 +264,7 @@ enum BusinessType {
   CARPET
   CLOTHING
   ELECTRONICS
+  SMM
   OTHER
 }
 
@@ -450,6 +451,9 @@ enum OnboardingAnswerType {
   SINGLE
   MULTI
   TEXT
+  TEXTAREA
+  NUMBER
+  BOOLEAN
 }
 
 enum PersonalWalletKind {
@@ -714,6 +718,11 @@ model Store {
   /// 1:1 overlay for the shared account layer. Not an ERP tenant replacement.
   workspace                   Workspace?
 
+  /// SMM agency CMS (store-scoped). Additive — furniture/personal models unchanged.
+  smmProjects                 SmmProject[]
+  smmContentTemplates         SmmContentTemplate[]
+  smmContentTasks             SmmContentTask[]
+
   @@index([isActive])
   @@index([accessStatus])
   @@index([businessType])
@@ -782,6 +791,22 @@ model User {
   reviewedSubscriptionRequests  SubscriptionRequest[]    @relation("SubscriptionRequestReviewedBy")
   accountDeletions              AccountDeletion[]
   authSessions                  AuthSession[]
+
+  /// SMM agency CMS reverse relations (additive).
+  smmProjectsAsClient           SmmProject[]              @relation("SmmProjectClientUser")
+  smmProjectsCreated            SmmProject[]              @relation("SmmProjectCreatedBy")
+  smmProjectMemberships         SmmProjectMember[]
+  smmContentTemplatesCreated    SmmContentTemplate[]      @relation("SmmContentTemplateCreatedBy")
+  smmContentItemsCreated        SmmContentItem[]          @relation("SmmContentItemCreatedBy")
+  smmContentAssignments         SmmContentAssignment[]
+  smmContentTasksAssigned       SmmContentTask[]          @relation("SmmContentTaskAssignee")
+  smmContentTasksCreated        SmmContentTask[]          @relation("SmmContentTaskCreatedBy")
+  smmContentCostsAsWorker       SmmContentCost[]          @relation("SmmContentCostWorker")
+  smmContentCostsCreated        SmmContentCost[]          @relation("SmmContentCostCreatedBy")
+  smmContentAnalyticsRecorded   SmmContentAnalytics[]     @relation("SmmContentAnalyticsRecordedBy")
+  smmContentApprovalsReviewed   SmmContentApproval[]      @relation("SmmContentApprovalReviewer")
+  smmContentFilesUploaded       SmmContentFile[]          @relation("SmmContentFileUploadedBy")
+  smmActivitiesActed            SmmActivity[]             @relation("SmmActivityActor")
 
   /// Business notification toggles. Isolated from PersonalProfile prefs.
   bizNotifyPrefs Json?
@@ -1092,14 +1117,17 @@ model OnboardingQuestion {
 }
 
 model OnboardingOption {
-  id          String  @id @default(cuid())
-  questionId  String
-  key         String
-  labelUz     String
-  labelRu     String
-  allowsOther Boolean @default(false)
-  isActive    Boolean @default(true)
-  sortOrder   Int
+  id            String  @id @default(cuid())
+  questionId    String
+  key           String
+  labelUz       String
+  labelRu       String
+  /// Admin-editable card copy for businessType options (and future rich chips).
+  descriptionUz String?
+  descriptionRu String?
+  allowsOther   Boolean @default(false)
+  isActive      Boolean @default(true)
+  sortOrder     Int
 
   question OnboardingQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
@@ -3847,4 +3875,700 @@ model GlobalMonthlyWinner {
   @@index([identityId])
   @@index([deliveryStatus])
   @@map("global_monthly_winners")
+}
+
+// ---------------------------------------------------------------------------
+// SMM Agency Project Content Management (Balancy.Space)
+// Store-scoped via SmmProject.storeId. Additive — does not alter furniture ERP.
+// ---------------------------------------------------------------------------
+
+enum SmmProjectStatus {
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  ARCHIVED
+}
+
+enum SmmProjectMemberRole {
+  OWNER
+  ADMIN
+  MANAGER
+  PROJECT_MANAGER
+  CONTENT_MANAGER
+  EDITOR
+  DESIGNER
+  VIDEOGRAPHER
+  COPYWRITER
+  CLIENT
+}
+
+enum SmmInsightSource {
+  CLIENT_INTERVIEW
+  CUSTOMER_DATA
+  INSTAGRAM_INSIGHTS
+  ADVERTISING_DATA
+  COMPETITOR_RESEARCH
+  CUSTOMER_INTERVIEW
+  COMMENTS
+  DM
+  MARKET_RESEARCH
+  OTHER
+}
+
+enum SmmPlatform {
+  INSTAGRAM
+  TIKTOK
+  FACEBOOK
+  YOUTUBE
+  WEBSITE
+  OTHER
+}
+
+enum SmmContentType {
+  REELS
+  STORY
+  POST
+  CAROUSEL
+  VIDEO
+  AD
+}
+
+enum SmmContentStatus {
+  IDEA
+  PLANNED
+  BRIEF
+  SCRIPT_COPY
+  PRODUCTION
+  INTERNAL_REVIEW
+  CLIENT_REVIEW
+  REVISION
+  APPROVED
+  SCHEDULED
+  PUBLISHED
+  ANALYZED
+  ARCHIVED
+}
+
+enum SmmAssignmentStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum SmmTaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum SmmApprovalDecision {
+  PENDING
+  APPROVED
+  REVISION_REQUESTED
+  REJECTED
+}
+
+enum SmmTemplateScope {
+  PROJECT
+  AGENCY
+}
+
+enum SmmBlockKind {
+  HOOK
+  BODY
+  CTA
+  PROBLEM
+  SOLUTION
+  SOCIAL_PROOF
+  VISUAL
+  TEXT
+  PRODUCT
+  HEADLINE
+  CUSTOM
+}
+
+enum SmmFileKind {
+  VIDEO
+  IMAGE
+  DESIGN
+  SCRIPT
+  REFERENCE
+  OTHER
+}
+
+/// Client project / retainer container for an SMM agency store.
+model SmmProject {
+  id             String           @id @default(cuid())
+  storeId        String
+  name           String
+  clientName     String?
+  clientUserId   String?
+  description    String?
+  status         SmmProjectStatus @default(ACTIVE)
+  budgetPlanned  BigInt?
+  startDate      DateTime?
+  endDate        DateTime?
+  notes          String?
+  createdById    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store      Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  clientUser User?  @relation("SmmProjectClientUser", fields: [clientUserId], references: [id], onDelete: SetNull)
+  createdBy  User?  @relation("SmmProjectCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  members           SmmProjectMember[]
+  audienceSegments  SmmAudienceSegment[]
+  personas          SmmPersona[]
+  competitors       SmmCompetitor[]
+  contentReferences SmmContentReference[]
+  contentPillars    SmmContentPillar[]
+  campaigns         SmmCampaign[]
+  contentPlans      SmmContentPlan[]
+  contentTemplates  SmmContentTemplate[]
+  contentItems      SmmContentItem[]
+  contentTasks      SmmContentTask[]
+  contentCosts      SmmContentCost[]
+  contentFiles      SmmContentFile[]
+  activities        SmmActivity[]
+
+  @@index([storeId, status])
+  @@index([storeId, createdAt])
+  @@index([clientUserId])
+  @@index([createdById])
+  @@map("smm_projects")
+}
+
+model SmmProjectMember {
+  id       String               @id @default(cuid())
+  projectId String
+  userId   String
+  role     SmmProjectMemberRole
+  isActive Boolean              @default(true)
+  notes    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project SmmProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId, isActive])
+  @@index([projectId, role])
+  @@map("smm_project_members")
+}
+
+model SmmAudienceSegment {
+  id                String   @id @default(cuid())
+  projectId         String
+  name              String
+  ageRange          String?
+  gender            String?
+  location          String?
+  income            String?
+  occupation        String?
+  interests         String[] @default([])
+  painPoints        String?
+  needs             String?
+  desires           String?
+  objections        String?
+  buyingMotivation  String?
+  buyingBehavior    String?
+  contentPreferences String?
+  researchSources   String?
+  notes             String?
+  /// Json array of { text, source?, createdAt? }.
+  insights          Json     @default("[]")
+  archivedAt        DateTime?
+  sortOrder         Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project  SmmProject     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  personas SmmPersona[]
+  contentItems SmmContentItem[]
+
+  @@index([projectId, archivedAt])
+  @@index([projectId, sortOrder])
+  @@map("smm_audience_segments")
+}
+
+model SmmPersona {
+  id              String    @id @default(cuid())
+  projectId       String
+  segmentId       String?
+  name            String
+  ageRange        String?
+  gender          String?
+  location        String?
+  occupation      String?
+  income          String?
+  problems        String?
+  needs           String?
+  motivation      String?
+  objections      String?
+  preferredContent String?
+  notes           String?
+  archivedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project      SmmProject         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  segment      SmmAudienceSegment? @relation(fields: [segmentId], references: [id], onDelete: SetNull)
+  contentItems SmmContentItem[]
+
+  @@index([projectId, archivedAt])
+  @@index([segmentId])
+  @@map("smm_personas")
+}
+
+model SmmCompetitor {
+  id               String      @id @default(cuid())
+  projectId        String
+  name             String
+  platform         SmmPlatform
+  profileUrl       String?
+  followers        Int?
+  postingFrequency String?
+  contentFormats   String?
+  engagement       String?
+  offers           String?
+  pricing          String?
+  positioning      String?
+  strengths        String?
+  weaknesses       String?
+  bestContent      String?
+  hooks            String?
+  notes            String?
+  researchDate     DateTime?
+  archivedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project SmmProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, archivedAt])
+  @@index([projectId, platform])
+  @@map("smm_competitors")
+}
+
+model SmmContentReference {
+  id          String         @id @default(cuid())
+  projectId   String
+  title       String
+  platform    SmmPlatform
+  sourceUrl   String?
+  contentType SmmContentType
+  creatorName String?
+  topic       String?
+  hook        String?
+  format      String?
+  goal        String?
+  whySaved    String?
+  tags        String[]       @default([])
+  notes       String?
+  mediaKey    String?
+  mediaUrl    String?
+  archivedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project      SmmProject       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  contentItems SmmContentItem[]
+
+  @@index([projectId, archivedAt])
+  @@index([projectId, platform])
+  @@index([projectId, contentType])
+  @@map("smm_content_references")
+}
+
+model SmmContentPillar {
+  id          String    @id @default(cuid())
+  projectId   String
+  name        String
+  description String?
+  color       String?
+  sortOrder   Int       @default(0)
+  archivedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project      SmmProject       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  contentItems SmmContentItem[]
+
+  @@index([projectId, archivedAt])
+  @@index([projectId, sortOrder])
+  @@map("smm_content_pillars")
+}
+
+model SmmCampaign {
+  id          String    @id @default(cuid())
+  projectId   String
+  name        String
+  description String?
+  startDate   DateTime?
+  endDate     DateTime?
+  goal        String?
+  status      String    @default("ACTIVE")
+  archivedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project      SmmProject       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  contentItems SmmContentItem[]
+
+  @@index([projectId, archivedAt])
+  @@index([projectId, status])
+  @@map("smm_campaigns")
+}
+
+model SmmContentPlan {
+  id             String   @id @default(cuid())
+  projectId      String
+  name           String
+  periodStart    DateTime @db.Date
+  periodEnd      DateTime @db.Date
+  platforms      Json
+  frequencyNotes String?
+  contentTypes   Json
+  pillarIds      Json?
+  goals          String?
+  notes          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project SmmProject          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  slots   SmmContentPlanSlot[]
+
+  @@index([projectId, periodStart])
+  @@map("smm_content_plans")
+}
+
+model SmmContentPlanSlot {
+  id            String         @id @default(cuid())
+  planId        String
+  date          DateTime       @db.Date
+  contentType   SmmContentType
+  platform      SmmPlatform?
+  title         String?
+  notes         String?
+  contentItemId String?
+  sortOrder     Int            @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  plan        SmmContentPlan  @relation(fields: [planId], references: [id], onDelete: Cascade)
+  contentItem SmmContentItem? @relation(fields: [contentItemId], references: [id], onDelete: SetNull)
+
+  @@index([planId, date])
+  @@index([contentItemId])
+  @@map("smm_content_plan_slots")
+}
+
+/// Agency-wide (projectId null) or project-scoped content template.
+model SmmContentTemplate {
+  id          String           @id @default(cuid())
+  storeId     String
+  projectId   String?
+  scope       SmmTemplateScope
+  name        String
+  contentType SmmContentType
+  description String?
+  /// Structure / block layout payload.
+  payload     Json
+  createdById String?
+  archivedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store     Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  project   SmmProject? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User?       @relation("SmmContentTemplateCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([storeId, scope, archivedAt])
+  @@index([projectId])
+  @@index([createdById])
+  @@map("smm_content_templates")
+}
+
+model SmmContentItem {
+  id                String           @id @default(cuid())
+  projectId         String
+  campaignId        String?
+  platform          SmmPlatform
+  contentType       SmmContentType
+  title             String
+  publishAt         DateTime?
+  goal              String?
+  topic             String?
+  expectedResult    String?
+  audienceSegmentId String?
+  personaId         String?
+  pillarId          String?
+  status            SmmContentStatus @default(IDEA)
+  referenceId       String?
+  notes             String?
+  format            String?
+  hook              String?
+  body              String?
+  cta               String?
+  caption           String?
+  scriptNotes       String?
+  shotList          String?
+  productionNotes   String?
+  headline          String?
+  visualBrief       String?
+  /// Type-specific extras (carousel slides meta, ad targeting, etc.).
+  extras            Json?
+  createdById       String?
+  archivedAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project         SmmProject          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  campaign        SmmCampaign?        @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  audienceSegment SmmAudienceSegment? @relation(fields: [audienceSegmentId], references: [id], onDelete: SetNull)
+  persona         SmmPersona?         @relation(fields: [personaId], references: [id], onDelete: SetNull)
+  pillar          SmmContentPillar?   @relation(fields: [pillarId], references: [id], onDelete: SetNull)
+  reference       SmmContentReference? @relation(fields: [referenceId], references: [id], onDelete: SetNull)
+  createdBy       User?               @relation("SmmContentItemCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  blocks      SmmContentBlock[]
+  assignments SmmContentAssignment[]
+  tasks       SmmContentTask[]
+  costs       SmmContentCost[]
+  analytics   SmmContentAnalytics?
+  approvals   SmmContentApproval[]
+  files       SmmContentFile[]
+  planSlots   SmmContentPlanSlot[]
+
+  @@index([projectId, status])
+  @@index([projectId, platform])
+  @@index([projectId, contentType])
+  @@index([projectId, publishAt])
+  @@index([projectId, archivedAt])
+  @@index([campaignId])
+  @@index([audienceSegmentId])
+  @@index([personaId])
+  @@index([pillarId])
+  @@index([referenceId])
+  @@index([createdById])
+  @@map("smm_content_items")
+}
+
+model SmmContentBlock {
+  id              String      @id @default(cuid())
+  contentItemId   String
+  kind            SmmBlockKind
+  title           String?
+  body            String?
+  visualDirection String?
+  referenceText   String?
+  sortOrder       Int         @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contentItem SmmContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+
+  @@index([contentItemId, sortOrder])
+  @@map("smm_content_blocks")
+}
+
+model SmmContentAssignment {
+  id               String              @id @default(cuid())
+  contentItemId    String
+  userId           String
+  /// Free-form role label: Script / Shooting / Editing / Design / Publishing / …
+  role             String
+  responsibility   String?
+  deadline         DateTime?
+  status           SmmAssignmentStatus @default(PENDING)
+  estimatedMinutes Int?
+  actualMinutes    Int?
+  notes            String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contentItem SmmContentItem  @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks       SmmContentTask[]
+
+  @@index([contentItemId, status])
+  @@index([userId, status])
+  @@index([deadline])
+  @@map("smm_content_assignments")
+}
+
+model SmmContentTask {
+  id            String        @id @default(cuid())
+  storeId       String
+  projectId     String
+  contentItemId String?
+  assignmentId  String?
+  userId        String
+  title         String
+  description   String?
+  status        SmmTaskStatus @default(PENDING)
+  deadline      DateTime?
+  completedAt   DateTime?
+  createdById   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store       Store                 @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  project     SmmProject            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  contentItem SmmContentItem?       @relation(fields: [contentItemId], references: [id], onDelete: SetNull)
+  assignment  SmmContentAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  user        User                  @relation("SmmContentTaskAssignee", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy   User?                 @relation("SmmContentTaskCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  costs       SmmContentCost[]
+
+  @@index([storeId, status])
+  @@index([projectId, status])
+  @@index([userId, status])
+  @@index([contentItemId])
+  @@index([assignmentId])
+  @@index([deadline])
+  @@map("smm_content_tasks")
+}
+
+model SmmContentCost {
+  id            String   @id @default(cuid())
+  projectId     String
+  contentItemId String?
+  taskId        String?
+  userId        String?
+  label         String
+  amount        BigInt
+  costDate      DateTime @db.Date
+  notes         String?
+  createdById   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project     SmmProject      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  contentItem SmmContentItem? @relation(fields: [contentItemId], references: [id], onDelete: SetNull)
+  task        SmmContentTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  user        User?           @relation("SmmContentCostWorker", fields: [userId], references: [id], onDelete: SetNull)
+  createdBy   User?           @relation("SmmContentCostCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([projectId, costDate])
+  @@index([contentItemId])
+  @@index([taskId])
+  @@index([userId])
+  @@map("smm_content_costs")
+}
+
+model SmmContentAnalytics {
+  id            String    @id @default(cuid())
+  contentItemId String    @unique
+  reach         Int?
+  views         Int?
+  likes         Int?
+  comments      Int?
+  shares        Int?
+  saves         Int?
+  engagement    Float?
+  profileVisits Int?
+  leads         Int?
+  conversions   Int?
+  sales         Int?
+  notes         String?
+  recordedAt    DateTime?
+  recordedById  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contentItem SmmContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  recordedBy  User?          @relation("SmmContentAnalyticsRecordedBy", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@index([recordedById])
+  @@map("smm_content_analytics")
+}
+
+model SmmContentApproval {
+  id           String              @id @default(cuid())
+  contentItemId String
+  decision     SmmApprovalDecision @default(PENDING)
+  reviewerId   String?
+  /// INTERNAL or CLIENT (free-form for flexibility).
+  reviewerRole String?
+  comment      String?
+  decidedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contentItem SmmContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  reviewer    User?          @relation("SmmContentApprovalReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([contentItemId, decision])
+  @@index([reviewerId])
+  @@map("smm_content_approvals")
+}
+
+model SmmContentFile {
+  id            String     @id @default(cuid())
+  contentItemId String?
+  projectId     String
+  kind          SmmFileKind
+  fileName      String
+  fileKey       String
+  fileUrl       String
+  mimeType      String?
+  sizeBytes     Int?
+  uploadedById  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contentItem SmmContentItem? @relation(fields: [contentItemId], references: [id], onDelete: SetNull)
+  project     SmmProject      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy  User?           @relation("SmmContentFileUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([projectId, kind])
+  @@index([contentItemId])
+  @@index([uploadedById])
+  @@map("smm_content_files")
+}
+
+model SmmActivity {
+  id          String  @id @default(cuid())
+  projectId   String
+  actorUserId String?
+  eventType   String
+  entityType  String
+  entityId    String?
+  summary     String
+  metadata    Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project SmmProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  actor   User?      @relation("SmmActivityActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@index([projectId, entityType, entityId])
+  @@index([actorUserId])
+  @@map("smm_activities")
 }

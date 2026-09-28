@@ -1,6 +1,7 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
+import en from './locales/en.json';
 import ru from './locales/ru.json';
 import uz from './locales/uz.json';
 
@@ -25,9 +26,11 @@ void i18n.use(initReactI18next).init({
   resources: {
     uz: { translation: uz },
     ru: { translation: ru },
+    /** Partial EN pack for SMM Agency onboarding copy / fallback — not a selectable UI locale. */
+    en: { translation: en },
   },
   lng: readStoredLocale(),
-  fallbackLng: 'uz',
+  fallbackLng: ['uz', 'en'],
   interpolation: { escapeValue: false },
 });
 

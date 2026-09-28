@@ -60,6 +60,7 @@ import { settingsRouter } from './settings.routes.js';
 import { assemblyTasksRouter, salesRouter } from './sales.routes.js';
 import { workerFinancesRouter } from './worker-finances.routes.js';
 import { workersRouter } from './workers.routes.js';
+import { smmRouter } from '../modules/smm/smm.routes.js';
 
 /**
  * Every route in the application mounts here under `/api`.
@@ -132,3 +133,4 @@ apiRouter.use('/notifications', businessNotificationsRouter);
 apiRouter.use('/settings', settingsRouter);
 apiRouter.use('/backups', backupsRouter);
 apiRouter.use('/audit', auditRouter);
+apiRouter.use('/smm', smmRouter);

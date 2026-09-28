@@ -13,6 +13,7 @@ import {
   Boxes,
   CalendarDays,
   CircleDollarSign,
+  Clapperboard,
   CreditCard,
   Gift,
   HardHat,
@@ -69,6 +70,12 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: 'my-sales', labelKey: 'nav.mySales', to: ROUTES.mySales, icon: ShoppingCart },
   { key: 'my-reports', labelKey: 'nav.myReports', to: ROUTES.myReports, icon: BarChart3 },
   { key: 'products', labelKey: 'nav.products', to: ROUTES.products, icon: Sofa },
+  {
+    key: 'smm-projects',
+    labelKey: 'nav.smmProjects',
+    to: ROUTES.smmProjects,
+    icon: Clapperboard,
+  },
   { key: 'inventory', labelKey: 'nav.inventory', to: ROUTES.inventory, icon: Boxes },
   { key: 'delivery', labelKey: 'nav.delivery', to: ROUTES.delivery, icon: Truck },
   { key: 'assembly', labelKey: 'nav.assembly', to: ROUTES.assemblyTasks, icon: Wrench },
@@ -153,6 +160,7 @@ export const PLATFORM_NAV_ITEMS: readonly NavItem[] = [
     icon: Rocket,
     matchingPaths: [
       ROUTES.platformOnboardingQuestions,
+      ROUTES.platformOnboardingBusinessTypes,
       ROUTES.platformOnboardingAnswers,
       ROUTES.platformOnboardingNeeds,
       ROUTES.platformOnboardingSolutions,
@@ -349,12 +357,55 @@ function allowedByPlan(user: AuthPrincipal, item: NavItem): boolean {
 }
 
 /**
- * ERP modules for a BUSINESS workspace. Every current vertical shares the
- * furniture catalog; add a case here when a dedicated vertical ships.
+ * ERP modules for a BUSINESS workspace.
+ * SMM verticals get a focused rail; furniture (and other catalog verticals)
+ * keep the full furniture module list (with optional smm-projects by plan).
  */
-export function businessNavItems(_businessType: BusinessType = BusinessType.FURNITURE): readonly NavItem[] {
+export function businessNavItems(businessType: BusinessType = BusinessType.FURNITURE): readonly NavItem[] {
+  if (businessType === BusinessType.SMM) {
+    return SMM_NAV_ITEMS;
+  }
   return NAV_ITEMS;
 }
+
+/** Focused sidebar for SMM agency stores. */
+export const SMM_NAV_ITEMS: readonly NavItem[] = [
+  { key: 'dashboard', labelKey: 'nav.dashboard', to: ROUTES.dashboard, icon: LayoutDashboard },
+  {
+    key: 'smm-projects',
+    labelKey: 'nav.smmProjects',
+    to: ROUTES.smmProjects,
+    icon: Clapperboard,
+  },
+  {
+    key: 'workers',
+    labelKey: 'nav.smmAgency',
+    to: ROUTES.workers,
+    icon: HardHat,
+    matchingPaths: [ROUTES.masters, ROUTES.workersReconciliation],
+  },
+  { key: 'expenses', labelKey: 'nav.expenses', to: ROUTES.expenses, icon: CircleDollarSign },
+  {
+    key: 'settings',
+    labelKey: 'nav.settings',
+    to: ROUTES.settings,
+    icon: Settings,
+    matchingPaths: [
+      ROUTES.billing,
+      ROUTES.storeReferral,
+      ROUTES.audit,
+      ROUTES.settingsBackup,
+      ROUTES.settingsAccount,
+      ROUTES.settingsSecurity,
+      ROUTES.settingsShop,
+      ROUTES.settingsDanger,
+      ROUTES.notifications,
+      ROUTES.profile,
+      ROUTES.profileFinances,
+      ROUTES.reports,
+    ],
+  },
+];
 
 export function navItemsForAccountType(
   type: WorkspaceType,
@@ -417,13 +468,19 @@ export function navItemsForUser(user: AuthPrincipal | null | undefined): NavItem
     if (hasResponsibility(user, WorkerResponsibility.INSTALLER)) {
       keys.add('assembly');
     }
+    if (hasResponsibility(user, WorkerResponsibility.SMM)) {
+      keys.add('smm-projects');
+    }
 
     items = erpNav.filter((item) => keys.has(item.key));
   }
 
-  return items.filter(
-    (item) => allowedByPlan(user, item) && !BUSINESS_SIDEBAR_EXCLUDED_KEYS.has(item.key),
-  );
+  return items.filter((item) => {
+    if (!allowedByPlan(user, item)) return false;
+    // SMM rail is already curated — do not hide expenses/agency via furniture exclusions.
+    if ((user.businessType ?? BusinessType.FURNITURE) === BusinessType.SMM) return true;
+    return !BUSINESS_SIDEBAR_EXCLUDED_KEYS.has(item.key);
+  });
 }
 
 export function canManageWorkers(user: AuthPrincipal | null | undefined): boolean {

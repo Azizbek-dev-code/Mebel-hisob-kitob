@@ -1,9 +1,11 @@
 import {
+  BUSINESS_TYPE_LABELS,
   WorkspaceType,
   isPersonalAuth,
   isPlatformAdminAuth,
   type AccountWorkspaceItem,
   type AuthPrincipal,
+  type BusinessType,
 } from '@furniture-erp/shared';
 import { Building2, Check, Plus, Wallet } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +23,19 @@ export function currentWorkspaceId(
   if (!user) return undefined;
   if (isPersonalAuth(user)) return user.workspaceId;
   return items.find((item) => item.storeId === user.storeId)?.id;
+}
+
+function businessSubtitle(
+  item: AccountWorkspaceItem,
+  t: (key: string, options?: { defaultValue?: string }) => string,
+): string {
+  const type = item.businessType as BusinessType | null | undefined;
+  if (type && type in BUSINESS_TYPE_LABELS) {
+    return t(`onboarding.businessTypes.${type}`, {
+      defaultValue: BUSINESS_TYPE_LABELS[type],
+    });
+  }
+  return t('personal.businessAccount');
 }
 
 export function AccountWorkspaceList({ onPicked }: { onPicked?: () => void }) {
@@ -73,7 +88,7 @@ export function AccountWorkspaceList({ onPicked }: { onPicked?: () => void }) {
                           ? t('personal.currentAccount')
                           : personal
                             ? t('personal.switchPersonal')
-                            : t('personal.businessAccount')}
+                            : businessSubtitle(item, t)}
                       </span>
                     </span>
                     {active ? <Check className="size-4 shrink-0" aria-hidden="true" /> : null}

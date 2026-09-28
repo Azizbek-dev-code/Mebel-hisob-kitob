@@ -29,6 +29,7 @@ export const FeatureKey = {
   INSTALLMENT: 'installment',
   AUDIT: 'audit',
   ASSEMBLY: 'assembly',
+  SMM_PROJECTS: 'smm_projects',
 } as const;
 export type FeatureKey = (typeof FeatureKey)[keyof typeof FeatureKey];
 
@@ -167,6 +168,12 @@ export const FEATURE_CATALOG: readonly FeatureCatalogEntry[] = [
     description: 'Do‘kon audit jurnali',
     category: 'Tizim',
   },
+  {
+    key: FeatureKey.SMM_PROJECTS,
+    name: 'SMM loyihalar',
+    description: 'SMM agentlik kontent va loyiha boshqaruvi',
+    category: 'SMM',
+  },
 ] as const;
 
 export const LIMIT_CATALOG: readonly LimitCatalogEntry[] = [
@@ -216,6 +223,7 @@ export const FEATURE_WRITE_MAP: Record<FeatureKey, LimitResourceKey | null> = {
   installment: null,
   audit: null,
   assembly: null,
+  smm_projects: null,
 };
 
 export function featureByKey(key: string): FeatureCatalogEntry | undefined {
@@ -266,6 +274,8 @@ export const STARTER_FEATURE_KEYS: readonly FeatureKey[] = [
   FeatureKey.ASSEMBLY,
   FeatureKey.DEBTS,
   FeatureKey.REPORTS,
+  // SMM agencies need project CMS on the entry plan to be viable.
+  FeatureKey.SMM_PROJECTS,
 ];
 
 export const PRO_FEATURE_KEYS: readonly FeatureKey[] = FEATURE_KEYS.filter(
@@ -346,6 +356,7 @@ export const NAV_FEATURE_MAP: Record<string, FeatureKey | null> = {
   reports: FeatureKey.REPORTS,
   analytics: FeatureKey.ANALYTICS,
   audit: FeatureKey.AUDIT,
+  'smm-projects': FeatureKey.SMM_PROJECTS,
   notifications: null,
 };
 

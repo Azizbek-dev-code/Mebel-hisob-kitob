@@ -43,6 +43,7 @@ describe('BusinessType catalog', () => {
       'CARPET',
       'CLOTHING',
       'ELECTRONICS',
+      'SMM',
       'OTHER',
     ]);
   });

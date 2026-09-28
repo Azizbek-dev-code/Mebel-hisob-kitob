@@ -1,10 +1,12 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import type {
-  OnboardingNeedDto,
-  OnboardingQuestionDto,
-  OnboardingSolutionDto,
-  UpsertOnboardingQuestionRequest,
+import {
+  BUSINESS_TYPES,
+  type OnboardingNeedDto,
+  type OnboardingOptionDto,
+  type OnboardingQuestionDto,
+  type OnboardingSolutionDto,
+  type UpsertOnboardingQuestionRequest,
 } from '@furniture-erp/shared';
 import { Plus, List } from 'lucide-react';
 
@@ -133,10 +135,20 @@ function QuestionDialog({
   const [promptUz, setPromptUz] = useState(question?.promptUz ?? '');
   const [promptRu, setPromptRu] = useState(question?.promptRu ?? '');
   const [audience, setAudience] = useState(question?.audience ?? 'PERSONAL');
+  const [businessType, setBusinessType] = useState<string>(question?.businessType ?? '');
   const [answerType, setAnswerType] = useState(question?.answerType ?? 'SINGLE');
   const [required, setRequired] = useState(question?.required ?? true);
   const [optionsText, setOptionsText] = useState(
-    (question?.options ?? []).map((option) => `${option.key}|${option.labelUz}|${option.labelRu}`).join('\n'),
+    (question?.options ?? [])
+      .map((option) => {
+        const parts = [option.key, option.labelUz, option.labelRu];
+        if (option.descriptionUz || option.descriptionRu) {
+          parts.push(option.descriptionUz ?? '');
+          if (option.descriptionRu) parts.push(option.descriptionRu);
+        }
+        return parts.join('|');
+      })
+      .join('\n'),
   );
 
   async function onSubmit(event: FormEvent) {
@@ -146,11 +158,15 @@ function QuestionDialog({
       .map((line) => line.trim())
       .filter(Boolean)
       .map((line, index) => {
-        const [key, labelUz, labelRu] = line.split('|').map((part) => part.trim());
+        const [key, labelUz, labelRu, descriptionUz, descriptionRu] = line
+          .split('|')
+          .map((part) => part.trim());
         return {
           key: key || `OPT_${index + 1}`,
           labelUz: labelUz || key || `OPT_${index + 1}`,
           labelRu: labelRu || labelUz || key || `OPT_${index + 1}`,
+          descriptionUz: descriptionUz || null,
+          descriptionRu: descriptionRu || null,
           allowsOther: (key || '').toUpperCase() === 'OTHER',
           sortOrder: (index + 1) * 10,
         };
@@ -158,6 +174,7 @@ function QuestionDialog({
     await onSave({
       key: question?.key,
       audience,
+      businessType: businessType ? (businessType as UpsertOnboardingQuestionRequest['businessType']) : null,
       promptUz,
       promptRu,
       answerType,
@@ -180,20 +197,46 @@ function QuestionDialog({
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block space-y-1 text-sm">
             <span>{t('onboarding.admin.audience')}</span>
-            <select className={fieldClass} value={audience} onChange={(event) => setAudience(event.target.value as typeof audience)}>
+            <select
+              className={fieldClass}
+              value={audience}
+              onChange={(event) => setAudience(event.target.value as typeof audience)}
+            >
               <option value="PERSONAL">PERSONAL</option>
               <option value="BUSINESS">BUSINESS</option>
             </select>
           </label>
           <label className="block space-y-1 text-sm">
-            <span>{t('onboarding.admin.answerType')}</span>
-            <select className={fieldClass} value={answerType} onChange={(event) => setAnswerType(event.target.value as typeof answerType)}>
-              <option value="SINGLE">SINGLE</option>
-              <option value="MULTI">MULTI</option>
-              <option value="TEXT">TEXT</option>
+            <span>{t('onboarding.admin.businessType')}</span>
+            <select
+              className={fieldClass}
+              value={businessType}
+              onChange={(event) => setBusinessType(event.target.value)}
+            >
+              <option value="">{t('onboarding.admin.businessTypeAll')}</option>
+              {BUSINESS_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
             </select>
           </label>
         </div>
+        <label className="block space-y-1 text-sm">
+          <span>{t('onboarding.admin.answerType')}</span>
+          <select
+            className={fieldClass}
+            value={answerType}
+            onChange={(event) => setAnswerType(event.target.value as typeof answerType)}
+          >
+            <option value="SINGLE">SINGLE</option>
+            <option value="MULTI">MULTI</option>
+            <option value="TEXT">TEXT</option>
+            <option value="TEXTAREA">TEXTAREA</option>
+            <option value="NUMBER">NUMBER</option>
+            <option value="BOOLEAN">BOOLEAN</option>
+          </select>
+        </label>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={required} onChange={(event) => setRequired(event.target.checked)} />
           {t('onboarding.admin.required')}
@@ -205,6 +248,210 @@ function QuestionDialog({
             value={optionsText}
             onChange={(event) => setOptionsText(event.target.value)}
           />
+        </label>
+        <div className="flex justify-end gap-2">
+          <button type="button" className="text-sm text-ink-muted" onClick={onClose}>
+            {t('common.cancel')}
+          </button>
+          <button
+            type="submit"
+            disabled={busy}
+            className="rounded-input bg-brand-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+          >
+            {t('common.save')}
+          </button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
+export function PlatformOnboardingBusinessTypesPage() {
+  const { t } = useTranslation();
+  const list = useAdminOnboardingQuestions();
+  const save = useSaveOnboardingQuestion();
+  const [editing, setEditing] = useState<OnboardingOptionDto | null>(null);
+
+  const businessTypeQuestion = useMemo(
+    () => list.data?.items.find((item) => item.key === 'businessType' && item.isSystem) ?? null,
+    [list.data?.items],
+  );
+
+  const options = useMemo(
+    () =>
+      [...(businessTypeQuestion?.options ?? [])].sort(
+        (a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key),
+      ),
+    [businessTypeQuestion?.options],
+  );
+
+  return (
+    <PageContainer className="space-y-6 overflow-x-hidden">
+      <div>
+        <h2 className="text-lg font-semibold tracking-tight text-ink">
+          {t('onboarding.admin.businessTypesTitle')}
+        </h2>
+        <p className="mt-1 text-sm text-ink-muted">{t('onboarding.admin.businessTypesHint')}</p>
+      </div>
+      <SectionCard title={t('onboarding.admin.list')}>
+        {list.isPending && !list.data ? (
+          <Skeleton className="h-32 w-full" />
+        ) : list.isError ? (
+          <ErrorState
+            title={t('onboarding.adminLoadFailed')}
+            message={t('common.retry')}
+            onRetry={() => void list.refetch()}
+          />
+        ) : !businessTypeQuestion ? (
+          <EmptyState icon={List} title={t('onboarding.adminEmpty')} />
+        ) : (
+          <ul className="divide-y divide-line">
+            {options.map((option) => (
+              <li
+                key={option.id}
+                className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-ink">
+                    {option.labelUz} · {option.key}
+                  </p>
+                  <p className="mt-0.5 text-xs text-ink-muted">
+                    {option.descriptionUz || option.descriptionRu || '—'}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge>
+                    {option.isActive
+                      ? t('onboarding.admin.onboardingEnabled')
+                      : t('onboarding.admin.onboardingDisabled')}
+                  </Badge>
+                  <button
+                    type="button"
+                    className="text-sm font-medium text-brand-700 hover:underline"
+                    onClick={() => setEditing(option)}
+                  >
+                    {t('common.edit')}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </SectionCard>
+      {editing && businessTypeQuestion ? (
+        <BusinessTypeOptionDialog
+          option={editing}
+          busy={save.isPending}
+          onClose={() => setEditing(null)}
+          onSave={async (nextOption) => {
+            const nextOptions = options.map((option) =>
+              option.key === nextOption.key ? { ...option, ...nextOption } : option,
+            );
+            await save.mutateAsync({
+              id: businessTypeQuestion.id,
+              body: {
+                key: businessTypeQuestion.key,
+                audience: businessTypeQuestion.audience,
+                businessType: businessTypeQuestion.businessType,
+                promptUz: businessTypeQuestion.promptUz,
+                promptRu: businessTypeQuestion.promptRu,
+                hintUz: businessTypeQuestion.hintUz,
+                hintRu: businessTypeQuestion.hintRu,
+                answerType: businessTypeQuestion.answerType,
+                required: businessTypeQuestion.required,
+                isActive: businessTypeQuestion.isActive,
+                sortOrder: businessTypeQuestion.sortOrder,
+                options: nextOptions.map((option, index) => ({
+                  key: option.key,
+                  labelUz: option.labelUz,
+                  labelRu: option.labelRu,
+                  descriptionUz: option.descriptionUz,
+                  descriptionRu: option.descriptionRu,
+                  allowsOther: option.allowsOther,
+                  isActive: option.isActive,
+                  sortOrder: option.sortOrder ?? (index + 1) * 10,
+                })),
+              },
+            });
+            setEditing(null);
+          }}
+        />
+      ) : null}
+    </PageContainer>
+  );
+}
+
+function BusinessTypeOptionDialog({
+  option,
+  busy,
+  onClose,
+  onSave,
+}: {
+  option: OnboardingOptionDto;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (option: OnboardingOptionDto) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const [labelUz, setLabelUz] = useState(option.labelUz);
+  const [labelRu, setLabelRu] = useState(option.labelRu);
+  const [descriptionUz, setDescriptionUz] = useState(option.descriptionUz ?? '');
+  const [descriptionRu, setDescriptionRu] = useState(option.descriptionRu ?? '');
+  const [isActive, setIsActive] = useState(option.isActive);
+  const [sortOrder, setSortOrder] = useState(String(option.sortOrder));
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    await onSave({
+      ...option,
+      labelUz,
+      labelRu,
+      descriptionUz: descriptionUz.trim() || null,
+      descriptionRu: descriptionRu.trim() || null,
+      isActive,
+      sortOrder: Number.parseInt(sortOrder, 10) || option.sortOrder,
+    });
+  }
+
+  return (
+    <Dialog open title={`${t('common.edit')} · ${option.key}`} onClose={onClose}>
+      <form className="space-y-3" onSubmit={(event) => void onSubmit(event)}>
+        <label className="block space-y-1 text-sm">
+          <span>{t('onboarding.admin.labelUz')}</span>
+          <input className={fieldClass} value={labelUz} onChange={(event) => setLabelUz(event.target.value)} />
+        </label>
+        <label className="block space-y-1 text-sm">
+          <span>{t('onboarding.admin.labelRu')}</span>
+          <input className={fieldClass} value={labelRu} onChange={(event) => setLabelRu(event.target.value)} />
+        </label>
+        <label className="block space-y-1 text-sm">
+          <span>{t('onboarding.admin.descriptionUz')}</span>
+          <textarea
+            className={`${fieldClass} min-h-20`}
+            value={descriptionUz}
+            onChange={(event) => setDescriptionUz(event.target.value)}
+          />
+        </label>
+        <label className="block space-y-1 text-sm">
+          <span>{t('onboarding.admin.descriptionRu')}</span>
+          <textarea
+            className={`${fieldClass} min-h-20`}
+            value={descriptionRu}
+            onChange={(event) => setDescriptionRu(event.target.value)}
+          />
+        </label>
+        <label className="block space-y-1 text-sm">
+          <span>{t('onboarding.admin.sortOrder')}</span>
+          <input
+            type="number"
+            className={fieldClass}
+            value={sortOrder}
+            onChange={(event) => setSortOrder(event.target.value)}
+          />
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} />
+          {t('onboarding.admin.onboardingEnabled')}
         </label>
         <div className="flex justify-end gap-2">
           <button type="button" className="text-sm text-ink-muted" onClick={onClose}>

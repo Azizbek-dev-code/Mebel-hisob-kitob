@@ -4,6 +4,7 @@ import {
   STORE_TIMEZONE_OPTIONS,
   SUBSCRIPTION_STATUS_LABELS,
   UserRole,
+  isPersonalAuth,
   type StoreProfile,
 } from '@furniture-erp/shared';
 import { AlertTriangle, Tags } from 'lucide-react';
@@ -59,6 +60,7 @@ interface StoreSettingsFormProps {
 
 export function StoreSettingsForm({ store, editable }: StoreSettingsFormProps) {
   const { t } = useTranslation();
+  const { data: currentUser } = useCurrentUser();
   const updateStore = useUpdateStoreSettings();
 
   const [name, setName] = useState(store.name);
@@ -130,6 +132,16 @@ export function StoreSettingsForm({ store, editable }: StoreSettingsFormProps) {
       }
     >
       <form className="space-y-4" onSubmit={(event) => void handleSubmit(event)}>
+        {currentUser && !isPersonalAuth(currentUser) && currentUser.businessType ? (
+          <div>
+            <p className="mb-1 text-sm text-ink-soft">{t('settings.businessType')}</p>
+            <p className="rounded-input border border-line bg-surface-muted px-3 py-2 text-sm text-ink">
+              {t(`onboarding.businessTypes.${currentUser.businessType}`, {
+                defaultValue: currentUser.businessType,
+              })}
+            </p>
+          </div>
+        ) : null}
         <div>
           <label className="mb-1 block text-sm text-ink-soft" htmlFor="store-name">
             {t('settings.storeName')}

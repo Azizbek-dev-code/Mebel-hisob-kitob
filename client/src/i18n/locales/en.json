@@ -1,0 +1,37 @@
+{
+  "nav": {
+    "smmProjects": "SMM Projects",
+    "smmAgency": "Agency",
+    "expenses": "Expenses",
+    "settings": "Settings",
+    "dashboard": "Dashboard"
+  },
+  "onboarding": {
+    "businessTypeTitle": "Choose your business type",
+    "businessTypes": {
+      "FURNITURE": "Furniture",
+      "CARPET": "Carpet",
+      "CLOTHING": "Clothing",
+      "ELECTRONICS": "Electronics",
+      "SMM": "SMM Agency",
+      "OTHER": "Other"
+    },
+    "businessTypeDescriptions": {
+      "FURNITURE": "Sales, inventory, customers and accounting.",
+      "CARPET": "Carpet sales and store accounting.",
+      "CLOTHING": "Clothing sales and store accounting.",
+      "ELECTRONICS": "Electronics sales and store accounting.",
+      "SMM": "Manage clients, projects, content plans, team and agency costs.",
+      "OTHER": "Other business type."
+    },
+    "createAgency": "Create agency",
+    "agencyName": "Agency name",
+    "smmBusinessType": "SMM Agency"
+  },
+  "settings": {
+    "businessType": "Business type"
+  },
+  "personal": {
+    "businessAccount": "Business account"
+  }
+}

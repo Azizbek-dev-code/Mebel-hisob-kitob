@@ -567,6 +567,7 @@ export const BusinessType = {
   CARPET: 'CARPET',
   CLOTHING: 'CLOTHING',
   ELECTRONICS: 'ELECTRONICS',
+  SMM: 'SMM',
   OTHER: 'OTHER',
 } as const;
 export type BusinessType = (typeof BusinessType)[keyof typeof BusinessType];
@@ -578,8 +579,53 @@ export const BUSINESS_TYPE_LABELS = {
   CARPET: 'Gilam',
   CLOTHING: 'Kiyim',
   ELECTRONICS: 'Telefon/Elektronika',
+  SMM: 'SMM Agentlik',
   OTHER: 'Boshqa',
 } as const satisfies Record<BusinessType, string>;
+
+/** English labels for agency/onboarding copy (product UI locales remain uz/ru). */
+export const BUSINESS_TYPE_LABELS_EN = {
+  FURNITURE: 'Furniture',
+  CARPET: 'Carpet',
+  CLOTHING: 'Clothing',
+  ELECTRONICS: 'Electronics',
+  SMM: 'SMM Agency',
+  OTHER: 'Other',
+} as const satisfies Record<BusinessType, string>;
+
+/** Short onboarding descriptions per vertical (uz / ru / en). */
+export const BUSINESS_TYPE_DESCRIPTIONS = {
+  FURNITURE: {
+    uz: 'Sotuv, ombor, mijozlar va hisob-kitob.',
+    ru: 'Продажи, склад, клиенты и учёт.',
+    en: 'Sales, inventory, customers and accounting.',
+  },
+  CARPET: {
+    uz: 'Gilam savdosi va do‘kon hisobi.',
+    ru: 'Продажа ковров и учёт магазина.',
+    en: 'Carpet sales and store accounting.',
+  },
+  CLOTHING: {
+    uz: 'Kiyim savdosi va do‘kon hisobi.',
+    ru: 'Продажа одежды и учёт магазина.',
+    en: 'Clothing sales and store accounting.',
+  },
+  ELECTRONICS: {
+    uz: 'Elektronika savdosi va do‘kon hisobi.',
+    ru: 'Продажа электроники и учёт магазина.',
+    en: 'Electronics sales and store accounting.',
+  },
+  SMM: {
+    uz: 'Clientlar, projectlar, content rejalari, team va agency xarajatlarini boshqaring.',
+    ru: 'Клиенты, проекты, контент-планы, команда и расходы агентства.',
+    en: 'Manage clients, projects, content plans, team and agency costs.',
+  },
+  OTHER: {
+    uz: 'Boshqa biznes turi.',
+    ru: 'Другой тип бизнеса.',
+    en: 'Other business type.',
+  },
+} as const satisfies Record<BusinessType, { uz: string; ru: string; en: string }>;
 
 export function isBusinessType(value: unknown): value is BusinessType {
   return typeof value === 'string' && (BUSINESS_TYPES as readonly string[]).includes(value);
@@ -655,9 +701,20 @@ export const OnboardingAnswerType = {
   SINGLE: 'SINGLE',
   MULTI: 'MULTI',
   TEXT: 'TEXT',
+  TEXTAREA: 'TEXTAREA',
+  NUMBER: 'NUMBER',
+  BOOLEAN: 'BOOLEAN',
 } as const;
 export type OnboardingAnswerType =
   (typeof OnboardingAnswerType)[keyof typeof OnboardingAnswerType];
+
+export const ONBOARDING_ANSWER_TYPES = Object.values(OnboardingAnswerType);
+
+/** Business types that appear in user onboarding until admin toggles others. */
+export const ONBOARDING_LAUNCH_BUSINESS_TYPES = [
+  BusinessType.FURNITURE,
+  BusinessType.SMM,
+] as const satisfies readonly BusinessType[];
 
 /** Personal cash/card/bank wallets. Independent of store PaymentMethod. */
 export const PersonalWalletKind = {

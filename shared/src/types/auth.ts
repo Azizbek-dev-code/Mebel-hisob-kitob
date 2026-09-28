@@ -95,8 +95,12 @@ export function isEmailVerified(user: AuthPrincipal | null | undefined): boolean
   return Boolean(user && 'emailVerified' in user && user.emailVerified);
 }
 
-export function homePathForAuth(user: AuthPrincipal): '/personal/dashboard' | '/dashboard' {
-  return isPersonalAuth(user) ? '/personal/dashboard' : '/dashboard';
+export function homePathForAuth(
+  user: AuthPrincipal,
+): '/personal/dashboard' | '/dashboard' | '/smm/projects' {
+  if (isPersonalAuth(user)) return '/personal/dashboard';
+  if (user.businessType === 'SMM') return '/smm/projects';
+  return '/dashboard';
 }
 
 export interface LoginRequest {

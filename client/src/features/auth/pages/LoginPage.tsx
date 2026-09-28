@@ -62,11 +62,16 @@ export function LoginPage() {
     login.mutate(values, {
       onSuccess: ({ user }) => {
         const from = returnPathFrom(location.state, location.search);
+        const home = homePathForAuth(user);
         if (isPersonalAuth(user)) {
-          navigate(from.startsWith('/personal') ? from : homePathForAuth(user), { replace: true });
+          navigate(from.startsWith('/personal') ? from : home, { replace: true });
           return;
         }
-        navigate(from.startsWith('/personal') ? ROUTES.dashboard : from, { replace: true });
+        // Honor deep links; otherwise land on the vertical home (SMM → projects).
+        navigate(
+          from !== ROUTES.dashboard && !from.startsWith('/personal') ? from : home,
+          { replace: true },
+        );
       },
     });
   });
