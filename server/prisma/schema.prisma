@@ -720,6 +720,7 @@ model Store {
 
   /// SMM agency CMS (store-scoped). Additive — furniture/personal models unchanged.
   smmProjects                 SmmProject[]
+  smmClients                  SmmClient[]
   smmContentTemplates         SmmContentTemplate[]
   smmContentTasks             SmmContentTask[]
 
@@ -795,7 +796,9 @@ model User {
   /// SMM agency CMS reverse relations (additive).
   smmProjectsAsClient           SmmProject[]              @relation("SmmProjectClientUser")
   smmProjectsCreated            SmmProject[]              @relation("SmmProjectCreatedBy")
+  smmProjectsManaged            SmmProject[]              @relation("SmmProjectManager")
   smmProjectMemberships         SmmProjectMember[]
+  smmClientsCreated             SmmClient[]               @relation("SmmClientCreatedBy")
   smmContentTemplatesCreated    SmmContentTemplate[]      @relation("SmmContentTemplateCreatedBy")
   smmContentItemsCreated        SmmContentItem[]          @relation("SmmContentItemCreatedBy")
   smmContentAssignments         SmmContentAssignment[]
@@ -3889,6 +3892,46 @@ enum SmmProjectStatus {
   ARCHIVED
 }
 
+enum SmmContractType {
+  RETAINER
+  PROJECT
+  HYBRID
+}
+
+enum SmmPaymentSchedule {
+  MONTHLY
+  FULL_UPFRONT
+  FIFTY_FIFTY
+  CUSTOM
+}
+
+enum SmmBudgetLineCategory {
+  EMPLOYEE
+  PRODUCTION
+  ADVERTISING
+  TRANSPORT
+  EQUIPMENT
+  OTHER
+}
+
+enum SmmDeliverableMode {
+  TOTAL
+  FREQUENCY
+}
+
+enum SmmGoalKind {
+  BRAND_AWARENESS
+  REACH
+  FOLLOWERS
+  LEADS
+  SALES
+  ENGAGEMENT
+  TRAFFIC
+  CONTENT_PRODUCTION
+  COMMUNITY_GROWTH
+  CUSTOM
+}
+
 enum SmmProjectMemberRole {
   OWNER
   ADMIN
@@ -3998,6 +4041,36 @@ enum SmmFileKind {
   OTHER
 }
 
+/// Store-scoped CRM client for SMM agencies (NOT furniture Customer).
+model SmmClient {
+  id          String    @id @default(cuid())
+  storeId     String
+  companyName String
+  contactName String?
+  phone       String?
+  email       String?
+  telegram    String?
+  instagram   String?
+  website     String?
+  industry    String?
+  location    String?
+  notes       String?
+  archivedAt  DateTime?
+  createdById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store     Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  createdBy User?        @relation("SmmClientCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  projects  SmmProject[]
+
+  @@index([storeId, companyName])
+  @@index([storeId, archivedAt])
+  @@index([createdById])
+  @@map("smm_clients")
+}
+
 /// Client project / retainer container for an SMM agency store.
 model SmmProject {
   id             String           @id @default(cuid())
@@ -4013,14 +4086,49 @@ model SmmProject {
   notes          String?
   createdById    String?
 
+  /// Commercial / agency fields (additive nullable).
+  clientId              String?
+  managerUserId         String?
+  /// SMM | INSTAGRAM | TIKTOK | TELEGRAM | MULTI
+  direction             String?
+  /// string[] of SmmPlatform
+  platforms             Json?
+  contractType          SmmContractType?
+  /// If null, fall back to startDate in app logic.
+  contractStart         DateTime?
+  contractEnd           DateTime?
+  autoRenew             Boolean             @default(false)
+  /// Agency contract value (revenue) — NOT ad spend.
+  clientFee             BigInt?
+  paymentSchedule       SmmPaymentSchedule?
+  /// PENDING | PARTIAL | PAID | OVERDUE
+  paymentStatus         String?
+  internalBudgetPlanned BigInt?
+  /// Client advertising/target budget — NOT agency revenue.
+  adBudgetPlanned       BigInt?
+  /// MONTHLY | TOTAL
+  adBudgetPeriod        String?
+  adPlatforms           Json?
+  /// { reach?, leads?, followers?, engagement?, sales? } — labeled "kutilayotgan"
+  expectedResults       Json?
+  deliverableMode       SmmDeliverableMode?
+  /// { REELS?: number, POST?: number, STORY?: number, CAROUSEL?: number, VIDEO?: number }
+  deliverables          Json?
+  /// { REELS?: { count: number, unit: 'day'|'week'|'month' }, ... }
+  deliverableFrequency  Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  store      Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  clientUser User?  @relation("SmmProjectClientUser", fields: [clientUserId], references: [id], onDelete: SetNull)
-  createdBy  User?  @relation("SmmProjectCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  store      Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  client     SmmClient? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientUser User?      @relation("SmmProjectClientUser", fields: [clientUserId], references: [id], onDelete: SetNull)
+  manager    User?      @relation("SmmProjectManager", fields: [managerUserId], references: [id], onDelete: SetNull)
+  createdBy  User?      @relation("SmmProjectCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
 
   members           SmmProjectMember[]
+  goals             SmmProjectGoal[]
+  budgetLines       SmmProjectBudgetLine[]
   audienceSegments  SmmAudienceSegment[]
   personas          SmmPersona[]
   competitors       SmmCompetitor[]
@@ -4039,16 +4147,20 @@ model SmmProject {
   @@index([storeId, createdAt])
   @@index([clientUserId])
   @@index([createdById])
+  @@index([clientId])
+  @@index([managerUserId])
   @@map("smm_projects")
 }
 
 model SmmProjectMember {
-  id       String               @id @default(cuid())
-  projectId String
-  userId   String
-  role     SmmProjectMemberRole
-  isActive Boolean              @default(true)
-  notes    String?
+  id              String               @id @default(cuid())
+  projectId       String
+  userId          String
+  role            SmmProjectMemberRole
+  isActive        Boolean              @default(true)
+  notes           String?
+  responsibility  String?
+  estimatedHours  Float?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -4060,6 +4172,44 @@ model SmmProjectMember {
   @@index([userId, isActive])
   @@index([projectId, role])
   @@map("smm_project_members")
+}
+
+model SmmProjectGoal {
+  id           String      @id @default(cuid())
+  projectId    String
+  kind         SmmGoalKind
+  customLabel  String?
+  currentValue Float?
+  targetValue  Float?
+  periodLabel  String?
+  sortOrder    Int         @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project SmmProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, sortOrder])
+  @@map("smm_project_goals")
+}
+
+model SmmProjectBudgetLine {
+  id            String                @id @default(cuid())
+  projectId     String
+  category      SmmBudgetLineCategory
+  label         String
+  plannedAmount BigInt
+  notes         String?
+  sortOrder     Int                   @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project SmmProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, sortOrder])
+  @@index([projectId, category])
+  @@map("smm_project_budget_lines")
 }
 
 model SmmAudienceSegment {

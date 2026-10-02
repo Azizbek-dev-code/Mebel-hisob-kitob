@@ -10,6 +10,7 @@ import { idParamsSchema } from '../../validators/common.validators.js';
 import * as ctrl from './smm.controller.js';
 import {
   activityListQuerySchema,
+  agencyDashboardQuerySchema,
   audienceListQuerySchema,
   calendarQuerySchema,
   campaignListQuerySchema,
@@ -72,6 +73,16 @@ const upload = multer({
 export const smmRouter = Router();
 
 smmRouter.use(requireAuth, requireFeature(FeatureKey.SMM_PROJECTS));
+
+// ---------------------------------------------------------------------------
+// Agency dashboard — before :projectId catch-alls
+// ---------------------------------------------------------------------------
+
+smmRouter.get(
+  '/dashboard',
+  validate({ query: agencyDashboardQuerySchema }),
+  ctrl.getAgencyDashboard,
+);
 
 // ---------------------------------------------------------------------------
 // Templates (agency / store-scoped) — before :id catch-alls

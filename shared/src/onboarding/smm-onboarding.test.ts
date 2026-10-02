@@ -98,8 +98,8 @@ describe('homePathForAuth', () => {
     expect(homePathForAuth(personal)).toBe('/personal/dashboard');
   });
 
-  it('routes SMM businesses to SMM projects', () => {
-    expect(homePathForAuth({ ...baseUser, businessType: BusinessType.SMM })).toBe('/smm/projects');
+  it('routes SMM businesses to the SMM dashboard', () => {
+    expect(homePathForAuth({ ...baseUser, businessType: BusinessType.SMM })).toBe('/smm/dashboard');
   });
 
   it('routes furniture businesses to the ERP dashboard', () => {

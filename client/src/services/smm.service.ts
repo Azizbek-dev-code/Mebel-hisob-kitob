@@ -29,6 +29,9 @@ import type {
   CreateSmmProjectResponse,
   DecideSmmContentApprovalRequest,
   DecideSmmContentApprovalResponse,
+  SmmAgencyDashboard,
+  SmmAgencyDashboardQuery,
+  SmmAgencyDashboardResponse,
   SmmContentAssignmentListItem,
   SmmActivityListQuery,
   SmmActivityListResponse,
@@ -129,6 +132,23 @@ export type SmmContentAssignmentListResponse = { items: SmmContentAssignmentList
  * Paths match `/api/smm/...` (apiClient prefixes `/api`).
  */
 export const smmService = {
+  // ── Agency dashboard ────────────────────────────────────────────────────
+  async getAgencyDashboard(
+    query: SmmAgencyDashboardQuery = {},
+    signal?: AbortSignal,
+  ): Promise<SmmAgencyDashboard> {
+    const { dashboard } = await apiClient.get<SmmAgencyDashboardResponse>('/smm/dashboard', {
+      searchParams: {
+        preset: query.preset,
+        from: query.from,
+        to: query.to,
+        financePreset: query.financePreset,
+      },
+      signal,
+    });
+    return dashboard;
+  },
+
   // ── Projects ────────────────────────────────────────────────────────────
   listProjects(query: SmmProjectListQuery = {}, signal?: AbortSignal) {
     return apiClient.get<SmmProjectListResponse>('/smm/projects', {

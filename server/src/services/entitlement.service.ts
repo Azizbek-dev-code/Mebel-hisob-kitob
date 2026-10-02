@@ -274,11 +274,27 @@ export async function syncCatalogPlanEntitlements(
  * who tunes the trial does not have it overwritten on the next boot.
  */
 export async function repairFreePlanEntitlements(planId: string): Promise<boolean> {
+  const plan = await prisma.subscriptionPlan.findUnique({
+    where: { id: planId },
+    select: { isDefaultTrial: true, monthlyPrice: true },
+  });
+  if (!plan) return false;
+
   const rows = await prisma.planFeature.findMany({
     where: { planId },
     include: { feature: { select: { key: true } } },
   });
   const enabled = rows.filter((row) => row.enabled).map((row) => row.feature.key);
+
+  // Default trial always realigns to TRIAL_FEATURE_KEYS (code is source of truth).
+  if (plan.isDefaultTrial) {
+    await syncPlanEntitlements(planId, {
+      featureKeys: [...TRIAL_FEATURE_KEYS],
+      limits: TRIAL_LIMIT_PRESET.map((row) => ({ ...row })),
+    });
+    return true;
+  }
+
   if (rows.length > 0 && !isUnsafeFreePlanFeatureSet(enabled)) return false;
 
   await syncPlanEntitlements(planId, {

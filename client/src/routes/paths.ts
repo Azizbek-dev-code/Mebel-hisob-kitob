@@ -177,6 +177,11 @@ export const ROUTES = {
   settingsBackup: '/settings/backup',
   /** Unlisted foundation diagnostics screen; reachable by URL, not from the sidebar. */
   systemCheck: '/system',
+  /** SMM Agency — business-isolated modules (not Furniture ERP chrome). */
+  smmDashboard: '/smm/dashboard',
+  smmAgency: '/smm/agency',
+  smmExpenses: '/smm/expenses',
+  smmSettings: '/smm/settings',
   /** SMM Agency project CMS */
   smmProjects: '/smm/projects',
   smmProjectDetail: (id: string) => `/smm/projects/${id}`,

@@ -250,6 +250,8 @@ export const TRIAL_FEATURE_KEYS: readonly FeatureKey[] = [
   FeatureKey.CUSTOMERS,
   FeatureKey.EXPENSES,
   FeatureKey.REPORTS,
+  // SMM Agency trial must unlock project CMS (and agency rail uses this gate).
+  FeatureKey.SMM_PROJECTS,
 ];
 
 /**
@@ -357,6 +359,10 @@ export const NAV_FEATURE_MAP: Record<string, FeatureKey | null> = {
   analytics: FeatureKey.ANALYTICS,
   audit: FeatureKey.AUDIT,
   'smm-projects': FeatureKey.SMM_PROJECTS,
+  'smm-dashboard': FeatureKey.SMM_PROJECTS,
+  'smm-agency': FeatureKey.SMM_PROJECTS,
+  'smm-expenses': FeatureKey.EXPENSES,
+  'smm-settings': null,
   notifications: null,
 };
 
@@ -415,11 +421,17 @@ export function resolvePlanEntitlements(input: {
   const enabled = [...(input.enabledFeatureKeys ?? [])];
   const free = isFreePlanMeta(input);
 
+  // Default trial plan always tracks TRIAL_FEATURE_KEYS in code so adding
+  // verticals (e.g. SMM_PROJECTS) does not require a one-off DB patch.
+  if (input.isDefaultTrial) {
+    return { featureKeys: [...TRIAL_FEATURE_KEYS], featuresRestricted: true };
+  }
+
   if (free && (!input.hasPlanFeatureRows || isUnsafeFreePlanFeatureSet(enabled))) {
     return { featureKeys: [...TRIAL_FEATURE_KEYS], featuresRestricted: true };
   }
   if (input.hasPlanFeatureRows) {
     return { featureKeys: enabled, featuresRestricted: true };
   }
-  return { featureKeys: [], featuresRestricted: false };
+  return { featureKeys: enabled, featuresRestricted: false };
 }

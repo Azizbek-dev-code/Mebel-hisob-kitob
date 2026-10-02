@@ -112,11 +112,18 @@ describe('navItemsForUser', () => {
 
   it('returns SMM-focused nav for SMM business type', () => {
     expect(businessNavItems(BusinessType.SMM).map((item) => item.key)).toEqual([
-      'dashboard',
+      'smm-dashboard',
       'smm-projects',
-      'workers',
-      'expenses',
-      'settings',
+      'smm-agency',
+      'smm-expenses',
+      'smm-settings',
+    ]);
+    expect(businessNavItems(BusinessType.SMM).map((item) => item.to)).toEqual([
+      ROUTES.smmDashboard,
+      ROUTES.smmProjects,
+      ROUTES.smmAgency,
+      ROUTES.smmExpenses,
+      ROUTES.smmSettings,
     ]);
   });
 
@@ -126,9 +133,29 @@ describe('navItemsForUser', () => {
       businessType: BusinessType.SMM,
     };
     expect(navItemsForUser(smmAdmin).map((item) => item.key)).toEqual(
-      expect.arrayContaining(['dashboard', 'smm-projects', 'workers', 'expenses', 'settings']),
+      expect.arrayContaining([
+        'smm-dashboard',
+        'smm-projects',
+        'smm-agency',
+        'smm-expenses',
+        'smm-settings',
+      ]),
     );
     expect(navItemsForUser(smmAdmin).map((item) => item.key)).not.toContain('sales');
+    expect(navItemsForUser(smmAdmin).map((item) => item.key)).not.toContain('workers');
+    expect(navItemsForUser(smmAdmin).map((item) => item.key)).not.toContain('dashboard');
+  });
+
+  it('shows smm-projects for SMM business employees with SMM responsibility', () => {
+    const smmWorker = {
+      ...TEST_EMPLOYEE,
+      businessType: BusinessType.SMM,
+      responsibilities: [WorkerResponsibility.SMM],
+    };
+    expect(navItemsForUser(smmWorker).map((item) => item.key)).toEqual(
+      expect.arrayContaining(['smm-dashboard', 'smm-projects']),
+    );
+    expect(navItemsForUser(smmWorker).map((item) => item.key)).not.toContain('smm-agency');
   });
 
   it('adapts employee nav to responsibilities', () => {
@@ -359,9 +386,12 @@ describe('canManageExpenses', () => {
 });
 
 describe('navItemForPath', () => {
-  it('names the module a page belongs to', () => {
-    expect(navItemForPath(ROUTES.sales)?.labelKey).toBe('nav.sales');
-    expect(navItemForPath(ROUTES.dashboard)?.labelKey).toBe('nav.dashboard');
+  it('names SMM module pages under the SMM rail', () => {
+    expect(navItemForPath(ROUTES.smmDashboard)?.key).toBe('smm-dashboard');
+    expect(navItemForPath(ROUTES.smmProjects)?.labelKey).toBe('nav.smmProjects');
+    expect(navItemForPath(ROUTES.smmAgency)?.key).toBe('smm-agency');
+    expect(navItemForPath(ROUTES.smmExpenses)?.key).toBe('smm-expenses');
+    expect(navItemForPath(ROUTES.smmSettings)?.key).toBe('smm-settings');
   });
 
   it('keeps naming the module on its nested pages', () => {

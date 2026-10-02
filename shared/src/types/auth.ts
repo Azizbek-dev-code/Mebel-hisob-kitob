@@ -97,9 +97,9 @@ export function isEmailVerified(user: AuthPrincipal | null | undefined): boolean
 
 export function homePathForAuth(
   user: AuthPrincipal,
-): '/personal/dashboard' | '/dashboard' | '/smm/projects' {
+): '/personal/dashboard' | '/dashboard' | '/smm/dashboard' {
   if (isPersonalAuth(user)) return '/personal/dashboard';
-  if (user.businessType === 'SMM') return '/smm/projects';
+  if (user.businessType === 'SMM') return '/smm/dashboard';
   return '/dashboard';
 }
 

@@ -9,12 +9,25 @@ import type {
   SmmApprovalDecision,
   SmmAssignmentStatus,
   SmmBlockKind,
+  SmmBudgetLineCategory,
+  SmmBudgetStatusFilter,
   SmmContentStatus,
   SmmContentType,
+  SmmContractStatusFilter,
+  SmmContractType,
+  SmmDashboardPeriodPreset,
+  SmmDeliverableFrequency,
+  SmmDeliverableMode,
+  SmmDeliverableTotals,
+  SmmExpectedResults,
   SmmFileKind,
+  SmmFinanceChartPreset,
+  SmmGoalKind,
   SmmInsightSource,
+  SmmPaymentSchedule,
   SmmPlatform,
   SmmProgressStatusGroup,
+  SmmProjectHealth,
   SmmProjectMemberRole,
   SmmProjectStatus,
   SmmTaskStatus,
@@ -57,6 +70,113 @@ export interface SmmContentBlockInput {
 }
 
 // ---------------------------------------------------------------------------
+// Clients
+// ---------------------------------------------------------------------------
+
+export interface SmmClientListItem {
+  id: string;
+  companyName: string;
+  contactName: string | null;
+  phone: string | null;
+  email: string | null;
+  telegram: string | null;
+  instagram: string | null;
+  website: string | null;
+  industry: string | null;
+  location: string | null;
+  notes: string | null;
+  archivedAt: IsoDateString | null;
+  projectCount: number;
+  createdAt: IsoDateString;
+  updatedAt: IsoDateString;
+}
+
+export interface SmmClientDetail extends SmmClientListItem {
+  createdBy: SmmUserSummary | null;
+}
+
+export interface CreateSmmClientRequest {
+  companyName: string;
+  contactName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  telegram?: string | null;
+  instagram?: string | null;
+  website?: string | null;
+  industry?: string | null;
+  location?: string | null;
+  notes?: string | null;
+}
+
+export interface UpdateSmmClientRequest extends Partial<CreateSmmClientRequest> {}
+
+export interface SmmClientListQuery extends PaginationQuery {
+  search?: string;
+  includeArchived?: boolean;
+}
+
+export type SmmClientListResponse = PaginatedResult<SmmClientListItem>;
+export type SmmClientDetailResponse = { client: SmmClientDetail };
+export type CreateSmmClientResponse = { client: SmmClientDetail };
+export type UpdateSmmClientResponse = { client: SmmClientDetail };
+
+// ---------------------------------------------------------------------------
+// Project goals / budget lines
+// ---------------------------------------------------------------------------
+
+export interface SmmProjectGoalDto {
+  id: string;
+  kind: SmmGoalKind;
+  customLabel: string | null;
+  currentValue: number | null;
+  targetValue: number | null;
+  periodLabel: string | null;
+  sortOrder: number;
+}
+
+export interface SmmProjectGoalInput {
+  kind: SmmGoalKind;
+  customLabel?: string | null;
+  currentValue?: number | null;
+  targetValue?: number | null;
+  periodLabel?: string | null;
+  sortOrder?: number;
+}
+
+export interface SmmProjectBudgetLineDto {
+  id: string;
+  category: SmmBudgetLineCategory;
+  label: string;
+  plannedAmount: Money;
+  notes: string | null;
+  sortOrder: number;
+}
+
+export interface SmmProjectBudgetLineInput {
+  category: SmmBudgetLineCategory;
+  label: string;
+  plannedAmount: Money;
+  notes?: string | null;
+  sortOrder?: number;
+}
+
+export interface SmmProjectTeamPreviewMember {
+  userId: string;
+  fullName: string;
+  role: SmmProjectMemberRole;
+}
+
+export interface SmmDeliverablesSummary {
+  mode: SmmDeliverableMode | null;
+  totals: SmmDeliverableTotals;
+  frequency: SmmDeliverableFrequency | null;
+  contractedTotal: number;
+  plannedCount: number;
+  completedCount: number;
+  publishedCount: number;
+}
+
+// ---------------------------------------------------------------------------
 // Projects
 // ---------------------------------------------------------------------------
 
@@ -64,12 +184,37 @@ export interface SmmProjectListItem {
   id: string;
   name: string;
   clientName: string | null;
+  clientId: string | null;
   status: SmmProjectStatus;
   budgetPlanned: Money | null;
   startDate: IsoDateString | null;
   endDate: IsoDateString | null;
   memberCount: number;
   contentCount: number;
+  managerUserId: string | null;
+  managerName: string | null;
+  teamPreview: SmmProjectTeamPreviewMember[];
+  contractStart: IsoDateString | null;
+  contractEnd: IsoDateString | null;
+  remainingDays: number | null;
+  clientFee: Money | null;
+  internalBudgetPlanned: Money | null;
+  adBudgetPlanned: Money | null;
+  spent: Money;
+  remainingInternalBudget: Money | null;
+  profitEstimate: Money | null;
+  contentPlanned: number;
+  contentCompleted: number;
+  contentPublished: number;
+  contentProgressPct: number;
+  tasksTotal: number;
+  tasksCompleted: number;
+  tasksOverdue: number;
+  health: SmmProjectHealth;
+  deliverables: SmmDeliverablesSummary | null;
+  direction: string | null;
+  platforms: SmmPlatform[];
+  contractType: SmmContractType | null;
   createdAt: IsoDateString;
   updatedAt: IsoDateString;
 }
@@ -81,6 +226,8 @@ export interface SmmProjectMemberDto {
   role: SmmProjectMemberRole;
   isActive: boolean;
   notes: string | null;
+  responsibility: string | null;
+  estimatedHours: number | null;
   createdAt: IsoDateString;
 }
 
@@ -89,25 +236,71 @@ export interface SmmProjectDetail extends SmmProjectListItem {
   notes: string | null;
   clientUserId: string | null;
   clientUser: SmmUserSummary | null;
+  client: SmmClientListItem | null;
+  manager: SmmUserSummary | null;
   createdBy: SmmUserSummary | null;
   members: SmmProjectMemberDto[];
+  goals: SmmProjectGoalDto[];
+  budgetLines: SmmProjectBudgetLineDto[];
+  autoRenew: boolean;
+  paymentSchedule: SmmPaymentSchedule | null;
+  paymentStatus: string | null;
+  adBudgetPeriod: string | null;
+  adPlatforms: string[];
+  expectedResults: SmmExpectedResults | null;
+  deliverableMode: SmmDeliverableMode | null;
+  deliverableTotals: SmmDeliverableTotals | null;
+  deliverableFrequency: SmmDeliverableFrequency | null;
+}
+
+export interface CreateSmmProjectMemberInput {
+  userId: string;
+  role: SmmProjectMemberRole;
+  responsibility?: string | null;
+  estimatedHours?: number | null;
+  notes?: string | null;
+  isActive?: boolean;
 }
 
 export interface CreateSmmProjectRequest {
   name: string;
   clientName?: string | null;
+  clientId?: string | null;
   clientUserId?: string | null;
+  newClient?: CreateSmmClientRequest;
   description?: string | null;
   status?: SmmProjectStatus;
   budgetPlanned?: Money | null;
   startDate?: string | null;
   endDate?: string | null;
   notes?: string | null;
+  managerUserId?: string | null;
+  direction?: string | null;
+  platforms?: SmmPlatform[];
+  contractType?: SmmContractType | null;
+  contractStart?: string | null;
+  contractEnd?: string | null;
+  autoRenew?: boolean;
+  clientFee?: Money | null;
+  paymentSchedule?: SmmPaymentSchedule | null;
+  paymentStatus?: string | null;
+  internalBudgetPlanned?: Money | null;
+  adBudgetPlanned?: Money | null;
+  adBudgetPeriod?: string | null;
+  adPlatforms?: string[];
+  expectedResults?: SmmExpectedResults | null;
+  deliverableMode?: SmmDeliverableMode | null;
+  deliverables?: SmmDeliverableTotals | null;
+  deliverableFrequency?: SmmDeliverableFrequency | null;
+  members?: CreateSmmProjectMemberInput[];
+  goals?: SmmProjectGoalInput[];
+  budgetLines?: SmmProjectBudgetLineInput[];
 }
 
 export interface UpdateSmmProjectRequest {
   name?: string;
   clientName?: string | null;
+  clientId?: string | null;
   clientUserId?: string | null;
   description?: string | null;
   status?: SmmProjectStatus;
@@ -115,23 +308,80 @@ export interface UpdateSmmProjectRequest {
   startDate?: string | null;
   endDate?: string | null;
   notes?: string | null;
+  managerUserId?: string | null;
+  direction?: string | null;
+  platforms?: SmmPlatform[] | null;
+  contractType?: SmmContractType | null;
+  contractStart?: string | null;
+  contractEnd?: string | null;
+  autoRenew?: boolean;
+  clientFee?: Money | null;
+  paymentSchedule?: SmmPaymentSchedule | null;
+  paymentStatus?: string | null;
+  internalBudgetPlanned?: Money | null;
+  adBudgetPlanned?: Money | null;
+  adBudgetPeriod?: string | null;
+  adPlatforms?: string[] | null;
+  expectedResults?: SmmExpectedResults | null;
+  deliverableMode?: SmmDeliverableMode | null;
+  deliverables?: SmmDeliverableTotals | null;
+  deliverableFrequency?: SmmDeliverableFrequency | null;
+  goals?: SmmProjectGoalInput[];
+  budgetLines?: SmmProjectBudgetLineInput[];
 }
 
 export interface SmmProjectListQuery extends PaginationQuery {
   search?: string;
   status?: SmmProjectStatus | 'ALL';
+  managerUserId?: string;
+  clientId?: string;
+  health?: SmmProjectHealth;
+  contractStatus?: SmmContractStatusFilter;
+  budgetStatus?: SmmBudgetStatusFilter;
+  contractFrom?: string;
+  contractTo?: string;
+}
+
+export interface SmmProjectStatusCounts {
+  ACTIVE: number;
+  ON_HOLD: number;
+  COMPLETED: number;
+  ARCHIVED: number;
+  ALL: number;
 }
 
 export type SmmProjectListResponse = PaginatedResult<SmmProjectListItem>;
 export type SmmProjectDetailResponse = { project: SmmProjectDetail };
 export type CreateSmmProjectResponse = { project: SmmProjectDetail };
 export type UpdateSmmProjectResponse = { project: SmmProjectDetail };
+export type SmmProjectStatusCountsResponse = { counts: SmmProjectStatusCounts };
+
+export interface GenerateSmmCalendarRequest {
+  /** Optional override of contract window; defaults to project contract/start-end. */
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
+export interface GenerateSmmCalendarResponse {
+  created: number;
+  capped: boolean;
+  items: Array<{
+    id: string;
+    title: string;
+    contentType: SmmContentType;
+    platform: SmmPlatform;
+    status: SmmContentStatus;
+    publishAt: IsoDateString | null;
+  }>;
+}
 
 export interface UpsertSmmProjectMemberRequest {
   userId: string;
   role: SmmProjectMemberRole;
   isActive?: boolean;
   notes?: string | null;
+  responsibility?: string | null;
+  estimatedHours?: number | null;
 }
 
 export type SmmProjectMemberListResponse = { items: SmmProjectMemberDto[] };
@@ -1038,3 +1288,196 @@ export interface SmmProgressStats {
 }
 
 export type SmmProgressStatsResponse = { stats: SmmProgressStats };
+
+// ---------------------------------------------------------------------------
+// Agency dashboard (store-wide control center)
+// ---------------------------------------------------------------------------
+
+export type SmmAttentionSeverity = 'critical' | 'warning' | 'info';
+
+export type SmmAttentionKind =
+  | 'OVERDUE_TASKS'
+  | 'CLIENT_APPROVAL'
+  | 'DEADLINE'
+  | 'BUDGET'
+  | 'INTERNAL_REVIEW';
+
+export interface SmmDashboardPeriodMeta {
+  preset: SmmDashboardPeriodPreset;
+  from: IsoDateString;
+  to: IsoDateString;
+  label: string;
+  timeZone: string;
+}
+
+export interface SmmDashboardKpis {
+  activeProjects: number;
+  /** ACTIVE projects created in the selected period (for trend footnote). */
+  activeProjectsOpenedInPeriod: number;
+  /** Tasks + assignments due today or currently in progress. */
+  todayWorkCount: number;
+  todayOverdueCount: number;
+  /** Content with publishAt / planned date in the current store week. */
+  weekContentPlanned: number;
+  /** Share of week content in READY or LIVE groups (0–100). */
+  weekContentReadyPct: number;
+  /**
+   * Contracted project budgets booked in the period
+   * (`startDate ?? createdAt` in range). NOT client ad spend.
+   */
+  revenue: Money;
+  /** Store `Expense` ACTIVE rows in the period (agency operating costs). */
+  expenses: Money;
+  /** revenue − expenses. */
+  profit: Money;
+  /** Project delivery costs (`SmmContentCost`) in the period — separate from ad budgets. */
+  contentCosts: Money;
+}
+
+export interface SmmDashboardTodayItem {
+  id: string;
+  kind: 'TASK' | 'ASSIGNMENT';
+  title: string;
+  projectId: string;
+  projectName: string;
+  clientName: string | null;
+  assigneeName: string | null;
+  status: string;
+  /** HIGH when overdue; otherwise MEDIUM when due today; LOW otherwise. */
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  deadline: IsoDateString | null;
+  isOverdue: boolean;
+  href: string;
+}
+
+export interface SmmDashboardAttentionItem {
+  kind: SmmAttentionKind;
+  severity: SmmAttentionSeverity;
+  count: number;
+  label: string;
+  href: string | null;
+}
+
+export interface SmmDashboardProjectCard {
+  id: string;
+  name: string;
+  clientName: string | null;
+  status: SmmProjectStatus;
+  contentProgressPct: number;
+  taskProgressPct: number;
+  deadline: IsoDateString | null;
+  teamCount: number;
+  managerName: string | null;
+  health: SmmProjectHealth;
+  overdueTasks: number;
+  pendingClientApprovals: number;
+  pendingInternalReviews: number;
+  budgetPlanned: Money | null;
+  contentCostTotal: Money;
+}
+
+export interface SmmDashboardFinancePoint {
+  label: string;
+  /** ISO start of bucket. */
+  start: IsoDateString;
+  revenue: Money;
+  expenses: Money;
+  profit: Money;
+}
+
+export interface SmmDashboardFinance {
+  preset: SmmFinanceChartPreset;
+  revenue: Money;
+  expenses: Money;
+  profit: Money;
+  points: SmmDashboardFinancePoint[];
+}
+
+export interface SmmDashboardTeamMemberLoad {
+  userId: string;
+  fullName: string;
+  /** Open (PENDING + IN_PROGRESS) assignments across accessible projects. */
+  activeAssignments: number;
+  estimatedMinutes: number;
+  /**
+   * Capacity = 40h/week. Null when estimated minutes are missing for all
+   * open assignments — UI must label as "Faol topshiriqlar", not "Workload".
+   */
+  workloadPct: number | null;
+  inProgressCount: number;
+  pendingCount: number;
+}
+
+export interface SmmDashboardTeam {
+  employeeCount: number;
+  working: number;
+  pending: number;
+  completedRecently: number;
+  members: SmmDashboardTeamMemberLoad[];
+}
+
+export interface SmmDashboardContentPipelineBucket {
+  status: SmmContentStatus;
+  count: number;
+}
+
+export interface SmmDashboardWeeklyDay {
+  /** `YYYY-MM-DD` in store timezone. */
+  date: string;
+  weekday: number;
+  label: string;
+  isToday: boolean;
+  reels: number;
+  posts: number;
+  stories: number;
+  other: number;
+}
+
+export interface SmmDashboardApprovalItem {
+  approvalId: string;
+  contentItemId: string;
+  contentTitle: string;
+  projectId: string;
+  projectName: string;
+  clientName: string | null;
+  submittedAt: IsoDateString;
+  waitingHours: number;
+  responsibleName: string | null;
+  href: string;
+}
+
+export interface SmmDashboardActivityItem {
+  id: string;
+  projectId: string;
+  projectName: string;
+  summary: string;
+  actorName: string | null;
+  eventType: string;
+  createdAt: IsoDateString;
+  href: string;
+}
+
+export interface SmmAgencyDashboard {
+  period: SmmDashboardPeriodMeta;
+  /** True when the caller is only a CLIENT member — finance/team salary-like data omitted. */
+  isClientView: boolean;
+  kpis: SmmDashboardKpis;
+  todayWork: SmmDashboardTodayItem[];
+  attention: SmmDashboardAttentionItem[];
+  projects: SmmDashboardProjectCard[];
+  finance: SmmDashboardFinance | null;
+  team: SmmDashboardTeam | null;
+  contentPipeline: SmmDashboardContentPipelineBucket[];
+  weeklyContent: SmmDashboardWeeklyDay[];
+  clientApprovals: SmmDashboardApprovalItem[];
+  recentActivity: SmmDashboardActivityItem[];
+}
+
+export type SmmAgencyDashboardResponse = { dashboard: SmmAgencyDashboard };
+
+export interface SmmAgencyDashboardQuery {
+  preset?: SmmDashboardPeriodPreset;
+  from?: string;
+  to?: string;
+  financePreset?: SmmFinanceChartPreset;
+}

@@ -368,9 +368,14 @@ export function businessNavItems(businessType: BusinessType = BusinessType.FURNI
   return NAV_ITEMS;
 }
 
-/** Focused sidebar for SMM agency stores. */
+/** Focused sidebar for SMM agency stores — dedicated `/smm/*` modules. */
 export const SMM_NAV_ITEMS: readonly NavItem[] = [
-  { key: 'dashboard', labelKey: 'nav.dashboard', to: ROUTES.dashboard, icon: LayoutDashboard },
+  {
+    key: 'smm-dashboard',
+    labelKey: 'nav.smmDashboard',
+    to: ROUTES.smmDashboard,
+    icon: LayoutDashboard,
+  },
   {
     key: 'smm-projects',
     labelKey: 'nav.smmProjects',
@@ -378,17 +383,27 @@ export const SMM_NAV_ITEMS: readonly NavItem[] = [
     icon: Clapperboard,
   },
   {
-    key: 'workers',
+    key: 'smm-agency',
     labelKey: 'nav.smmAgency',
-    to: ROUTES.workers,
+    to: ROUTES.smmAgency,
     icon: HardHat,
-    matchingPaths: [ROUTES.masters, ROUTES.workersReconciliation],
+    matchingPaths: [
+      ROUTES.workers,
+      ROUTES.workerNew,
+      ROUTES.masters,
+      ROUTES.workersReconciliation,
+    ],
   },
-  { key: 'expenses', labelKey: 'nav.expenses', to: ROUTES.expenses, icon: CircleDollarSign },
   {
-    key: 'settings',
+    key: 'smm-expenses',
+    labelKey: 'nav.expenses',
+    to: ROUTES.smmExpenses,
+    icon: CircleDollarSign,
+  },
+  {
+    key: 'smm-settings',
     labelKey: 'nav.settings',
-    to: ROUTES.settings,
+    to: ROUTES.smmSettings,
     icon: Settings,
     matchingPaths: [
       ROUTES.billing,
@@ -402,7 +417,6 @@ export const SMM_NAV_ITEMS: readonly NavItem[] = [
       ROUTES.notifications,
       ROUTES.profile,
       ROUTES.profileFinances,
-      ROUTES.reports,
     ],
   },
 ];
@@ -448,6 +462,12 @@ export function navItemsForUser(user: AuthPrincipal | null | undefined): NavItem
         'profile',
       ].includes(item.key),
     );
+  } else if ((user.businessType ?? BusinessType.FURNITURE) === BusinessType.SMM) {
+    const keys = new Set<string>(['smm-dashboard']);
+    if (hasResponsibility(user, WorkerResponsibility.SMM)) {
+      keys.add('smm-projects');
+    }
+    items = erpNav.filter((item) => keys.has(item.key));
   } else {
     const keys = new Set<string>(['dashboard', 'profile', 'my-finances']);
 
@@ -535,7 +555,12 @@ export function canReviewStoreCreationRequests(user: AuthPrincipal | null | unde
  */
 export function navItemForPath(
   pathname: string,
-  items: readonly NavItem[] = [...NAV_ITEMS, ...PLATFORM_NAV_ITEMS, ...PERSONAL_NAV_ITEMS],
+  items: readonly NavItem[] = [
+    ...NAV_ITEMS,
+    ...SMM_NAV_ITEMS,
+    ...PLATFORM_NAV_ITEMS,
+    ...PERSONAL_NAV_ITEMS,
+  ],
 ): NavItem | undefined {
   const matches = items.filter((item) => itemMatchesPath(item, pathname));
   if (matches.length === 0) return undefined;

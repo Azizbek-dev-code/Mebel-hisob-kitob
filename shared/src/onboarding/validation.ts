@@ -119,8 +119,12 @@ export function readOnboardingAnswers(input: unknown): OnboardingAnswers {
     if (key in answers) continue;
     if (/income/i.test(key) && /som/i.test(key)) continue;
     if (typeof value === 'string') {
-      const text = value.trim().slice(0, 200);
+      const text = value.trim().slice(0, 2000);
       if (text) answers[key] = text;
+    } else if (typeof value === 'number' && Number.isFinite(value)) {
+      answers[key] = value;
+    } else if (typeof value === 'boolean') {
+      answers[key] = value;
     } else if (Array.isArray(value)) {
       const items = [...new Set(asStringArray(value))].slice(0, 30);
       if (items.length > 0) answers[key] = items;

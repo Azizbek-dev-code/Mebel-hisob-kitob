@@ -1,7 +1,7 @@
 import { createBrowserRouter, Navigate, useParams, type RouteObject } from 'react-router-dom';
 import { lazy, Suspense, type ComponentType, type ReactNode } from 'react';
 
-import { PersonalEntryType } from '@furniture-erp/shared';
+import { BusinessType, PersonalEntryType, isPersonalAuth } from '@furniture-erp/shared';
 
 import { Skeleton } from '@/components/ui/Skeleton';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -427,6 +427,22 @@ const SmmProjectsPage = lazyPage(
   () => import('@/features/smm/pages/SmmProjectsPage'),
   'SmmProjectsPage',
 );
+const SmmDashboardPage = lazyPage(
+  () => import('@/features/smm/pages/SmmDashboardPage'),
+  'SmmDashboardPage',
+);
+const SmmAgencyPage = lazyPage(
+  () => import('@/features/smm/pages/SmmAgencyPage'),
+  'SmmAgencyPage',
+);
+const SmmExpensesPage = lazyPage(
+  () => import('@/features/smm/pages/SmmExpensesPage'),
+  'SmmExpensesPage',
+);
+const SmmSettingsPage = lazyPage(
+  () => import('@/features/smm/pages/SmmSettingsPage'),
+  'SmmSettingsPage',
+);
 const SmmProjectDetailPage = lazyPage(
   () => import('@/features/smm/pages/SmmProjectDetailPage'),
   'SmmProjectDetailPage',
@@ -613,6 +629,9 @@ function HomeDashboard() {
   const { data: user } = useCurrentUser();
   if (canReviewStoreCreationRequests(user)) {
     return <PlatformDashboardPage />;
+  }
+  if (user && !isPersonalAuth(user) && user.businessType === BusinessType.SMM) {
+    return <Navigate to={ROUTES.smmDashboard} replace />;
   }
   // Financial analytics dashboard is store ADMIN only.
   // Employees (and cashiers) get the personal "My Work" home instead.
@@ -963,6 +982,24 @@ export const routes: RouteObject[] = [
               </RequireInventoryManager>
             ),
           },
+          { path: ROUTES.smmDashboard, element: <SmmDashboardPage /> },
+          {
+            path: ROUTES.smmAgency,
+            element: (
+              <RequireWorkerManager>
+                <SmmAgencyPage />
+              </RequireWorkerManager>
+            ),
+          },
+          {
+            path: ROUTES.smmExpenses,
+            element: (
+              <RequireExpenseManager>
+                <SmmExpensesPage />
+              </RequireExpenseManager>
+            ),
+          },
+          { path: ROUTES.smmSettings, element: <SmmSettingsPage /> },
           { path: ROUTES.smmProjects, element: <SmmProjectsPage /> },
           {
             path: '/smm/projects/:projectId/content/:contentId',

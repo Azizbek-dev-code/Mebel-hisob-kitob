@@ -26,10 +26,29 @@ describe('resolvePlanEntitlements', () => {
 
     expect(trial.featureKeys).toEqual([...TRIAL_FEATURE_KEYS]);
     expect(trial.featuresRestricted).toBe(true);
+    expect(trial.featureKeys).toContain(FeatureKey.SMM_PROJECTS);
     expect(trial.featureKeys).not.toContain(FeatureKey.INVENTORY);
     expect(trial.featureKeys).not.toContain(FeatureKey.WORKERS);
     expect(start.featureKeys).toEqual([...STARTER_FEATURE_KEYS]);
     expect(start.featureKeys).toContain(FeatureKey.INVENTORY);
+  });
+
+  it('keeps default trial on TRIAL_FEATURE_KEYS even when DB rows are an older narrow set', () => {
+    const resolved = resolvePlanEntitlements({
+      isDefaultTrial: true,
+      monthlyPrice: 0,
+      enabledFeatureKeys: [
+        FeatureKey.DASHBOARD,
+        FeatureKey.SALES,
+        FeatureKey.PRODUCTS,
+        FeatureKey.CUSTOMERS,
+        FeatureKey.EXPENSES,
+        FeatureKey.REPORTS,
+      ],
+      hasPlanFeatureRows: true,
+    });
+    expect(resolved.featureKeys).toEqual([...TRIAL_FEATURE_KEYS]);
+    expect(resolved.featureKeys).toContain(FeatureKey.SMM_PROJECTS);
   });
 
   it('clamps a free plan that was seeded with the whole catalog', () => {
@@ -66,10 +85,22 @@ describe('resolvePlanEntitlements', () => {
     expect(resolved).toEqual({ featureKeys: [], featuresRestricted: false });
   });
 
-  it('keeps a deliberately narrow trial selection', () => {
+  it('forces default trial onto TRIAL_FEATURE_KEYS even for a deliberately narrow DB selection', () => {
     const custom = [FeatureKey.DASHBOARD, FeatureKey.SALES];
     const resolved = resolvePlanEntitlements({
       isDefaultTrial: true,
+      monthlyPrice: 0,
+      enabledFeatureKeys: custom,
+      hasPlanFeatureRows: true,
+    });
+    expect(resolved.featureKeys).toEqual([...TRIAL_FEATURE_KEYS]);
+    expect(resolved.featureKeys).toContain(FeatureKey.SMM_PROJECTS);
+  });
+
+  it('still honors a narrow custom free plan that is not the default trial', () => {
+    const custom = [FeatureKey.DASHBOARD, FeatureKey.SALES];
+    const resolved = resolvePlanEntitlements({
+      isDefaultTrial: false,
       monthlyPrice: 0,
       enabledFeatureKeys: custom,
       hasPlanFeatureRows: true,

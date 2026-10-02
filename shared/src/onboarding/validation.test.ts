@@ -59,6 +59,26 @@ describe('readOnboardingAnswers', () => {
       businessSize: 'SOLO',
     });
   });
+
+  it('keeps SMM NUMBER and BOOLEAN answers for complete-business validation', () => {
+    expect(
+      readOnboardingAnswers({
+        purpose: 'BUSINESS',
+        businessType: 'SMM',
+        smmAgencyName: 'Nova Media',
+        smmClientCount: 12,
+        smmTeamSize: 4,
+        smmAcceptTerms: true,
+      }),
+    ).toMatchObject({
+      purpose: AccountPurpose.BUSINESS,
+      businessType: 'SMM',
+      smmAgencyName: 'Nova Media',
+      smmClientCount: 12,
+      smmTeamSize: 4,
+      smmAcceptTerms: true,
+    });
+  });
 });
 
 describe('validatePersonalOnboardingComplete', () => {

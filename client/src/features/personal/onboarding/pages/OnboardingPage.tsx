@@ -405,6 +405,10 @@ export function OnboardingPage() {
       }
       await submitAccount();
     } catch (error) {
+      if (error instanceof ApiClientError && error.details?.length) {
+        setFieldErrors(Object.fromEntries(error.details.map((item) => [item.field, item.message])));
+        return;
+      }
       setFieldErrors({
         form: error instanceof Error ? error.message : t('onboarding.submitFailed'),
       });
@@ -435,6 +439,10 @@ export function OnboardingPage() {
       }
       await submitAccount();
     } catch (error) {
+      if (error instanceof ApiClientError && error.details?.length) {
+        setFieldErrors(Object.fromEntries(error.details.map((item) => [item.field, item.message])));
+        return;
+      }
       setFieldErrors({
         form: error instanceof Error ? error.message : t('onboarding.submitFailed'),
       });

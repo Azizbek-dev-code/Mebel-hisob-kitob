@@ -14,6 +14,7 @@ import type {
   CreateSmmProjectRequest,
   DecideSmmContentApprovalRequest,
   SmmActivityListQuery,
+  SmmAgencyDashboardQuery,
   SmmAudienceSegmentListQuery,
   SmmCompetitorListQuery,
   SmmContentBlockInput,
@@ -50,6 +51,7 @@ import {
 
 export const smmKeys = {
   all: ['smm'] as const,
+  dashboard: (query: SmmAgencyDashboardQuery) => [...smmKeys.all, 'dashboard', query] as const,
   projects: () => [...smmKeys.all, 'projects'] as const,
   projectList: (query: SmmProjectListQuery) => [...smmKeys.projects(), 'list', query] as const,
   project: (id: string) => [...smmKeys.projects(), 'detail', id] as const,
@@ -91,9 +93,14 @@ export const smmKeys = {
     [...smmKeys.all, 'templates', query] as const,
 };
 
+function invalidateDashboard(qc: ReturnType<typeof useQueryClient>) {
+  void qc.invalidateQueries({ queryKey: [...smmKeys.all, 'dashboard'] });
+}
+
 function invalidateProject(qc: ReturnType<typeof useQueryClient>, projectId: string) {
   void qc.invalidateQueries({ queryKey: smmKeys.project(projectId) });
   void qc.invalidateQueries({ queryKey: smmKeys.projects() });
+  invalidateDashboard(qc);
 }
 
 // ── Projects ──────────────────────────────────────────────────────────────
@@ -140,7 +147,10 @@ export function useCreateSmmProject() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: CreateSmmProjectRequest) => smmService.createProject(body),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: smmKeys.projects() }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: smmKeys.projects() });
+      invalidateDashboard(qc);
+    },
   });
 }
 
@@ -425,7 +435,10 @@ export function useCreateSmmContent(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: CreateSmmContentItemRequest) => smmService.createContent(projectId, body),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: smmKeys.project(projectId) }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: smmKeys.project(projectId) });
+      invalidateDashboard(qc);
+    },
   });
 }
 
@@ -749,7 +762,10 @@ export function useCreateSmmTask(projectId: string) {
   return useMutation({
     mutationFn: (body: Omit<CreateSmmContentTaskRequest, 'projectId'>) =>
       smmService.createTask(projectId, body),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: smmKeys.project(projectId) }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: smmKeys.project(projectId) });
+      invalidateDashboard(qc);
+    },
   });
 }
 
@@ -780,7 +796,10 @@ export function useCreateSmmCost(projectId: string) {
   return useMutation({
     mutationFn: (body: Omit<CreateSmmContentCostRequest, 'projectId'>) =>
       smmService.createCost(projectId, body),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: smmKeys.project(projectId) }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: smmKeys.project(projectId) });
+      invalidateDashboard(qc);
+    },
   });
 }
 

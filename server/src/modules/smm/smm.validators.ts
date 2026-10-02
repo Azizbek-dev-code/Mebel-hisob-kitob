@@ -1,15 +1,19 @@
 import {
+  DASHBOARD_MAX_RANGE_DAYS,
   SMM_APPROVAL_DECISIONS,
   SMM_ASSIGNMENT_STATUSES,
   SMM_BLOCK_KINDS,
   SMM_CONTENT_STATUSES,
   SMM_CONTENT_TYPES,
+  SMM_DASHBOARD_PERIOD_PRESETS,
   SMM_FILE_KINDS,
+  SMM_FINANCE_CHART_PRESETS,
   SMM_PLATFORMS,
   SMM_PROJECT_MEMBER_ROLES,
   SMM_PROJECT_STATUSES,
   SMM_TASK_STATUSES,
   SMM_TEMPLATE_SCOPES,
+  SmmDashboardPeriodPreset,
 } from '@furniture-erp/shared';
 import { z } from 'zod';
 
@@ -91,6 +95,61 @@ export const planSlotParamsSchema = z.object({
 export const templateIdParamsSchema = z.object({ id: cuidSchema });
 export const taskIdParamsSchema = z.object({ id: cuidSchema });
 export const costIdParamsSchema = z.object({ id: cuidSchema });
+
+// ---------------------------------------------------------------------------
+// Agency dashboard
+// ---------------------------------------------------------------------------
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function inclusiveDaySpan(from: string, to: string): number {
+  const asUtc = (value: string): number => {
+    const [year = 0, month = 0, day = 0] = value.split('-').map(Number);
+    return Date.UTC(year, month - 1, day);
+  };
+  return Math.round((asUtc(to) - asUtc(from)) / DAY_MS) + 1;
+}
+
+export const agencyDashboardQuerySchema = z
+  .object({
+    preset: z
+      .enum(SMM_DASHBOARD_PERIOD_PRESETS as [string, ...string[]])
+      .default(SmmDashboardPeriodPreset.THIS_MONTH),
+    from: calendarDateSchema.optional(),
+    to: calendarDateSchema.optional(),
+    financePreset: z
+      .enum(SMM_FINANCE_CHART_PRESETS as [string, ...string[]])
+      .default('LAST_30_DAYS'),
+  })
+  .superRefine((value, ctx) => {
+    if (value.preset !== SmmDashboardPeriodPreset.CUSTOM) return;
+
+    if (!value.from || !value.to) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [value.from ? 'to' : 'from'],
+        message: 'A custom period needs both a start and an end date',
+      });
+      return;
+    }
+
+    if (value.from > value.to) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['from'],
+        message: 'The start date must not be after the end date',
+      });
+      return;
+    }
+
+    if (inclusiveDaySpan(value.from, value.to) > DASHBOARD_MAX_RANGE_DAYS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['to'],
+        message: `A custom period cannot be longer than ${DASHBOARD_MAX_RANGE_DAYS} days`,
+      });
+    }
+  });
 
 // ---------------------------------------------------------------------------
 // Projects

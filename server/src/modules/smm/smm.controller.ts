@@ -42,6 +42,7 @@ import { asyncHandler } from '../../utils/async-handler.js';
 import { sendCreated, sendNoContent, sendSuccess } from '../../utils/http-response.js';
 
 import * as contentService from './content.service.js';
+import * as dashboardService from './dashboard.service.js';
 import * as opsService from './ops.service.js';
 import * as planningService from './planning.service.js';
 import * as projectsService from './projects.service.js';
@@ -59,6 +60,24 @@ function projectId(req: Request): string {
 function id(req: Request): string {
   return String(req.params.id);
 }
+
+// ---------------------------------------------------------------------------
+// Agency dashboard
+// ---------------------------------------------------------------------------
+
+export const getAgencyDashboard = asyncHandler(async (req: Request, res: Response) => {
+  const user = requireUser(req);
+  const dashboard = await dashboardService.getAgencyDashboard({
+    storeId: user.storeId,
+    userId: user.id,
+    userRole: user.role,
+    preset: req.query.preset as never,
+    from: req.query.from as string | undefined,
+    to: req.query.to as string | undefined,
+    financePreset: req.query.financePreset as never,
+  });
+  sendSuccess(res, { dashboard });
+});
 
 // ---------------------------------------------------------------------------
 // Projects

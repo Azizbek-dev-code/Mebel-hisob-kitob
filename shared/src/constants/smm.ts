@@ -415,3 +415,341 @@ export function isSmmPlatform(value: unknown): value is SmmPlatform {
 export function isSmmContentType(value: unknown): value is SmmContentType {
   return typeof value === 'string' && (SMM_CONTENT_TYPES as readonly string[]).includes(value);
 }
+
+/** Agency dashboard period presets (see `/api/smm/dashboard`). */
+export const SmmDashboardPeriodPreset = {
+  TODAY: 'TODAY',
+  THIS_WEEK: 'THIS_WEEK',
+  THIS_MONTH: 'THIS_MONTH',
+  LAST_7_DAYS: 'LAST_7_DAYS',
+  LAST_30_DAYS: 'LAST_30_DAYS',
+  CUSTOM: 'CUSTOM',
+} as const;
+export type SmmDashboardPeriodPreset =
+  (typeof SmmDashboardPeriodPreset)[keyof typeof SmmDashboardPeriodPreset];
+export const SMM_DASHBOARD_PERIOD_PRESETS = Object.values(SmmDashboardPeriodPreset);
+
+export const SmmFinanceChartPreset = {
+  LAST_7_DAYS: 'LAST_7_DAYS',
+  LAST_30_DAYS: 'LAST_30_DAYS',
+  LAST_3_MONTHS: 'LAST_3_MONTHS',
+  LAST_12_MONTHS: 'LAST_12_MONTHS',
+} as const;
+export type SmmFinanceChartPreset =
+  (typeof SmmFinanceChartPreset)[keyof typeof SmmFinanceChartPreset];
+export const SMM_FINANCE_CHART_PRESETS = Object.values(SmmFinanceChartPreset);
+
+export const SmmProjectHealth = {
+  ON_TRACK: 'ON_TRACK',
+  NEEDS_ATTENTION: 'NEEDS_ATTENTION',
+  AT_RISK: 'AT_RISK',
+} as const;
+export type SmmProjectHealth = (typeof SmmProjectHealth)[keyof typeof SmmProjectHealth];
+
+/**
+ * Derive project health from real operational signals — not an AI score.
+ *
+ * Rules (first match wins):
+ * - AT_RISK: overdue work AND (deadline ≤7d or content progress <50%)
+ * - NEEDS_ATTENTION: overdue, client approval backlog, budget ≥90%, or
+ *   deadline ≤14d with content progress <70%
+ * - ON_TRACK: otherwise
+ */
+export function deriveSmmProjectHealth(input: {
+  overdueTasks: number;
+  overdueAssignments: number;
+  contentProgressPct: number;
+  pendingClientApprovals: number;
+  daysUntilDeadline: number | null;
+  budgetPlanned: number | null;
+  contentCostTotal: number;
+}): SmmProjectHealth {
+  const overdue = input.overdueTasks + input.overdueAssignments;
+  const deadlineSoon7 =
+    input.daysUntilDeadline !== null && input.daysUntilDeadline >= 0 && input.daysUntilDeadline <= 7;
+  const deadlineSoon14 =
+    input.daysUntilDeadline !== null &&
+    input.daysUntilDeadline >= 0 &&
+    input.daysUntilDeadline <= 14;
+  const deadlinePassed =
+    input.daysUntilDeadline !== null && input.daysUntilDeadline < 0;
+  const budgetHot =
+    input.budgetPlanned !== null &&
+    input.budgetPlanned > 0 &&
+    input.contentCostTotal / input.budgetPlanned >= 0.9;
+
+  if (
+    (overdue > 0 && (deadlineSoon7 || deadlinePassed || input.contentProgressPct < 50)) ||
+    (deadlinePassed && input.contentProgressPct < 80)
+  ) {
+    return SmmProjectHealth.AT_RISK;
+  }
+
+  if (
+    overdue > 0 ||
+    input.pendingClientApprovals > 0 ||
+    budgetHot ||
+    (deadlineSoon14 && input.contentProgressPct < 70)
+  ) {
+    return SmmProjectHealth.NEEDS_ATTENTION;
+  }
+
+  return SmmProjectHealth.ON_TRACK;
+}
+
+// ---------------------------------------------------------------------------
+// Commercial / agency contract enums
+// ---------------------------------------------------------------------------
+
+export const SmmContractType = {
+  RETAINER: 'RETAINER',
+  PROJECT: 'PROJECT',
+  HYBRID: 'HYBRID',
+} as const;
+export type SmmContractType = (typeof SmmContractType)[keyof typeof SmmContractType];
+export const SMM_CONTRACT_TYPES = Object.values(SmmContractType);
+
+export const SMM_CONTRACT_TYPE_LABELS = {
+  RETAINER: 'Retainer',
+  PROJECT: 'Loyiha',
+  HYBRID: 'Gibrid',
+} as const satisfies Record<SmmContractType, string>;
+
+export const SmmPaymentSchedule = {
+  MONTHLY: 'MONTHLY',
+  FULL_UPFRONT: 'FULL_UPFRONT',
+  FIFTY_FIFTY: 'FIFTY_FIFTY',
+  CUSTOM: 'CUSTOM',
+} as const;
+export type SmmPaymentSchedule =
+  (typeof SmmPaymentSchedule)[keyof typeof SmmPaymentSchedule];
+export const SMM_PAYMENT_SCHEDULES = Object.values(SmmPaymentSchedule);
+
+export const SMM_PAYMENT_SCHEDULE_LABELS = {
+  MONTHLY: 'Oylik',
+  FULL_UPFRONT: 'To‘liq oldindan',
+  FIFTY_FIFTY: '50/50',
+  CUSTOM: 'Maxsus',
+} as const satisfies Record<SmmPaymentSchedule, string>;
+
+export const SmmBudgetLineCategory = {
+  EMPLOYEE: 'EMPLOYEE',
+  PRODUCTION: 'PRODUCTION',
+  ADVERTISING: 'ADVERTISING',
+  TRANSPORT: 'TRANSPORT',
+  EQUIPMENT: 'EQUIPMENT',
+  OTHER: 'OTHER',
+} as const;
+export type SmmBudgetLineCategory =
+  (typeof SmmBudgetLineCategory)[keyof typeof SmmBudgetLineCategory];
+export const SMM_BUDGET_LINE_CATEGORIES = Object.values(SmmBudgetLineCategory);
+
+export const SMM_BUDGET_LINE_CATEGORY_LABELS = {
+  EMPLOYEE: 'Xodim',
+  PRODUCTION: 'Ishlab chiqarish',
+  ADVERTISING: 'Reklama',
+  TRANSPORT: 'Transport',
+  EQUIPMENT: 'Jihoz',
+  OTHER: 'Boshqa',
+} as const satisfies Record<SmmBudgetLineCategory, string>;
+
+export const SmmDeliverableMode = {
+  TOTAL: 'TOTAL',
+  FREQUENCY: 'FREQUENCY',
+} as const;
+export type SmmDeliverableMode =
+  (typeof SmmDeliverableMode)[keyof typeof SmmDeliverableMode];
+export const SMM_DELIVERABLE_MODES = Object.values(SmmDeliverableMode);
+
+export const SMM_DELIVERABLE_MODE_LABELS = {
+  TOTAL: 'Jami',
+  FREQUENCY: 'Chastota',
+} as const satisfies Record<SmmDeliverableMode, string>;
+
+export const SmmGoalKind = {
+  BRAND_AWARENESS: 'BRAND_AWARENESS',
+  REACH: 'REACH',
+  FOLLOWERS: 'FOLLOWERS',
+  LEADS: 'LEADS',
+  SALES: 'SALES',
+  ENGAGEMENT: 'ENGAGEMENT',
+  TRAFFIC: 'TRAFFIC',
+  CONTENT_PRODUCTION: 'CONTENT_PRODUCTION',
+  COMMUNITY_GROWTH: 'COMMUNITY_GROWTH',
+  CUSTOM: 'CUSTOM',
+} as const;
+export type SmmGoalKind = (typeof SmmGoalKind)[keyof typeof SmmGoalKind];
+export const SMM_GOAL_KINDS = Object.values(SmmGoalKind);
+
+export const SMM_GOAL_KIND_LABELS = {
+  BRAND_AWARENESS: 'Brend tanilishi',
+  REACH: 'Qamrov',
+  FOLLOWERS: 'Obunachilar',
+  LEADS: 'Lidlar',
+  SALES: 'Sotuvlar',
+  ENGAGEMENT: 'Faollik',
+  TRAFFIC: 'Trafik',
+  CONTENT_PRODUCTION: 'Kontent ishlab chiqarish',
+  COMMUNITY_GROWTH: 'Hamjamiyat o‘sishi',
+  CUSTOM: 'Maxsus',
+} as const satisfies Record<SmmGoalKind, string>;
+
+export const SmmProjectHealthFilter = SmmProjectHealth;
+export type SmmProjectHealthFilter = SmmProjectHealth;
+export const SMM_PROJECT_HEALTH_VALUES = Object.values(SmmProjectHealth);
+
+export const SMM_PROJECT_HEALTH_LABELS = {
+  ON_TRACK: 'Rejada',
+  NEEDS_ATTENTION: 'Diqqat kerak',
+  AT_RISK: 'Xavf ostida',
+} as const satisfies Record<SmmProjectHealth, string>;
+
+export const SmmContractStatusFilter = {
+  ACTIVE: 'ACTIVE',
+  ENDING_SOON: 'ENDING_SOON',
+  EXPIRED: 'EXPIRED',
+} as const;
+export type SmmContractStatusFilter =
+  (typeof SmmContractStatusFilter)[keyof typeof SmmContractStatusFilter];
+export const SMM_CONTRACT_STATUS_FILTERS = Object.values(SmmContractStatusFilter);
+
+export const SMM_CONTRACT_STATUS_FILTER_LABELS = {
+  ACTIVE: 'Faol',
+  ENDING_SOON: 'Tez tugaydi',
+  EXPIRED: 'Muddati o‘tgan',
+} as const satisfies Record<SmmContractStatusFilter, string>;
+
+export const SmmBudgetStatusFilter = {
+  UNDER: 'UNDER',
+  NEAR_LIMIT: 'NEAR_LIMIT',
+  OVER: 'OVER',
+} as const;
+export type SmmBudgetStatusFilter =
+  (typeof SmmBudgetStatusFilter)[keyof typeof SmmBudgetStatusFilter];
+export const SMM_BUDGET_STATUS_FILTERS = Object.values(SmmBudgetStatusFilter);
+
+export const SMM_BUDGET_STATUS_FILTER_LABELS = {
+  UNDER: 'Byudjet ichida',
+  NEAR_LIMIT: 'Limitga yaqin',
+  OVER: 'Ortiqcha',
+} as const satisfies Record<SmmBudgetStatusFilter, string>;
+
+export const SmmPaymentStatus = {
+  PENDING: 'PENDING',
+  PARTIAL: 'PARTIAL',
+  PAID: 'PAID',
+  OVERDUE: 'OVERDUE',
+} as const;
+export type SmmPaymentStatus = (typeof SmmPaymentStatus)[keyof typeof SmmPaymentStatus];
+export const SMM_PAYMENT_STATUSES = Object.values(SmmPaymentStatus);
+
+export const SMM_PAYMENT_STATUS_LABELS = {
+  PENDING: 'Kutilmoqda',
+  PARTIAL: 'Qisman',
+  PAID: 'To‘langan',
+  OVERDUE: 'Muddati o‘tgan',
+} as const satisfies Record<SmmPaymentStatus, string>;
+
+export const SmmFrequencyUnit = {
+  day: 'day',
+  week: 'week',
+  month: 'month',
+} as const;
+export type SmmFrequencyUnit = (typeof SmmFrequencyUnit)[keyof typeof SmmFrequencyUnit];
+
+export type SmmDeliverableTotals = Partial<
+  Record<'REELS' | 'POST' | 'STORY' | 'CAROUSEL' | 'VIDEO', number>
+>;
+
+export type SmmDeliverableFrequency = Partial<
+  Record<
+    'REELS' | 'POST' | 'STORY' | 'CAROUSEL' | 'VIDEO',
+    { count: number; unit: SmmFrequencyUnit }
+  >
+>;
+
+export type SmmExpectedResults = {
+  reach?: number | null;
+  leads?: number | null;
+  followers?: number | null;
+  engagement?: number | null;
+  sales?: number | null;
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Inclusive calendar-day span between two dates (UTC midnight truncation). */
+export function inclusiveDaySpan(start: Date, end: Date): number {
+  const startUtc = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+  const endUtc = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+  if (endUtc < startUtc) return 0;
+  return Math.round((endUtc - startUtc) / DAY_MS) + 1;
+}
+
+/**
+ * Whole remaining calendar days until `end` from `now`.
+ * Negative when the end date has already passed. Null when end is missing.
+ */
+export function remainingDays(end: Date | null | undefined, now: Date = new Date()): number | null {
+  if (!end) return null;
+  const endUtc = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+  const nowUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.round((endUtc - nowUtc) / DAY_MS);
+}
+
+/**
+ * Expand frequency specs into total deliverable counts across [start, end].
+ * Does not invent content — only arithmetic totals for calendar generation.
+ */
+export function computeExpectedTotalsFromFrequency(
+  frequency: SmmDeliverableFrequency | null | undefined,
+  start: Date,
+  end: Date,
+): SmmDeliverableTotals {
+  if (!frequency) return {};
+  const days = inclusiveDaySpan(start, end);
+  if (days <= 0) return {};
+
+  const weeks = Math.max(1, Math.ceil(days / 7));
+  const months = Math.max(1, Math.ceil(days / 30));
+  const result: SmmDeliverableTotals = {};
+
+  for (const [rawType, spec] of Object.entries(frequency)) {
+    if (!spec || typeof spec.count !== 'number' || spec.count <= 0) continue;
+    const type = rawType as keyof SmmDeliverableTotals;
+    let total = 0;
+    if (spec.unit === 'day') total = Math.round(spec.count * days);
+    else if (spec.unit === 'week') total = Math.round(spec.count * weeks);
+    else if (spec.unit === 'month') total = Math.round(spec.count * months);
+    if (total > 0) result[type] = total;
+  }
+
+  return result;
+}
+
+/** Alias used by calendar / wizard code paths. */
+export const computeDeliverableTotalsFromFrequency = computeExpectedTotalsFromFrequency;
+
+/** Alias for contract remaining-day displays. */
+export const contractRemainingDays = remainingDays;
+
+export function deriveSmmContractStatus(
+  remaining: number | null,
+  endingSoonDays = 14,
+): SmmContractStatusFilter | null {
+  if (remaining === null) return SmmContractStatusFilter.ACTIVE;
+  if (remaining < 0) return SmmContractStatusFilter.EXPIRED;
+  if (remaining <= endingSoonDays) return SmmContractStatusFilter.ENDING_SOON;
+  return SmmContractStatusFilter.ACTIVE;
+}
+
+export function deriveSmmBudgetStatus(
+  planned: number | null,
+  spent: number,
+): SmmBudgetStatusFilter | null {
+  if (planned === null || planned <= 0) return null;
+  const ratio = spent / planned;
+  if (ratio >= 1) return SmmBudgetStatusFilter.OVER;
+  if (ratio >= 0.8) return SmmBudgetStatusFilter.NEAR_LIMIT;
+  return SmmBudgetStatusFilter.UNDER;
+}
