@@ -49,13 +49,29 @@ import {
 
 const projectDetailInclude = {
   clientUser: { select: userSelect },
+  client: { include: { _count: { select: { projects: true } } } },
+  manager: { select: userSelect },
   createdBy: { select: userSelect },
   members: {
     include: { user: { select: userSelect } },
     orderBy: { createdAt: 'asc' as const },
   },
+  goals: { orderBy: { sortOrder: 'asc' as const } },
+  budgetLines: { orderBy: { sortOrder: 'asc' as const } },
+  contentItems: {
+    select: {
+      status: true,
+      archivedAt: true,
+      assignments: { select: { status: true, deadline: true } },
+      approvals: { select: { decision: true, reviewerRole: true } },
+    },
+  },
+  contentTasks: { select: { status: true, deadline: true } },
+  contentCosts: { select: { amount: true } },
   _count: { select: { members: true, contentItems: true } },
 } satisfies Prisma.SmmProjectInclude;
+
+const projectListInclude = projectDetailInclude;
 
 async function loadProjectDetail(storeId: string, projectId: string): Promise<SmmProjectDetail> {
   const project = await prisma.smmProject.findFirst({
@@ -96,7 +112,7 @@ export async function listProjects(
     prisma.smmProject.count({ where }),
     prisma.smmProject.findMany({
       where,
-      include: { _count: { select: { members: true, contentItems: true } } },
+      include: projectListInclude,
       orderBy: { updatedAt: 'desc' },
       skip,
       take,
@@ -164,6 +180,7 @@ export async function getProject(
   const project = await loadProjectDetail(storeId, projectId);
   if (access.isClient) {
     project.notes = null;
+    if (project.client) project.client.notes = null;
   }
   return { project, access };
 }

@@ -1,5 +1,10 @@
 import {
+  deriveSmmProjectHealth,
+  remainingDays,
+  SmmAssignmentStatus,
+  SmmContentStatus,
   SmmProgressStatusGroup,
+  SmmTaskStatus,
   smmProgressGroupForStatus,
   type SmmActivityListItem,
   type SmmAudienceSegmentDetail,
@@ -37,8 +42,13 @@ import {
   type SmmProjectDetail,
   type SmmProjectListItem,
   type SmmProjectMemberDto,
+  type SmmProjectGoalDto,
+  type SmmProjectBudgetLineDto,
+  type SmmClientListItem,
+  type SmmDeliverableTotals,
+  type SmmDeliverableFrequency,
+  type SmmExpectedResults,
   type SmmUserSummary,
-  type SmmContentStatus,
 } from '@furniture-erp/shared';
 import type {
   SmmActivity,
@@ -61,10 +71,13 @@ import type {
   SmmPersona,
   SmmProject,
   SmmProjectMember,
+  SmmProjectGoal,
+  SmmProjectBudgetLine,
+  SmmClient,
   User,
 } from '@prisma/client';
 
-import { fromDbMoney } from '../../lib/money-mapper.js';
+import { fromDbMoney, fromDbMoneySum } from '../../lib/money-mapper.js';
 
 type UserRef = Pick<User, 'id' | 'fullName'>;
 
@@ -111,21 +124,136 @@ function parseContentTypeArray(raw: unknown): SmmContentType[] {
 // ---------------------------------------------------------------------------
 
 export function mapProjectListItem(
-  project: SmmProject & { _count?: { members?: number; contentItems?: number } },
+  project: SmmProject & {
+    client?: (SmmClient & { _count?: { projects?: number } }) | null;
+    manager?: UserRef | null;
+    members?: Array<SmmProjectMember & { user: UserRef }>;
+    contentItems?: Array<
+      Pick<SmmContentItem, 'status' | 'archivedAt'> & {
+        assignments?: Array<Pick<SmmContentAssignment, 'status' | 'deadline'>>;
+        approvals?: Array<Pick<SmmContentApproval, 'decision' | 'reviewerRole'>>;
+      }
+    >;
+    contentTasks?: Array<Pick<SmmContentTask, 'status' | 'deadline'>>;
+    contentCosts?: Array<Pick<SmmContentCost, 'amount'>>;
+    _count?: { members?: number; contentItems?: number };
+  },
 ): SmmProjectListItem {
+  const members = project.members ?? [];
+  const contentItems = project.contentItems ?? [];
+  const activeContent = contentItems.filter((item) => item.archivedAt === null);
+  const contentPlanned = activeContent.length;
+  const contentCompleted = activeContent.filter((item) => {
+    const group = smmProgressGroupForStatus(item.status);
+    return group === SmmProgressStatusGroup.READY || group === SmmProgressStatusGroup.LIVE;
+  }).length;
+  const contentPublished = activeContent.filter(
+    (item) =>
+      item.status === SmmContentStatus.PUBLISHED || item.status === SmmContentStatus.ANALYZED,
+  ).length;
+  const contentProgressPct =
+    contentPlanned === 0 ? 0 : Math.round((contentCompleted / contentPlanned) * 100);
+  const tasks = project.contentTasks ?? [];
+  const activeTasks = tasks.filter((task) => task.status !== SmmTaskStatus.CANCELLED);
+  const tasksCompleted = activeTasks.filter(
+    (task) => task.status === SmmTaskStatus.COMPLETED,
+  ).length;
+  const today = new Date();
+  const tasksOverdue = activeTasks.filter(
+    (task) =>
+      task.deadline !== null && task.deadline < today && task.status !== SmmTaskStatus.COMPLETED,
+  ).length;
+  const overdueAssignments = activeContent.reduce(
+    (count, item) =>
+      count +
+      (item.assignments ?? []).filter(
+        (assignment) =>
+          assignment.deadline !== null &&
+          assignment.deadline < today &&
+          assignment.status !== SmmAssignmentStatus.COMPLETED &&
+          assignment.status !== SmmAssignmentStatus.CANCELLED,
+      ).length,
+    0,
+  );
+  const pendingClientApprovals = activeContent.filter(
+    (item) =>
+      item.status === SmmContentStatus.CLIENT_REVIEW ||
+      (item.approvals ?? []).some(
+        (approval) => approval.decision === 'PENDING' && approval.reviewerRole === 'CLIENT',
+      ),
+  ).length;
+  const spent = fromDbMoneySum(
+    (project.contentCosts ?? []).reduce((sum, cost) => sum + cost.amount, 0n),
+  );
+  const internalBudgetPlanned =
+    project.internalBudgetPlanned === null ? null : fromDbMoney(project.internalBudgetPlanned);
+  const budgetPlanned = project.budgetPlanned === null ? null : fromDbMoney(project.budgetPlanned);
+  const deadlineDays = remainingDays(project.endDate, today);
+  const health = deriveSmmProjectHealth({
+    overdueTasks: tasksOverdue,
+    overdueAssignments,
+    contentProgressPct,
+    pendingClientApprovals,
+    daysUntilDeadline: deadlineDays,
+    budgetPlanned,
+    contentCostTotal: spent,
+  });
+  const deliverableTotals = parseDeliverableTotals(project.deliverables);
+  const deliverableFrequency = parseDeliverableFrequency(project.deliverableFrequency);
+  const contractedTotal = Object.values(deliverableTotals).reduce(
+    (sum, count) => sum + (count ?? 0),
+    0,
+  );
   return {
     id: project.id,
     name: project.name,
     clientName: project.clientName,
     status: project.status,
-    budgetPlanned:
-      project.budgetPlanned === null || project.budgetPlanned === undefined
-        ? null
-        : fromDbMoney(project.budgetPlanned),
+    clientId: project.clientId,
+    budgetPlanned,
     startDate: toIso(project.startDate),
     endDate: toIso(project.endDate),
     memberCount: project._count?.members ?? 0,
     contentCount: project._count?.contentItems ?? 0,
+    managerUserId: project.managerUserId,
+    managerName: project.manager?.fullName ?? null,
+    teamPreview: members.slice(0, 4).map((member) => ({
+      userId: member.userId,
+      fullName: member.user.fullName,
+      role: member.role,
+    })),
+    contractStart: toIso(project.contractStart),
+    contractEnd: toIso(project.contractEnd),
+    remainingDays: remainingDays(project.contractEnd ?? project.endDate, today),
+    clientFee: project.clientFee === null ? null : fromDbMoney(project.clientFee),
+    internalBudgetPlanned,
+    adBudgetPlanned: project.adBudgetPlanned === null ? null : fromDbMoney(project.adBudgetPlanned),
+    spent,
+    remainingInternalBudget: internalBudgetPlanned === null ? null : internalBudgetPlanned - spent,
+    profitEstimate: project.clientFee === null ? null : fromDbMoney(project.clientFee) - spent,
+    contentPlanned,
+    contentCompleted,
+    contentPublished,
+    contentProgressPct,
+    tasksTotal: activeTasks.length,
+    tasksCompleted,
+    tasksOverdue,
+    health,
+    deliverables:
+      project.deliverableMode === null
+        ? null
+        : {
+            mode: project.deliverableMode,
+            totals: deliverableTotals,
+            frequency: deliverableFrequency,
+            contractedTotal,
+            plannedCount: contentPlanned,
+            completedCount: contentCompleted,
+            publishedCount: contentPublished,
+          },
+    direction: project.direction,
+    platforms: parsePlatformArray(project.platforms),
+    contractType: project.contractType,
     createdAt: toIsoRequired(project.createdAt),
     updatedAt: toIsoRequired(project.updatedAt),
   };
@@ -141,6 +269,8 @@ export function mapProjectMember(
     role: member.role,
     isActive: member.isActive,
     notes: member.notes,
+    responsibility: member.responsibility,
+    estimatedHours: member.estimatedHours,
     createdAt: toIsoRequired(member.createdAt),
   };
 }
@@ -148,8 +278,12 @@ export function mapProjectMember(
 export function mapProjectDetail(
   project: SmmProject & {
     clientUser: UserRef | null;
+    client?: (SmmClient & { _count?: { projects?: number } }) | null;
+    manager?: UserRef | null;
     createdBy: UserRef | null;
     members: Array<SmmProjectMember & { user: UserRef }>;
+    goals?: SmmProjectGoal[];
+    budgetLines?: SmmProjectBudgetLine[];
     _count?: { members?: number; contentItems?: number };
   },
 ): SmmProjectDetail {
@@ -159,9 +293,115 @@ export function mapProjectDetail(
     notes: project.notes,
     clientUserId: project.clientUserId,
     clientUser: mapUserSummary(project.clientUser),
+    client: mapSmmClientSummary(project.client),
+    manager: mapUserSummary(project.manager),
     createdBy: mapUserSummary(project.createdBy),
     members: project.members.map(mapProjectMember),
+    goals: (project.goals ?? []).map(mapProjectGoal),
+    budgetLines: (project.budgetLines ?? []).map(mapProjectBudgetLine),
+    autoRenew: project.autoRenew,
+    paymentSchedule: project.paymentSchedule,
+    paymentStatus: project.paymentStatus,
+    adBudgetPeriod: project.adBudgetPeriod,
+    adPlatforms: parseStringArray(project.adPlatforms),
+    expectedResults: parseExpectedResults(project.expectedResults),
+    deliverableMode: project.deliverableMode,
+    deliverableTotals:
+      project.deliverables === null ? null : parseDeliverableTotals(project.deliverables),
+    deliverableFrequency:
+      project.deliverableFrequency === null
+        ? null
+        : parseDeliverableFrequency(project.deliverableFrequency),
   };
+}
+
+function mapProjectGoal(row: SmmProjectGoal): SmmProjectGoalDto {
+  return {
+    id: row.id,
+    kind: row.kind,
+    customLabel: row.customLabel,
+    currentValue: row.currentValue,
+    targetValue: row.targetValue,
+    periodLabel: row.periodLabel,
+    sortOrder: row.sortOrder,
+  };
+}
+
+function mapProjectBudgetLine(row: SmmProjectBudgetLine): SmmProjectBudgetLineDto {
+  return {
+    id: row.id,
+    category: row.category,
+    label: row.label,
+    plannedAmount: fromDbMoney(row.plannedAmount),
+    notes: row.notes,
+    sortOrder: row.sortOrder,
+  };
+}
+
+function mapSmmClientSummary(
+  row: (SmmClient & { _count?: { projects?: number } }) | null | undefined,
+): SmmClientListItem | null {
+  if (!row) return null;
+  return {
+    id: row.id,
+    companyName: row.companyName,
+    contactName: row.contactName,
+    phone: row.phone,
+    email: row.email,
+    telegram: row.telegram,
+    instagram: row.instagram,
+    website: row.website,
+    industry: row.industry,
+    location: row.location,
+    notes: row.notes,
+    archivedAt: toIso(row.archivedAt),
+    projectCount: row._count?.projects ?? 0,
+    createdAt: toIsoRequired(row.createdAt),
+    updatedAt: toIsoRequired(row.updatedAt),
+  };
+}
+
+function parseJsonRecord(raw: unknown): Record<string, unknown> | null {
+  return raw !== null && typeof raw === 'object' && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>)
+    : null;
+}
+
+function parseDeliverableTotals(raw: unknown): SmmDeliverableTotals {
+  const value = parseJsonRecord(raw);
+  if (!value) return {};
+  const result: SmmDeliverableTotals = {};
+  for (const key of ['REELS', 'POST', 'STORY', 'CAROUSEL', 'VIDEO'] as const) {
+    if (typeof value[key] === 'number') result[key] = value[key];
+  }
+  return result;
+}
+
+function parseDeliverableFrequency(raw: unknown): SmmDeliverableFrequency {
+  const value = parseJsonRecord(raw);
+  if (!value) return {};
+  const result: SmmDeliverableFrequency = {};
+  for (const key of ['REELS', 'POST', 'STORY', 'CAROUSEL', 'VIDEO'] as const) {
+    const entry = parseJsonRecord(value[key]);
+    if (
+      typeof entry?.count === 'number' &&
+      (entry.unit === 'day' || entry.unit === 'week' || entry.unit === 'month')
+    ) {
+      result[key] = { count: entry.count, unit: entry.unit };
+    }
+  }
+  return result;
+}
+
+function parseExpectedResults(raw: unknown): SmmExpectedResults | null {
+  const value = parseJsonRecord(raw);
+  if (!value) return null;
+  const result: SmmExpectedResults = {};
+  for (const key of ['reach', 'leads', 'followers', 'engagement', 'sales'] as const) {
+    const item = value[key];
+    if (typeof item === 'number' || item === null) result[key] = item;
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------
