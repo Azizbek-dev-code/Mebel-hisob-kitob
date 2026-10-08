@@ -1,0 +1,612 @@
+.marketing-header {
+  position: sticky;
+  top: 0;
+  border-bottom: 1px solid #e7eaf0;
+  background: rgba(250, 251, 253, 0.92);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+.marketing-header-inner {
+  min-height: 62px;
+}
+.marketing-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #172033;
+  font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.brand-symbol {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 7px;
+  background: #1d2b48;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+}
+.brand-light {
+  color: #8190ad;
+  font-weight: 500;
+}
+.marketing-desktop-nav {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.marketing-desktop-nav > a,
+.marketing-nav-button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 11px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #687386;
+  font-family: inherit;
+  font-size: 11px;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    color 0.16s,
+    background 0.16s;
+}
+.marketing-desktop-nav > a:hover,
+.marketing-nav-button:hover,
+.marketing-nav-button.is-open {
+  background: #eff1f6;
+  color: #263650;
+}
+.marketing-nav-button svg {
+  transition: transform 0.18s;
+}
+.marketing-nav-button.is-open svg {
+  transform: rotate(180deg);
+}
+.marketing-nav-item {
+  height: 100%;
+}
+.marketing-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+.marketing-locales {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 3px;
+  border: 1px solid #e5e8ee;
+  border-radius: 6px;
+  background: #fff;
+}
+.marketing-locales button {
+  min-width: 26px;
+  padding: 5px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #8992a1;
+  font:
+    600 9px/1 'DM Sans',
+    sans-serif;
+  cursor: pointer;
+  transition:
+    background 0.16s,
+    color 0.16s;
+}
+.marketing-locales button[aria-pressed='true'] {
+  background: #edf0f7;
+  color: #34476f;
+}
+.marketing-login {
+  color: #606c7d;
+  font-size: 11px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.marketing-login:hover {
+  color: #263650;
+}
+.marketing-get-started {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 13px;
+  border-radius: 6px;
+  background: #1e2c48;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    transform 0.2s,
+    background 0.2s,
+    box-shadow 0.2s;
+}
+.marketing-get-started:hover {
+  transform: translateY(-1px);
+  background: #2e4065;
+  box-shadow: 0 5px 14px #17203325;
+}
+.marketing-menu-button {
+  display: none;
+  width: 35px;
+  height: 35px;
+  place-items: center;
+  border: 1px solid #e1e5ec;
+  border-radius: 6px;
+  background: #fff;
+  color: #293752;
+  cursor: pointer;
+}
+.marketing-mega-wrap {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  padding: 0 22px 16px;
+  background: transparent;
+  animation: mega-appear 0.2s ease both;
+}
+.marketing-mega-menu {
+  display: grid;
+  grid-template-columns: 0.75fr 1fr 1.2fr;
+  gap: 24px;
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 25px 26px;
+  border: 1px solid #e5e8ee;
+  border-radius: 0 0 12px 12px;
+  background: #fff;
+  box-shadow: 0 22px 55px #1720331d;
+}
+.mega-intro {
+  padding: 5px 12px 4px 3px;
+}
+.mega-kicker,
+.mega-group-title {
+  display: block;
+  color: #8c95a3;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+.mega-intro h2 {
+  margin: 12px 0 0;
+  color: #172033;
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+.mega-intro p {
+  max-width: 255px;
+  margin: 10px 0 18px;
+  color: #788395;
+  font-size: 11px;
+  line-height: 1.65;
+}
+.mega-intro > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #5165aa;
+  font-size: 10px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.mega-group {
+  min-width: 0;
+}
+.mega-group-title {
+  margin: 4px 0 11px;
+}
+.mega-group-business {
+  padding-left: 20px;
+  border-left: 1px solid #edf0f4;
+}
+.mega-product {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 10px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.18s,
+    transform 0.18s;
+}
+.mega-product:hover,
+.mega-product:focus-visible {
+  transform: translateX(2px);
+  background: #f5f6fa;
+  outline: none;
+}
+.mega-product-icon {
+  display: grid;
+  flex: 0 0 31px;
+  width: 31px;
+  height: 31px;
+  place-items: center;
+  border: 1px solid #e7eaf1;
+  border-radius: 7px;
+  background: #f8f9fb;
+  color: #5165a8;
+  font-size: 10px;
+  font-weight: 700;
+}
+.mega-product-copy {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+.mega-product-title {
+  overflow: hidden;
+  color: #26334a;
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mega-product-description {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #8a93a1;
+  font-size: 9px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.mega-product-status {
+  flex: none;
+  padding: 4px 6px;
+  border-radius: 20px;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+.status-available {
+  background: #eaf4ef;
+  color: #4e8067;
+}
+.status-soon {
+  background: #f1f2f5;
+  color: #7f8998;
+}
+.mega-product-arrow {
+  flex: none;
+  color: #a1a9b5;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.mega-product:hover .mega-product-arrow,
+.mega-product:focus-visible .mega-product-arrow {
+  opacity: 1;
+}
+.mega-product-compact {
+  padding: 7px 8px;
+}
+.mega-product-compact .mega-product-icon {
+  flex-basis: 27px;
+  width: 27px;
+  height: 27px;
+  font-size: 9px;
+}
+.mega-product-compact .mega-product-description {
+  display: none;
+}
+.mega-view-all {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0 7px;
+  padding: 7px 0;
+  border: 0;
+  background: none;
+  color: #5267ae;
+  font-size: 9px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mega-business-list {
+  grid-column: span 2;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-content: start;
+  column-gap: 18px;
+}
+.mega-business-list > .mega-group-title {
+  grid-column: span 2;
+}
+.mega-business-list .mega-product {
+  padding: 6px 8px;
+}
+.mega-resources {
+  grid-column: span 3;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.mega-resources > .mega-kicker {
+  grid-column: span 2;
+}
+.mega-resources > a {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e8ebf0;
+  border-radius: 7px;
+  color: #697487;
+  text-decoration: none;
+  transition:
+    background 0.15s,
+    border 0.15s;
+}
+.mega-resources > a:hover {
+  border-color: #d4daea;
+  background: #f8f9fc;
+}
+.mega-resources > a span {
+  display: grid;
+  gap: 5px;
+}
+.mega-resources b {
+  color: #293750;
+  font-size: 11px;
+}
+.mega-resources small {
+  color: #8992a0;
+  font-size: 9px;
+  line-height: 1.5;
+}
+.marketing-mobile-nav {
+  display: none;
+}
+.marketing-footer {
+  border-top: 1px solid #e8ebf0;
+  background: #fff;
+}
+.marketing-footer-grid > div:first-child > p {
+  max-width: 260px;
+  margin: 12px 0 0;
+  color: #8490a0;
+  font-size: 10px;
+  line-height: 1.7;
+}
+.footer-heading {
+  margin: 2px 0 14px;
+  color: #26334a;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.marketing-footer ul {
+  display: grid;
+  gap: 11px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.marketing-footer li a,
+.marketing-footer li button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #7b8696;
+  font:
+    400 10px 'DM Sans',
+    sans-serif;
+  text-decoration: none;
+  cursor: pointer;
+}
+.marketing-footer li a:hover,
+.marketing-footer li button:hover {
+  color: #5368d8;
+}
+.marketing-copyright {
+  margin: 0;
+  padding: 14px;
+  border-top: 1px solid #edf0f3;
+  color: #a0a8b4;
+  font-size: 9px;
+  text-align: center;
+}
+.marketing-footer .marketing-locales {
+  margin-top: 16px;
+  width: max-content;
+}
+.marketing-layout button:focus-visible,
+.marketing-layout a:focus-visible {
+  outline: 2px solid #6578d2;
+  outline-offset: 3px;
+}
+@keyframes mega-appear {
+  from {
+    opacity: 0;
+    transform: translateY(-7px);
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+@media (max-width: 850px) {
+  .marketing-header-inner {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+  .marketing-desktop-nav {
+    gap: 0;
+  }
+  .marketing-desktop-nav > a,
+  .marketing-nav-button {
+    padding: 8px 7px;
+    font-size: 10px;
+  }
+  .marketing-header-actions {
+    gap: 9px;
+  }
+  .marketing-mega-menu {
+    gap: 14px;
+    padding: 20px;
+  }
+  .mega-product-status {
+    display: none;
+  }
+}
+@media (max-width: 720px) {
+  .marketing-header-inner {
+    min-height: 58px;
+  }
+  .marketing-desktop-nav {
+    display: none;
+  }
+  .marketing-header-actions {
+    gap: 8px;
+  }
+  .marketing-header-actions > .marketing-login {
+    display: none;
+  }
+  .marketing-menu-button {
+    display: grid;
+  }
+  .marketing-header-actions > .marketing-locales {
+    display: none;
+  }
+  .marketing-mega-wrap {
+    display: none;
+  }
+  .marketing-mobile-nav {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    display: block;
+    max-height: calc(100vh - 58px);
+    overflow-y: auto;
+    padding: 8px 20px 18px;
+    border-bottom: 1px solid #e5e8ee;
+    background: #fff;
+    box-shadow: 0 16px 28px #17203318;
+    animation: mega-appear 0.2s ease both;
+  }
+  .marketing-mobile-nav > a,
+  .mobile-accordion-trigger {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+    align-items: center;
+    padding: 13px 2px;
+    border: 0;
+    border-bottom: 1px solid #eef0f4;
+    background: none;
+    color: #4d5b70;
+    font-family: inherit;
+    font-size: 13px;
+    text-align: left;
+    text-decoration: none;
+  }
+  .mobile-accordion-trigger {
+    cursor: pointer;
+  }
+  .mobile-accordion-trigger[aria-expanded='true'] svg {
+    transform: rotate(180deg);
+  }
+  .mobile-product-list {
+    padding: 5px 0 8px 7px;
+    border-bottom: 1px solid #eef0f4;
+  }
+  .mobile-product-list .mega-product {
+    padding: 9px 5px;
+  }
+  .mobile-product-list .mega-product-description {
+    display: block;
+  }
+  .mobile-product-list .mega-product-status {
+    display: block;
+  }
+  .mobile-account-actions {
+    display: grid;
+    grid-template-columns: auto 1fr 1fr;
+    align-items: center;
+    gap: 10px;
+    padding-top: 16px;
+  }
+  .mobile-account-actions > a {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+    padding: 10px;
+    border: 1px solid #e5e8ee;
+    border-radius: 5px;
+    color: #526076;
+    font-size: 10px;
+    text-decoration: none;
+  }
+  .mobile-account-actions > a:last-child {
+    border-color: #1e2c48;
+    background: #1e2c48;
+    color: #fff;
+  }
+  .marketing-locales-mobile {
+    margin: 0;
+  }
+}
+@media (max-width: 380px) {
+  .marketing-header-inner {
+    gap: 7px;
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+  .marketing-brand {
+    font-size: 13px;
+  }
+  .marketing-brand .brand-symbol {
+    width: 23px;
+    height: 23px;
+  }
+  .marketing-get-started {
+    padding: 9px 10px;
+    font-size: 10px;
+  }
+  .marketing-header-actions {
+    gap: 6px;
+  }
+  .mobile-account-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+  .mobile-account-actions .marketing-locales {
+    grid-column: span 2;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marketing-header *,
+  .marketing-footer * {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
